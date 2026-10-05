@@ -1,0 +1,40 @@
+# Weaveverse OS · 版本记录
+
+## M0 · 2026-10-05
+- **任务**：可运行骨架 + 开屏动画 + 左右布局 + 静态导航
+- **实现**：
+  - 后端：FastAPI + uvicorn（子线程） + pywebview（主线程），端口自动检测
+  - 前端：Vue 3 + Vite + Tailwind 3，开屏动画可替换
+  - 通信：`/api/health`、`/api/nav`
+  - 开发/生产双模式
+- **技术架构**：`backend/main.py` 优先绑定 `127.0.0.1:8765`，占用时回退到系统分配端口，并写入 `backend/.weaveverse-port` 供 Vite 代理读取。生产模式由 FastAPI 挂载 `frontend/dist/assets` 并对 SPA 路由回退到 `index.html`；开发模式通过 `WEAVEVERSE_DEV=1` 让 pywebview 加载 Vite dev server，并会先等待 Vite 端口就绪。uvicorn 在子线程运行，pywebview 保持在主线程，窗口关闭时设置 `server.should_exit = True` 并等待子线程退出。
+- **与上一版本相比的变化**：M0 为首版
+- **已知问题**：
+  - 开发模式如果后端回退到随机端口，建议先启动后端再启动 Vite，或手动设置 `WEAVEVERSE_API_PORT`。
+  - Vite 8.3.2 在当前 Windows + Node 24 环境下触发 `rolldown` 原生绑定加载失败，M0 改用 Vite 7.3.6 作为当前可验收稳定线。
+  - pywebview 需要本机具备可用的 WebView 运行时；不同系统可能需要额外安装系统组件。
+  - 当前未接数据库，导航仍是 M0 静态数据。
+- **文件变更**：
+  - 新增 `README.md`
+  - 修改 `.gitignore`
+  - 新增 `backend/main.py`
+  - 新增 `backend/requirements.txt`
+  - 新增 `backend/app/__init__.py`
+  - 新增 `backend/app/api.py`
+  - 新增 `backend/app/config.py`
+  - 新增 `backend/app/static.py`
+  - 新增 `frontend/package.json`
+  - 新增 `frontend/package-lock.json`
+  - 新增 `frontend/vite.config.js`
+  - 新增 `frontend/tailwind.config.js`
+  - 新增 `frontend/postcss.config.js`
+  - 新增 `frontend/index.html`
+  - 新增 `frontend/src/main.js`
+  - 新增 `frontend/src/App.vue`
+  - 新增 `frontend/src/style.css`
+  - 新增 `frontend/src/api/client.js`
+  - 新增 `frontend/src/components/SplashScreen.vue`
+  - 新增 `frontend/src/components/SidebarNav.vue`
+  - 新增 `frontend/src/components/WorkspacePanel.vue`
+  - 新增 `frontend/src/assets/splash/README.md`
+  - 新增 `frontend/src/assets/splash/splash.png`

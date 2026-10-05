@@ -1,0 +1,15 @@
+.venv/
+backend/.venv/
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.vite/
+.env
+backend/.weaveverse-port
+npm-debug.log*
+.idea/
+.DS_Store
