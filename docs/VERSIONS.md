@@ -38,3 +38,48 @@
   - 新增 `frontend/src/components/WorkspacePanel.vue`
   - 新增 `frontend/src/assets/splash/README.md`
   - 新增 `frontend/src/assets/splash/splash.png`
+
+## M1 · 2026-10-06
+- **任务**：SQLite + 导航 CRUD + Alembic + 重启不丢数据
+- **实现**：
+  - 后端：SQLModel + SQLite + Alembic（启动自动迁移）
+  - 新增 `/api/nav` POST/PUT/DELETE
+  - 前端：侧边栏增删改 UI + 编辑弹窗
+  - 首次启动自动 seed 6 条数据
+- **技术架构**：数据库文件位于 `backend/data/weaveverse.db`，由 `backend/main.py` 在启动桌面窗口前通过 Alembic Python API 执行 `upgrade head`。迁移脚本从 `app.models` 的 `SQLModel.metadata` 读取模型元数据，首版迁移创建 `nav_items` 表。启动时先判断数据库文件是否已存在：不存在则迁移后 seed M0 的 6 条导航；存在则只迁移不 seed，避免用户删空后重启又恢复默认数据。API 分层为 `routes/nav.py`（HTTP 层）→ `crud.py`（数据库操作）→ `models.py`（模型）。
+- **与 M0 相比的变化**：
+  - `/api/nav` 数据源：硬编码 → 数据库
+  - 导航项 id 类型：string → int
+  - 新增接口：`POST /api/nav`、`PUT /api/nav/{id}`、`DELETE /api/nav/{id}`
+  - 前端侧边栏支持新增、编辑、删除导航项
+- **已知问题**：
+  - M1 不做拖拽排序，新增项会按当前最大 `sort_order + 1` 放到列表底部。
+  - 删除当前选中项后会自动选中现有第一项；全部删除时显示空状态。
+  - 数据库暂放项目目录，后续版本可能迁移到用户数据目录。
+  - `.gitignore` 已新增 `backend/data/*.db` 和 `backend/data/*.db-*`，避免提交本地数据库与 SQLite 临时文件。
+- **文件变更**：
+  - 修改 `.gitignore`
+  - 修改 `README.md`
+  - 修改 `backend/main.py`
+  - 修改 `backend/requirements.txt`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/app/config.py`
+  - 修改 `backend/app/static.py`
+  - 新增 `backend/app/db.py`
+  - 新增 `backend/app/models.py`
+  - 新增 `backend/app/schemas.py`
+  - 新增 `backend/app/crud.py`
+  - 新增 `backend/app/seed.py`
+  - 新增 `backend/app/routes/__init__.py`
+  - 新增 `backend/app/routes/nav.py`
+  - 新增 `backend/alembic.ini`
+  - 新增 `backend/alembic/env.py`
+  - 新增 `backend/alembic/script.py.mako`
+  - 新增 `backend/alembic/versions/20261006_0001_initial_nav_items.py`
+  - 新增 `backend/data/README.md`
+  - 新增 `backend/data/.gitkeep`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/components/SidebarNav.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 新增 `frontend/src/components/NavEditDialog.vue`

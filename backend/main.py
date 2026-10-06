@@ -9,13 +9,15 @@ from __future__ import annotations
 import socket
 import threading
 import time
-from pathlib import Path
 from urllib.parse import urlsplit
 
+from alembic import command
+from alembic.config import Config
 import uvicorn
 import webview
 
-from app.config import DEV_SERVER_URL, HOST, MIN_HEIGHT, MIN_WIDTH, PORT_FILE, is_dev_mode
+from app.config import BACKEND_DIR, DATABASE_PATH, DATA_DIR, DEV_SERVER_URL, HOST, MIN_HEIGHT, MIN_WIDTH, PORT_FILE, is_dev_mode
+from app.seed import seed_initial_nav_items
 from app.static import create_app
 
 
@@ -64,6 +66,17 @@ def run_server(port: int) -> None:
     server.run()
 
 
+def run_migrations() -> bool:
+    """Upgrade SQLite schema to the latest Alembic revision before serving."""
+    database_existed = DATABASE_PATH.exists()
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    alembic_config = Config(str(BACKEND_DIR / "alembic.ini"))
+    alembic_config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    command.upgrade(alembic_config, "head")
+    return database_existed
+
+
 def wait_until_ready(port: int, timeout_seconds: float = 8.0) -> None:
     """Wait briefly for uvicorn to accept TCP connections before opening UI."""
     deadline = time.monotonic() + timeout_seconds
@@ -100,6 +113,9 @@ def shutdown_backend() -> None:
 
 def main() -> None:
     global server_port
+
+    database_existed = run_migrations()
+    seed_initial_nav_items(should_seed=not database_existed)
 
     server_port = choose_port()
     write_port_file(server_port)

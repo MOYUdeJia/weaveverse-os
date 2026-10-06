@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import router as api_router
@@ -12,12 +13,21 @@ from app.config import FRONTEND_DIST, is_dev_mode
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Weaveverse OS")
+    register_error_handlers(app)
     app.include_router(api_router)
 
     if not is_dev_mode():
         mount_frontend(app)
 
     return app
+
+
+def register_error_handlers(app: FastAPI) -> None:
+    """Keep API validation errors in the M1 response shape."""
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request, exc) -> JSONResponse:
+        return JSONResponse(status_code=400, content={"detail": "请求参数错误"})
 
 
 def mount_frontend(app: FastAPI) -> None:

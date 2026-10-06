@@ -1,3 +1,5 @@
 fastapi==0.142.2
 uvicorn==0.53.0
 pywebview==6.2.1
+sqlmodel==0.0.27
+alembic==1.18.0
