@@ -40,22 +40,28 @@ def get_nav_item(session: Session, nav_id: int) -> NavItem | None:
     return session.get(NavItem, nav_id)
 
 
-# 创建导航项，并插入该页面类型的默认区块。
-# Create a navigation item and insert that page type's default blocks.
-def create_nav_item(session: Session, data: NavItemCreate) -> NavItem:
-    spec = PAGE_TYPES[data.page_type]
+# 创建导航项，并插入页面类型或模板给出的默认区块。
+# Create a navigation item and insert page-type or template default blocks.
+def create_nav_item(
+    session: Session,
+    data: NavItemCreate,
+    *,
+    page_type: str,
+    default_blocks: list[dict] | None = None,
+) -> NavItem:
+    blocks = PAGE_TYPES[page_type]["default_blocks"] if default_blocks is None else default_blocks
     max_order = session.exec(select(func.max(NavItem.sort_order))).one()
     next_order = 0 if max_order is None else int(max_order) + 1
     item = NavItem(
         title=data.title,
         icon=data.icon,
-        page_type=data.page_type,
+        page_type=page_type,
         sort_order=next_order,
     )
     session.add(item)
     session.flush()
 
-    for index, block in enumerate(spec["default_blocks"]):
+    for index, block in enumerate(blocks):
         content = parse_block_content(block["block_type"], block["content"])
         session.add(
             Block(

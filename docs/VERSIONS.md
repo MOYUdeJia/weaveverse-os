@@ -145,3 +145,40 @@
   - 修改 `frontend/src/style.css`
   - 修改 `frontend/package.json`
   - 修改 `frontend/package-lock.json`
+
+## M3 · 2026-10-07
+- **任务**：3 个新块类型 + 页面模板 + 6 个成长模板
+- **实现**：
+  - 新增 schedule / progress / chart 块类型
+  - 新增 templates.py（6 个模板定义）
+  - 新增 GET /api/templates
+  - POST /api/nav 支持 template_id
+  - 前端：3 个新块组件 + 模板选择 UI
+- **技术架构**：无数据库变化。模板硬编码在 templates.py。图表用原生 SVG。
+- **与 M2 相比的变化**：
+  - 新增 block_type：schedule / progress / chart
+  - 新增接口：GET /api/templates
+  - POST /api/nav 新增可选参数 template_id；与 page_type 同时给出返回 400
+  - 省略 template_id 和 page_type 时仍默认 page_type=markdown
+  - 前端「+」按钮改为两级菜单：新建空白页 / 从模板创建
+- **已知问题**：
+  - 图表没有 tooltip，数据点变多时横轴标签会挤在一起。
+  - 模板不能由用户自定义，加模板只改 templates.py。
+  - 现有 M1 导航不会自动补默认区块，进入后仍是空页。
+  - 图片上传和桌面壳外链仍按 M2 的已知限制：自动化浏览器未走文件选择器，外链在 Chrome 验收走 window.open。
+  - SQLite 表定义里 icon 仍是 VARCHAR(8)，长度 20 只在 Python 校验层生效。
+  - 数据库仍在项目目录，未迁到用户数据目录。
+- **文件变更**：
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/app/crud.py`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/app/routes/nav.py`
+  - 新增 `backend/app/templates.py`
+  - 新增 `backend/app/routes/templates.py`
+  - 修改 `frontend/src/blocks/registry.js`
+  - 新增 `frontend/src/blocks/ScheduleBlock.vue`
+  - 新增 `frontend/src/blocks/ProgressBlock.vue`
+  - 新增 `frontend/src/blocks/ChartBlock.vue`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/components/NavEditDialog.vue`
+  - 修改 `docs/VERSIONS.md`

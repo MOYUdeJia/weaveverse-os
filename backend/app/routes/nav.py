@@ -10,6 +10,7 @@ from app.db import get_session
 from app.errors import raise_api_error
 from app.page_types import PAGE_TYPES
 from app.schemas import BlockCreate, NavItemCreate, NavItemDetail, NavItemRead, NavItemUpdate, NavReorder
+from app.templates import get_template
 
 
 router = APIRouter(prefix="/nav", tags=["nav"])
@@ -26,10 +27,31 @@ def get_nav(session: Session = Depends(get_session)) -> list:
 # 创建导航项并带上默认区块。
 # Create a navigation item together with its default blocks.
 def create_nav(data: NavItemCreate, session: Session = Depends(get_session)):
-    if data.page_type not in PAGE_TYPES:
+    if data.template_id and data.page_type:
+        raise_api_error(400, "template_id", "不能同时指定 template_id 和 page_type")
+
+    if data.template_id:
+        spec = get_template(data.template_id)
+        if spec is None:
+            raise_api_error(400, "template_id", "未知的模板")
+        if spec["page_type"] not in PAGE_TYPES:
+            raise_api_error(400, "template_id", "模板的页面类型无效")
+        try:
+            item = crud.create_nav_item(
+                session,
+                data,
+                page_type=spec["page_type"],
+                default_blocks=spec["default_blocks"],
+            )
+        except ValueError as exc:
+            raise_api_error(400, "template_id", str(exc))
+        return crud.nav_item_to_detail(session, item)
+
+    page_type = data.page_type or "markdown"
+    if page_type not in PAGE_TYPES:
         raise_api_error(400, "page_type", "未知的页面类型")
     try:
-        item = crud.create_nav_item(session, data)
+        item = crud.create_nav_item(session, data, page_type=page_type)
     except ValueError as exc:
         raise_api_error(400, "page_type", str(exc))
     return crud.nav_item_to_detail(session, item)

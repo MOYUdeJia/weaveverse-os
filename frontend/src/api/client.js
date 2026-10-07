@@ -55,6 +55,10 @@ export function getPageTypes() {
   return request('/page-types')
 }
 
+export function getTemplates() {
+  return request('/templates')
+}
+
 export function getNav() {
   return request('/nav')
 }
