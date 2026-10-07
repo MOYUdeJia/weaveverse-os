@@ -83,3 +83,65 @@
   - 修改 `frontend/src/components/SidebarNav.vue`
   - 修改 `frontend/src/components/WorkspacePanel.vue`
   - 新增 `frontend/src/components/NavEditDialog.vue`
+
+## M2 · 2026-10-06
+- **任务**：页面系统 + 区块系统 + Markdown/待办/链接/图片 + 导航拖拽
+- **实现**：
+  - 数据模型：NavItem 加 page_type，新增 Block 表，级联删除（SQLite FK `ON DELETE CASCADE` + `PRAGMA foreign_keys=ON`）
+  - 页面类型注册表（`backend/app/page_types.py`）
+  - 区块组件注册表（`frontend/src/blocks/registry.js`）
+  - 4 种区块类型：markdown / todo / link / gallery
+  - 图片上传到 `backend/data/attachments/`
+  - 导航拖拽排序（原生 HTML5 DnD + `POST /api/nav/reorder`）
+  - 修复 M1 遗留：datetime.utcnow、emoji max_length、校验错误、SPA fallback
+- **技术架构**：页面 = 导航项 + `page_type` + 若干 Block。Block.content 在 SQLite 里存 JSON 文本，API 进出为对象。创建导航时按 `PAGE_TYPES[page_type].default_blocks` 插入默认区块。前端 WorkspacePanel 按 `block_type` 从 `blockComponents` 取 Vue 组件。Markdown 用 `marked` 解析、`DOMPurify` 消毒。外链优先 `pywebview` `js_api.open_url`（系统浏览器），没有桥时退回 `window.open`。附件通过 `GET /api/attachments/{filename}` 提供给画廊显示。
+- **与 M1 相比的变化**：
+  - `nav_items` 新增 `page_type` 字段（现有行默认 `markdown`）
+  - 新增 `blocks` 表
+  - 新增 API：`/api/page-types`、`GET /api/nav/{id}`、`POST /api/nav/reorder`、`/api/nav/{id}/blocks`、`PUT|DELETE /api/blocks/{id}`、`POST /api/blocks/{id}/images`、`GET|DELETE /api/attachments/{filename}`
+  - `POST /api/nav` 可带 `page_type`，返回对象含 `blocks`
+  - `GET /api/nav` 列表项增加 `page_type`
+  - 前端新增 4 个区块组件
+  - 错误响应格式：`detail` 从字符串改为 `{field, message}`
+- **已知问题**：
+  - 现有 M1 导航不会自动补默认区块，进入后是空页，需手动「添加区块」或新建带类型的页面。
+  - 图片上传 API 已在本机验证；自动化浏览器未走 `<input type=file>` 选文件。请用桌面窗口或浏览器开发模式手动点「上传图片」确认 WebView 文件选择器。
+  - 外链：Chrome 验收走 `window.open`。桌面壳已挂 `js_api.open_url`，未在本次 pywebview 窗口里点链接验收。
+  - 原生拖拽绑在整行上，自动化点击时偶发触发 `POST /api/nav/reorder`；人手拖排序可用，若误触可再拖回去。
+  - SQLite 表定义里 `icon` 仍是 `VARCHAR(8)`（不重建表），长度 20 只在 Python 校验层生效。
+  - 数据库仍在项目目录，未迁到用户数据目录。
+- **文件变更**：
+  - 新增 `backend/alembic/versions/20261006_0002_nav_item_page_type_and_blocks.py`
+  - 新增 `backend/app/page_types.py`
+  - 新增 `backend/app/errors.py`
+  - 新增 `backend/app/routes/page_types.py`
+  - 新增 `backend/app/routes/blocks.py`
+  - 新增 `backend/data/attachments/.gitkeep`
+  - 新增 `backend/data/attachments/README.md`
+  - 修改 `backend/app/models.py`
+  - 修改 `backend/app/db.py`
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/app/crud.py`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/app/static.py`
+  - 修改 `backend/app/config.py`
+  - 修改 `backend/app/seed.py`
+  - 修改 `backend/main.py`
+  - 修改 `backend/requirements.txt`
+  - 修改 `backend/data/README.md`
+  - 修改 `.gitignore`
+  - 新增 `frontend/src/blocks/registry.js`
+  - 新增 `frontend/src/blocks/MarkdownBlock.vue`
+  - 新增 `frontend/src/blocks/TodoBlock.vue`
+  - 新增 `frontend/src/blocks/LinkBlock.vue`
+  - 新增 `frontend/src/blocks/GalleryBlock.vue`
+  - 新增 `frontend/src/openExternal.js`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改 `frontend/src/components/SidebarNav.vue`
+  - 修改 `frontend/src/components/NavEditDialog.vue`
+  - 修改 `frontend/src/components/SplashScreen.vue`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/package.json`
+  - 修改 `frontend/package-lock.json`

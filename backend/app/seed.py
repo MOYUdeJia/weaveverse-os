@@ -18,8 +18,9 @@ DEFAULT_NAV_ITEMS = [
 ]
 
 
+# 仅在数据库文件首次创建时写入默认导航。
+# Insert default sidebar entries only when the database file is first created.
 def seed_initial_nav_items(should_seed: bool) -> None:
-    """Insert M0 sidebar entries only when the database file is first created."""
     if not should_seed:
         return
 

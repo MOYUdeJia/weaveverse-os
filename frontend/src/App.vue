@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 
-import { createNav, deleteNav, getHealth, getNav, updateNav } from './api/client'
+import { createNav, deleteNav, getHealth, getNav, reorderNav, updateNav } from './api/client'
 import NavEditDialog from './components/NavEditDialog.vue'
 import SidebarNav from './components/SidebarNav.vue'
 import SplashScreen from './components/SplashScreen.vue'
@@ -66,7 +66,7 @@ async function saveNavItem(data) {
       noticeMessage.value = '导航项已添加。'
     } else if (editingItem.value) {
       const updated = await updateNav(editingItem.value.id, data)
-      navItems.value = navItems.value.map((item) => (item.id === updated.id ? updated : item))
+      navItems.value = navItems.value.map((item) => (item.id === updated.id ? { ...item, ...updated } : item))
       activeId.value = updated.id
       noticeMessage.value = '导航项已更新。'
     }
@@ -95,6 +95,19 @@ async function removeNavItem(item) {
   }
 }
 
+async function persistNavOrder(ids) {
+  const previous = navItems.value
+  navItems.value = ids.map((id) => previous.find((item) => item.id === id)).filter(Boolean)
+  try {
+    const items = await reorderNav(ids)
+    setNavItems(items)
+  } catch (error) {
+    console.error('Failed to reorder nav:', error)
+    navItems.value = previous
+    alert(error.message || '排序失败')
+  }
+}
+
 onMounted(loadShellData)
 </script>
 
@@ -112,6 +125,7 @@ onMounted(loadShellData)
         @create="openCreateDialog"
         @edit="openEditDialog"
         @delete="removeNavItem"
+        @reorder="persistNavOrder"
       />
       <WorkspacePanel
         :item="activeItem"

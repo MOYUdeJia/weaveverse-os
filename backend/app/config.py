@@ -17,11 +17,13 @@ PORT_FILE = BACKEND_DIR / ".weaveverse-port"
 DATA_DIR = BACKEND_DIR / "data"
 DATABASE_PATH = DATA_DIR / "weaveverse.db"
 DATABASE_URL = f"sqlite:///{DATABASE_PATH.as_posix()}"
+ATTACHMENTS_DIR = DATA_DIR / "attachments"
 
 DEV_SERVER_URL = os.getenv("WEAVEVERSE_DEV_SERVER_URL", "http://127.0.0.1:5173")
 
 
+# 判断是否走 Vite 开发模式。
+# Return true when the task-book development flag is enabled.
 def is_dev_mode() -> bool:
-    """Return true when the task-book development flag is enabled."""
     return os.getenv("WEAVEVERSE_DEV") == "1"
 

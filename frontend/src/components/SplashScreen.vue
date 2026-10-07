@@ -11,6 +11,8 @@ let leaveTimer
 let finishTimer
 
 onMounted(() => {
+  // 先淡出，再通知父组件结束开屏。
+  // Fade out first, then tell the parent the splash is done.
   leaveTimer = window.setTimeout(() => {
     isLeaving.value = true
   }, SPLASH_DURATION_MS - 420)
@@ -21,6 +23,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  // 组件卸载时清掉开屏定时器。
+  // Clear splash timers when the component unmounts.
   window.clearTimeout(leaveTimer)
   window.clearTimeout(finishTimer)
 })

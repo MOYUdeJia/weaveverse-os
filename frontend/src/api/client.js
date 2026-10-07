@@ -1,23 +1,47 @@
 const API_PREFIX = '/api'
 
+// 把后端 {field, message} 或旧字符串 detail 转成可读错误。
+// Turn a {field, message} body or a legacy string detail into a readable error.
+function formatDetail(detail) {
+  if (!detail) {
+    return ''
+  }
+  if (typeof detail === 'string') {
+    return detail
+  }
+  if (detail.field && detail.message) {
+    return `${detail.field}: ${detail.message}`
+  }
+  return detail.message || JSON.stringify(detail)
+}
+
+// 发起 /api 请求，JSON 默认，FormData 不强制 Content-Type。
+// Send an /api request; JSON by default, FormData without a forced Content-Type.
 async function request(path, options = {}) {
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+  const headers = {
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(options.headers ?? {}),
+  }
+
   const response = await fetch(`${API_PREFIX}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers ?? {}),
-    },
     ...options,
+    headers,
   })
 
   if (!response.ok) {
     let message = ''
     try {
       const payload = await response.json()
-      message = payload.detail
+      message = formatDetail(payload.detail)
     } catch {
       message = await response.text()
     }
     throw new Error(message || `Request failed with ${response.status}`)
+  }
+
+  if (response.status === 204) {
+    return null
   }
 
   return response.json()
@@ -27,8 +51,16 @@ export function getHealth() {
   return request('/health')
 }
 
+export function getPageTypes() {
+  return request('/page-types')
+}
+
 export function getNav() {
   return request('/nav')
+}
+
+export function getNavItem(id) {
+  return request(`/nav/${id}`)
 }
 
 export function createNav(data) {
@@ -49,4 +81,50 @@ export function deleteNav(id) {
   return request(`/nav/${id}`, {
     method: 'DELETE',
   })
+}
+
+export function reorderNav(ids) {
+  return request('/nav/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  })
+}
+
+export function createBlock(navId, payload) {
+  return request(`/nav/${navId}/blocks`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function updateBlock(blockId, payload) {
+  return request(`/blocks/${blockId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteBlock(blockId) {
+  return request(`/blocks/${blockId}`, {
+    method: 'DELETE',
+  })
+}
+
+export function uploadImage(blockId, file) {
+  const body = new FormData()
+  body.append('file', file)
+  return request(`/blocks/${blockId}/images`, {
+    method: 'POST',
+    body,
+  })
+}
+
+export function deleteAttachment(filename) {
+  return request(`/attachments/${encodeURIComponent(filename)}`, {
+    method: 'DELETE',
+  })
+}
+
+export function attachmentUrl(filename) {
+  return `${API_PREFIX}/attachments/${encodeURIComponent(filename)}`
 }
