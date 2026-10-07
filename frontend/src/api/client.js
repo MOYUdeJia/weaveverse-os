@@ -132,3 +132,45 @@ export function deleteAttachment(filename) {
 export function attachmentUrl(filename) {
   return `${API_PREFIX}/attachments/${encodeURIComponent(filename)}`
 }
+
+export function listBooks(sort = 'recent', format = '') {
+  const params = new URLSearchParams({ sort })
+  if (format) {
+    params.set('format', format)
+  }
+  return request(`/books?${params}`)
+}
+
+export function getBook(id) {
+  return request(`/books/${id}`)
+}
+
+export function uploadBook(file) {
+  const body = new FormData()
+  body.append('file', file)
+  return request('/books', {
+    method: 'POST',
+    body,
+  })
+}
+
+export function updateBook(id, data) {
+  return request(`/books/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+export function deleteBook(id) {
+  return request(`/books/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export function getBookContent(id, chapter = 0) {
+  return request(`/books/${id}/content?chapter=${chapter}`)
+}
+
+export function bookCoverUrl(id) {
+  return `${API_PREFIX}/books/${id}/cover`
+}

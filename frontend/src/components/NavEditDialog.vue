@@ -43,7 +43,9 @@ const dialogTitle = computed(() => {
   return '添加导航项'
 })
 const canSave = computed(() => title.value.trim().length > 0 && icon.value.trim().length > 0)
-const creatableTypes = computed(() => pageTypes.value.filter((item) => item.multi_instance))
+const creatableTypes = computed(() =>
+  pageTypes.value.filter((item) => item.multi_instance || item.type === 'bookshelf'),
+)
 
 watch(
   () => [props.open, props.mode, props.item],

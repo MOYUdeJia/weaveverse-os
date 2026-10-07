@@ -249,3 +249,71 @@ class TemplateRead(BaseModel):
     icon: str
     page_type: str
     block_count: int
+
+
+class BookTocItem(BaseModel):
+    index: int
+    title: str
+
+
+class BookSummary(BaseModel):
+    id: int
+    title: str
+    author: str
+    format: Literal["epub", "txt", "pdf"]
+    original_filename: str
+    file_size: int
+    has_cover: bool
+    language: str
+    chapter_count: int
+    page_count: int
+    progress_chapter: int
+    progress_offset: float
+    progress_ratio: float
+    last_read_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class BookDetail(BookSummary):
+    description: str
+    toc: list[BookTocItem] = Field(default_factory=list)
+
+
+class BookUpdate(BaseModel):
+    title: str | None = Field(default=None, max_length=500)
+    author: str | None = Field(default=None, max_length=500)
+    progress_chapter: int | None = Field(default=None, ge=0)
+    progress_offset: float | None = Field(default=None, ge=0, le=1)
+
+    @field_validator("title")
+    @classmethod
+    # 标题去空白后不能为空；省略表示不改。
+    # Strip the title and reject an empty value. None means leave it unchanged.
+    def strip_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("不能为空")
+        return stripped
+
+    @field_validator("author")
+    @classmethod
+    # 作者允许清空，只去掉首尾空白。
+    # Allow clearing the author, and only strip surrounding whitespace.
+    def strip_author(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip()
+
+
+class BookContent(BaseModel):
+    format: Literal["epub", "txt", "pdf"]
+    chapter: int | None
+    title: str
+    chapter_count: int
+    html: str | None = None
+    text: str | None = None
+    external: bool
+    page_count: int

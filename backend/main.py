@@ -6,18 +6,24 @@ the main thread so GUI frameworks keep their expected threading model.
 
 from __future__ import annotations
 
+import os
 import socket
 import threading
 import time
 import webbrowser
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from alembic import command
 from alembic.config import Config
+from sqlmodel import Session
 import uvicorn
 import webview
 
+from app import book_crud
+from app.book_files import original_path
 from app.config import BACKEND_DIR, DATABASE_PATH, DATA_DIR, DEV_SERVER_URL, HOST, MIN_HEIGHT, MIN_WIDTH, PORT_FILE, is_dev_mode
+from app.db import engine
 from app.seed import seed_initial_nav_items
 from app.static import create_app
 
@@ -27,7 +33,10 @@ server: uvicorn.Server | None = None
 
 
 class DesktopBridge:
-    """JavaScript bridge so the webview can open links in the system browser."""
+    """JavaScript bridge for the system browser, book file dialog, and PDF opener."""
+
+    def __init__(self) -> None:
+        self._picked_book: Path | None = None
 
     # 用系统浏览器打开 http(s) 外链。
     # Open an http(s) URL in the system browser.
@@ -38,6 +47,72 @@ class DesktopBridge:
         if not target.startswith(("http://", "https://")):
             return False
         webbrowser.open(target)
+        return True
+
+    # 弹出系统文件选择器，只记住路径，不在这里读文件。
+    # Open the system file dialog and remember the path without reading it yet.
+    def pick_book_file(self) -> dict | None:
+        window = webview.windows[0] if webview.windows else None
+        if window is None:
+            return {"error": "窗口还没准备好"}
+
+        try:
+            selected = window.create_file_dialog(
+                webview.FileDialog.OPEN,
+                allow_multiple=False,
+                file_types=("电子书 (*.epub;*.txt;*.pdf)",),
+            )
+        except Exception:
+            self._picked_book = None
+            return {"error": "无法打开文件选择器"}
+
+        if not selected:
+            self._picked_book = None
+            return None
+
+        path = Path(selected[0])
+        if path.suffix.lower() not in {".epub", ".txt", ".pdf"} or not path.is_file():
+            self._picked_book = None
+            return {"error": "仅支持 epub / txt / pdf"}
+
+        self._picked_book = path
+        return {"name": path.name, "size": path.stat().st_size}
+
+    # 把刚才选中的文件导入书架。上传仍是整文件读入内存。
+    # Import the file chosen above. The upload is still fully buffered in memory.
+    def import_picked_book(self) -> dict:
+        path = self._picked_book
+        self._picked_book = None
+        if path is None or not path.is_file():
+            return {"error": "还没有选择文件"}
+
+        try:
+            payload = path.read_bytes()
+            with Session(engine) as session:
+                book = book_crud.create_book(session, path.name, payload)
+                return {"id": book.id}
+        except ValueError as exc:
+            return {"error": str(exc)}
+        except OSError:
+            return {"error": "无法读取这个文件"}
+
+    # 用系统默认程序打开 PDF 原件。
+    # Open a PDF original in the system default application.
+    def open_book(self, book_id: int) -> bool:
+        try:
+            book_id = int(book_id)
+        except (TypeError, ValueError):
+            return False
+
+        with Session(engine) as session:
+            book = book_crud.get_book(session, book_id)
+            if book is None or book.format != "pdf":
+                return False
+            path = original_path(book.id, book.format)
+
+        if not path.is_file() or os.name != "nt":
+            return False
+        os.startfile(path)
         return True
 
 

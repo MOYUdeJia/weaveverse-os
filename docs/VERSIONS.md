@@ -182,3 +182,47 @@
   - 修改 `frontend/src/api/client.js`
   - 修改 `frontend/src/components/NavEditDialog.vue`
   - 修改 `docs/VERSIONS.md`
+
+## M4 · 2026-10-07
+- **任务**：阅读书架。导入 EPUB / TXT / PDF，看书架，打开阅读器，自动保存进度
+- **实现**：
+  - 新增 `books` 表，文件放在 `backend/data/books/{id}/`
+  - 新增 `/api/books`：上传、列表、详情、更新、删除、封面、内容
+  - EPUB 用 ebooklib 提取元数据、封面和章节；TXT 直接读；PDF 只提元数据
+  - 前端书架：最近阅读、全部书籍、排序、格式筛选、导入
+  - 阅读器是全屏浮层。EPUB / TXT 内嵌，PDF 用系统应用打开
+  - `bookshelf` 在 `WorkspacePanel.vue` 单独渲染，不走区块
+- **技术架构**：书籍不挂导航项，书架是全局的。章节正文留在原始文件里，`toc` 只存标题。进度由 `progress_chapter`、`progress_offset` 和算好的 `progress_ratio` 组成。上传把整个文件读进内存，上限 100MB，不是流式落盘；前端在文件超过 50MB 时提示「这个文件超过 50MB，上传较慢」。桌面窗口的导入走 pywebview 文件选择器，浏览器开发模式退回 `<input type="file">`。EPUB 正文渲染前用 DOMPurify 消毒。PDF 由桌面桥 `os.startfile` 打开原件。
+- **与 M3 相比的变化**：
+  - 新增数据表 `books`，迁移 `20261007_0003`
+  - 新增接口：`POST /api/books`、`GET /api/books`、`GET /api/books/{id}`、`PATCH /api/books/{id}`、`DELETE /api/books/{id}`、`GET /api/books/{id}/cover`、`GET /api/books/{id}/content`
+  - 新建空白页的类型列表里出现「书架」。其他单实例类型仍不出现
+  - 选中 `bookshelf` 页面时右侧是书架，不再显示「添加区块」
+  - 依赖新增 `ebooklib==0.18`、`pypdf==6.1.1`（ebooklib 会带上 lxml、six）
+- **已知问题**：
+  - EPUB 章节里的图片和 CSS 不会显示。阅读器只拿到章节 HTML，相对路径没有对应的资源接口。资源接口留到后续版本，M4 不加。
+  - 上传不是流式。后端把 multipart 正文拼成完整字节再落盘，内存里会拿住整本书，上限 100MB。超过 50MB 时前端提示上传较慢。
+  - PDF 不记录阅读位置。加密 PDF 会拒绝导入。
+  - 不支持 MOBI / AZW3 / KF8。
+  - 书架是全局的。删掉侧边栏的书架项不会删书；建两个书架项会看到同一批书。单实例没有在创建接口里强制。
+  - 桌面窗口里的文件选择器已在 pywebview 中点「导入书籍」弹出系统对话框（窗口类 `#32770`）。浏览器里的开发模式仍用网页文件框，不走这个桥。
+- **文件变更**：
+  - 修改 `.gitignore`
+  - 修改 `backend/requirements.txt`
+  - 修改 `backend/main.py`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/app/config.py`
+  - 修改 `backend/app/models.py`
+  - 修改 `backend/app/schemas.py`
+  - 新增 `backend/app/book_files.py`
+  - 新增 `backend/app/book_crud.py`
+  - 新增 `backend/app/routes/books.py`
+  - 新增 `backend/alembic/versions/20261007_0003_books.py`
+  - 新增 `backend/data/books/.gitkeep`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改 `frontend/src/components/NavEditDialog.vue`
+  - 新增 `frontend/src/components/BookshelfPanel.vue`
+  - 新增 `frontend/src/components/BookCover.vue`
+  - 新增 `frontend/src/components/BookReader.vue`
+  - 修改 `docs/VERSIONS.md`

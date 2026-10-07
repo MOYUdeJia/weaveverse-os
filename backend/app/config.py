@@ -18,6 +18,7 @@ DATA_DIR = BACKEND_DIR / "data"
 DATABASE_PATH = DATA_DIR / "weaveverse.db"
 DATABASE_URL = f"sqlite:///{DATABASE_PATH.as_posix()}"
 ATTACHMENTS_DIR = DATA_DIR / "attachments"
+BOOKS_DIR = DATA_DIR / "books"
 
 DEV_SERVER_URL = os.getenv("WEAVEVERSE_DEV_SERVER_URL", "http://127.0.0.1:5173")
 

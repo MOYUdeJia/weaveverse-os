@@ -15,6 +15,8 @@ backend/data/*.db-*
 backend/data/attachments/*
 !backend/data/attachments/.gitkeep
 !backend/data/attachments/README.md
+backend/data/books/*
+!backend/data/books/.gitkeep
 npm-debug.log*
 .idea/
 .DS_Store

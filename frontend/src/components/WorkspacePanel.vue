@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import { createBlock, deleteBlock, getNavItem, updateBlock } from '../api/client'
 import { blockComponents, blockOptions, defaultBlockContent } from '../blocks/registry.js'
+import BookshelfPanel from './BookshelfPanel.vue'
 
 const props = defineProps({
   item: {
@@ -112,7 +113,14 @@ async function addBlock(blockType) {
   <section class="relative flex min-w-0 flex-1 flex-col bg-[#fcfaf5]">
     <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-moss via-ember to-aurora" />
 
-    <div class="flex-1 overflow-y-auto px-10 py-12">
+    <BookshelfPanel
+      v-if="item && item.page_type === 'bookshelf' && !loading && !errorMessage && !empty"
+      :title="item.title"
+      :icon="item.icon"
+      :notice-message="noticeMessage"
+    />
+
+    <div v-else class="flex-1 overflow-y-auto px-10 py-12">
       <div class="mx-auto w-full max-w-3xl">
         <p class="text-sm font-semibold uppercase tracking-[0.28em] text-aurora">Workspace</p>
         <div v-if="noticeMessage" class="mt-4 rounded-md border border-moss/25 bg-moss/10 px-4 py-3 text-sm text-moss">
