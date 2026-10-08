@@ -1,9 +1,9 @@
 <script setup>
-// 添加导航：先选空白页或模板，再填标题和图标。编辑只改标题和图标。
+// 添加导航：先选积木页、模板或专用页，再填标题和图标。编辑只改标题和图标。
 import { computed, ref, watch } from 'vue'
 
 import { getPageTypes, getTemplates } from '../api/client'
-import { specialAdds } from '../specialAdds/registry'
+import { focusAdds, specialAdds } from '../specialAdds/registry'
 import IconField from './IconField.vue'
 
 const props = defineProps({
@@ -34,6 +34,7 @@ const pageType = ref('markdown')
 const pageTypes = ref([])
 const templates = ref([])
 const selectedTemplate = ref(null)
+const selectedFocus = ref(null)
 const loadError = ref('')
 const iconField = ref(null)
 
@@ -42,19 +43,37 @@ const dialogTitle = computed(() => {
     return '编辑导航项'
   }
   if (step.value === 'blank') {
-    return '新建空白页'
+    return '新建积木页'
   }
   if (step.value === 'templates' || step.value === 'template') {
     return '从模板创建'
   }
+  if (step.value === 'focus' || step.value === 'focusForm') {
+    return '新建专用页'
+  }
   return '添加导航项'
 })
-const canSave = computed(() => title.value.trim().length > 0 && icon.value.trim().length > 0)
+const canSave = computed(() => {
+  if (!title.value.trim()) {
+    return false
+  }
+  if (step.value === 'focusForm') {
+    return true
+  }
+  return icon.value.trim().length > 0
+})
+const focusList = computed(() => focusAdds())
 const specialAddList = computed(() =>
-  Object.entries(specialAdds).map(([id, spec]) => ({ id, ...spec })),
+  Object.entries(specialAdds)
+    .filter(([, spec]) => spec.placement !== 'focus')
+    .map(([id, spec]) => ({ id, ...spec })),
 )
+const focusTypeIds = computed(() => new Set(focusList.value.map((item) => item.pageType)))
 const creatableTypes = computed(() =>
   pageTypes.value.filter((type) => {
+    if (type.layer === 'focus' || type.layer === 'core' || focusTypeIds.value.has(type.type)) {
+      return false
+    }
     if (type.multi_instance) {
       return true
     }
@@ -76,6 +95,7 @@ watch(
     icon.value = props.item?.icon ?? ''
     pageType.value = props.item?.page_type ?? 'markdown'
     selectedTemplate.value = null
+    selectedFocus.value = null
     loadError.value = ''
     step.value = props.mode === 'edit' ? 'edit' : 'menu'
   },
@@ -120,9 +140,25 @@ async function chooseTemplates() {
 
 function pickTemplate(template) {
   selectedTemplate.value = template
+  selectedFocus.value = null
   title.value = template.label
   icon.value = template.icon
   step.value = 'template'
+}
+
+function chooseFocus() {
+  selectedTemplate.value = null
+  selectedFocus.value = null
+  loadError.value = ''
+  step.value = 'focus'
+}
+
+function pickFocus(add) {
+  selectedFocus.value = add
+  pageType.value = add.pageType
+  title.value = ''
+  icon.value = ''
+  step.value = 'focusForm'
 }
 
 function goBack() {
@@ -131,7 +167,12 @@ function goBack() {
     step.value = 'templates'
     return
   }
+  if (step.value === 'focusForm') {
+    step.value = 'focus'
+    return
+  }
   selectedTemplate.value = null
+  selectedFocus.value = null
   step.value = 'menu'
 }
 
@@ -182,12 +223,16 @@ function save() {
 
         <div v-if="step === 'menu'" class="grid gap-3">
           <button type="button" class="rounded-md bg-white px-4 py-4 text-left shadow-sm hover:bg-moss hover:text-white" @click="chooseBlank">
-            <span class="block text-base font-semibold">新建空白页</span>
-            <span class="mt-1 block text-sm opacity-70">选择页面类型，从一块空白开始</span>
+            <span class="block text-base font-semibold">新建积木页</span>
+            <span class="mt-1 block text-sm opacity-70">选一种积木页，用区块搭内容</span>
           </button>
           <button type="button" class="rounded-md bg-white px-4 py-4 text-left shadow-sm hover:bg-moss hover:text-white" @click="chooseTemplates">
             <span class="block text-base font-semibold">从模板创建</span>
             <span class="mt-1 block text-sm opacity-70">用一套搭好的区块开始</span>
+          </button>
+          <button type="button" class="rounded-md bg-white px-4 py-4 text-left shadow-sm hover:bg-moss hover:text-white" @click="chooseFocus">
+            <span class="block text-base font-semibold">新建专用页</span>
+            <span class="mt-1 block text-sm opacity-70">长文、笔记、网址集或白板，内容占满这一页</span>
           </button>
           <button
             v-for="add in specialAddList"
@@ -197,6 +242,20 @@ function save() {
             @click="chooseSpecial(add)"
           >
             <span class="block text-base font-semibold">{{ add.icon }} {{ add.label }}</span>
+          </button>
+        </div>
+
+        <div v-else-if="step === 'focus'" class="grid gap-3">
+          <button
+            v-for="add in focusList"
+            :key="add.pageType"
+            type="button"
+            class="rounded-md bg-white px-4 py-4 text-left shadow-sm hover:ring-2 hover:ring-moss"
+            @click="pickFocus(add)"
+          >
+            <span class="text-2xl">{{ add.icon }}</span>
+            <span class="mt-2 block text-sm font-semibold text-ink">{{ add.label }}</span>
+            <span class="mt-1 block text-xs leading-5 text-ink/60">{{ add.description }}</span>
           </button>
         </div>
 
@@ -226,6 +285,9 @@ function save() {
 
           <label class="mt-5 block text-sm font-medium text-ink/75" for="nav-icon">图标</label>
           <IconField ref="iconField" v-model="icon" />
+          <p v-if="step === 'focusForm' && selectedFocus" class="mt-2 text-xs text-ink/50">
+            不填图标时使用默认 {{ selectedFocus.icon }}
+          </p>
 
           <template v-if="step === 'blank'">
             <label class="mt-5 block text-sm font-medium text-ink/75" for="nav-page-type">页面类型</label>

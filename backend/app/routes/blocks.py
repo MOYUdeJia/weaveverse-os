@@ -13,6 +13,7 @@ from app import crud
 from app.config import ATTACHMENTS_DIR
 from app.db import get_session
 from app.errors import raise_api_error
+from app.page_types import fixed_block_type
 from app.schemas import BlockUpdate
 
 
@@ -51,6 +52,10 @@ def delete_block(block_id: int, session: Session = Depends(get_session)) -> dict
     block = crud.get_block(session, block_id)
     if block is None:
         raise_api_error(404, "id", "区块不存在")
+    item = crud.get_nav_item(session, block.nav_item_id)
+    pinned = fixed_block_type(item.page_type) if item is not None else None
+    if pinned and block.block_type == pinned:
+        raise_api_error(409, "id", "专用页的主内容不能删除")
     crud.delete_block(session, block)
     return {"status": "ok"}
 

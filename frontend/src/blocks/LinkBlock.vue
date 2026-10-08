@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 
 import { openExternalLink } from '../openExternal.js'
+import BlockShell from './BlockShell.vue'
 
 const props = defineProps({
   block: {
@@ -55,13 +56,7 @@ function confirmDelete() {
 </script>
 
 <template>
-  <article class="rounded-md border border-black/10 bg-white/80 p-4 shadow-sm">
-    <div class="mb-3 flex items-center justify-between gap-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-moss">链接</p>
-      <button type="button" class="grid h-8 w-8 place-items-center rounded-md hover:bg-black/5" title="删除" @click="confirmDelete">
-        🗑️
-      </button>
-    </div>
+  <BlockShell title="链接" :block-id="block.id" @delete="confirmDelete">
 
     <ul class="space-y-2">
       <li v-for="(item, index) in links" :key="`${item.url}-${index}`" class="flex items-center gap-2">
@@ -73,10 +68,10 @@ function confirmDelete() {
       </li>
     </ul>
 
-    <form class="mt-3 grid grid-cols-[1fr_1.4fr_auto] gap-2" @submit.prevent="addLink">
-      <input v-model="newTitle" class="h-10 rounded-md border border-black/15 bg-white px-3 text-sm outline-none focus:border-moss" placeholder="标题" />
-      <input v-model="newUrl" class="h-10 rounded-md border border-black/15 bg-white px-3 text-sm outline-none focus:border-moss" placeholder="https://" />
-      <button type="submit" class="h-10 rounded-md bg-ink px-3 text-sm font-semibold text-white hover:bg-moss">添加</button>
+    <form class="mt-2 grid grid-cols-[1fr_1.4fr_auto] gap-1.5" @submit.prevent="addLink">
+      <input v-model="newTitle" class="h-8 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" placeholder="标题" />
+      <input v-model="newUrl" class="h-8 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" placeholder="https://" />
+      <button type="submit" class="h-8 rounded-md bg-ink px-3 text-sm font-semibold text-white hover:bg-moss">添加</button>
     </form>
-  </article>
+  </BlockShell>
 </template>

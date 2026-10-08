@@ -1,4 +1,5 @@
 import ChartBlock from './ChartBlock.vue'
+import CodeBlock from './CodeBlock.vue'
 import GalleryBlock from './GalleryBlock.vue'
 import LinkBlock from './LinkBlock.vue'
 import MarkdownBlock from './MarkdownBlock.vue'
@@ -14,6 +15,7 @@ export const blockComponents = {
   schedule: ScheduleBlock,
   progress: ProgressBlock,
   chart: ChartBlock,
+  code: CodeBlock,
 }
 
 export const blockOptions = [
@@ -24,6 +26,7 @@ export const blockOptions = [
   { type: 'schedule', label: '计划表' },
   { type: 'progress', label: '进度' },
   { type: 'chart', label: '图表' },
+  { type: 'code', label: '代码' },
 ]
 
 export const defaultBlockContent = {
@@ -34,4 +37,5 @@ export const defaultBlockContent = {
   schedule: { entries: [] },
   progress: { items: [] },
   chart: { chart_type: 'line', unit: '', data: [] },
+  code: { language: 'plain', text: '', highlight: false },
 }

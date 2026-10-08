@@ -36,7 +36,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select', 'create', 'edit', 'delete', 'reorder', 'pin', 'move', 'open-overview'])
+const emit = defineEmits(['select', 'create', 'edit', 'delete', 'reorder', 'pin', 'lock', 'move', 'open-overview'])
 
 const localItems = ref([])
 
@@ -72,8 +72,20 @@ function onItemMenu(event, item) {
         onClick: () => emit('move', item, group.id),
       })),
     },
+    {
+      label: item.locked ? '解锁' : '锁定',
+      onClick: () => emit('lock', item),
+    },
     { label: '编辑', onClick: () => emit('edit', item) },
-    { label: '删除', onClick: () => emit('delete', item) },
+    {
+      label: '删除',
+      disabled: Boolean(item.locked),
+      onClick: () => {
+        if (!item.locked) {
+          emit('delete', item)
+        }
+      },
+    },
   ])
 }
 </script>
@@ -119,25 +131,10 @@ function onItemMenu(event, item) {
           <button type="button" class="flex min-w-0 flex-1 items-center gap-3 text-left" @click="emit('select', element.id)">
             <NavIcon :icon="element.icon" />
             <span class="truncate">{{ element.title }}</span>
-            <span v-if="element.pinned" class="text-xs opacity-70">置顶</span>
           </button>
-          <div class="nav-action flex shrink-0 gap-1 opacity-0 transition group-hover:opacity-100">
-            <button
-              type="button"
-              class="grid h-8 w-8 place-items-center rounded-md hover:bg-white/25"
-              title="编辑"
-              @click.stop="emit('edit', element)"
-            >
-              ✏️
-            </button>
-            <button
-              type="button"
-              class="grid h-8 w-8 place-items-center rounded-md hover:bg-white/25"
-              title="删除"
-              @click.stop="emit('delete', element)"
-            >
-              🗑️
-            </button>
+          <div class="flex shrink-0 items-center gap-1 pr-1 text-sm">
+            <span v-if="element.locked" title="已锁定">🔒</span>
+            <span v-if="element.pinned" title="已置顶">📌</span>
           </div>
         </div>
       </template>
@@ -152,7 +149,7 @@ function onItemMenu(event, item) {
         <span class="text-lg">+</span>
         <span>添加</span>
       </button>
-      <div class="text-xs leading-5 text-ink/55">右键可置顶、移动或删除</div>
+      <div class="text-xs leading-5 text-ink/55">右键可锁定、置顶、移动或删除</div>
     </div>
   </aside>
 </template>

@@ -16,9 +16,9 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select', 'create', 'edit', 'remove', 'reorder'])
+const emit = defineEmits(['select', 'create', 'edit', 'remove', 'reorder', 'lock'])
 
-const locked = ref(false)
+const narrow = ref(false)
 const holding = ref(false)
 const localGroups = ref([])
 let media = null
@@ -33,12 +33,28 @@ watch(
 )
 
 function onGroupMenu(event, group) {
-  const items = group.is_system
-    ? [{ label: '编辑图标', onClick: () => emit('edit', group) }]
-    : [
-        { label: '编辑', onClick: () => emit('edit', group) },
-        { label: '删除', onClick: () => emit('remove', group) },
-      ]
+  const items = [
+    {
+      label: group.locked ? '解锁' : '锁定',
+      onClick: () => emit('lock', group),
+    },
+  ]
+  if (group.is_system) {
+    items.push({ label: '编辑图标', onClick: () => emit('edit', group) })
+  } else {
+    items.push(
+      { label: '编辑', onClick: () => emit('edit', group) },
+      {
+        label: '删除',
+        disabled: Boolean(group.locked),
+        onClick: () => {
+          if (!group.locked) {
+            emit('remove', group)
+          }
+        },
+      },
+    )
+  }
   showMenu(event, items)
 }
 
@@ -55,7 +71,7 @@ function onDragEnd() {
 onMounted(() => {
   media = window.matchMedia('(max-width: 899px)')
   onMediaChange = () => {
-    locked.value = media.matches
+    narrow.value = media.matches
   }
   onMediaChange()
   media.addEventListener('change', onMediaChange)
@@ -72,7 +88,7 @@ onUnmounted(() => {
   <!-- 默认 48px，悬停展开到 200px。窄于 900px 时不再展开。 -->
   <aside
     class="group/folders flex h-screen w-12 shrink-0 flex-col overflow-hidden border-r border-black/10 bg-[#efeae1] transition-[width] duration-300 ease-out"
-    :class="locked ? '' : holding ? 'w-[200px]' : 'hover:w-[200px]'"
+    :class="narrow ? '' : holding ? 'w-[200px]' : 'hover:w-[200px]'"
   >
     <draggable
       v-model="localGroups"
@@ -90,7 +106,7 @@ onUnmounted(() => {
           @click="emit('select', element.id)"
           @contextmenu="onGroupMenu($event, element)"
         >
-          <span class="grid h-12 w-12 shrink-0 place-items-center">
+          <span class="relative grid h-12 w-12 shrink-0 place-items-center">
             <NavIcon
               :icon="element.icon"
               :box="
@@ -99,11 +115,12 @@ onUnmounted(() => {
                   : 'h-8 w-8 bg-white/80 text-base text-ink'
               "
             />
+            <span v-if="element.locked" class="absolute bottom-0.5 right-0.5 text-[11px] leading-none" title="已锁定">🔒</span>
           </span>
           <span
             class="min-w-0 flex-1 truncate whitespace-nowrap pr-3 text-sm font-medium transition-opacity duration-300"
             :class="[
-              locked ? 'opacity-0' : 'opacity-0 group-hover/folders:opacity-100',
+              narrow ? 'opacity-0' : 'opacity-0 group-hover/folders:opacity-100',
               element.id === activeId ? 'text-ink' : 'text-ink/70',
             ]"
           >
@@ -118,7 +135,7 @@ onUnmounted(() => {
         <span class="grid h-12 w-12 shrink-0 place-items-center text-xl">+</span>
         <span
           class="truncate whitespace-nowrap text-sm font-medium transition-opacity duration-300"
-          :class="locked ? 'opacity-0' : 'opacity-0 group-hover/folders:opacity-100'"
+          :class="narrow ? 'opacity-0' : 'opacity-0 group-hover/folders:opacity-100'"
         >
           新建分组
         </span>

@@ -76,6 +76,7 @@ def group_to_dict(session: Session, group: Group) -> dict:
         "icon": group.icon,
         "description": group.description,
         "is_system": group.is_system,
+        "locked": group.locked,
         "sort_order": group.sort_order,
         "item_count": count_nav_items(session, group.id),
         "overview_id": overview.id,
@@ -139,6 +140,17 @@ def update_group(
     overview.updated_at = now
     session.add(group)
     session.add(overview)
+    session.commit()
+    session.refresh(group)
+    return group
+
+
+# 切换分组锁定。锁定后不能删除，仍可以改名字、图标和简介。
+# Toggle the group lock. A locked group cannot be deleted, but it can still be edited.
+def toggle_group_lock(session: Session, group: Group) -> Group:
+    group.locked = not group.locked
+    group.updated_at = utc_now()
+    session.add(group)
     session.commit()
     session.refresh(group)
     return group

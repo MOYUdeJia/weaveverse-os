@@ -2,6 +2,8 @@
 // 计划表区块：按日期分组展示条目，勾选和编辑后立刻保存。
 import { computed, ref, watch } from 'vue'
 
+import BlockShell from './BlockShell.vue'
+
 const props = defineProps({
   block: {
     type: Object,
@@ -96,17 +98,11 @@ function confirmDelete() {
 </script>
 
 <template>
-  <article class="rounded-md border border-black/10 bg-white/80 p-4 shadow-sm">
-    <div class="mb-3 flex items-center justify-between gap-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-moss">计划表</p>
-      <button type="button" class="grid h-8 w-8 place-items-center rounded-md hover:bg-black/5" title="删除" @click="confirmDelete">
-        🗑️
-      </button>
-    </div>
+  <BlockShell title="计划表" :block-id="block.id" @delete="confirmDelete">
 
     <p v-if="entries.length === 0" class="text-sm text-ink/50">还没有计划</p>
 
-    <div v-else class="space-y-4">
+    <div v-else class="space-y-2">
       <section v-for="group in groups" :key="group.date">
         <p class="text-xs font-semibold tracking-wide text-aurora">{{ group.date }}</p>
         <ul class="mt-2 space-y-2">
@@ -143,11 +139,11 @@ function confirmDelete() {
       </section>
     </div>
 
-    <form class="mt-4 grid gap-2 sm:grid-cols-[auto_1fr_auto]" @submit.prevent="addEntry">
-      <input v-model="draft.date" type="date" required class="h-10 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" />
-      <input v-model="draft.title" class="h-10 rounded-md border border-black/15 bg-white px-3 text-sm outline-none focus:border-moss" placeholder="计划标题" />
-      <button type="submit" class="h-10 rounded-md bg-ink px-3 text-sm font-semibold text-white hover:bg-moss">+ 添加计划</button>
-      <input v-model="draft.note" class="h-10 rounded-md border border-black/15 bg-white px-3 text-sm outline-none focus:border-moss sm:col-span-3" placeholder="备注（可选）" />
+    <form class="mt-2 grid gap-1.5 sm:grid-cols-[auto_1fr_auto]" @submit.prevent="addEntry">
+      <input v-model="draft.date" type="date" required class="h-8 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" />
+      <input v-model="draft.title" class="h-8 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" placeholder="计划标题" />
+      <button type="submit" class="h-8 rounded-md bg-ink px-3 text-sm font-semibold text-white hover:bg-moss">+ 添加计划</button>
+      <input v-model="draft.note" class="h-8 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss sm:col-span-3" placeholder="备注（可选）" />
     </form>
-  </article>
+  </BlockShell>
 </template>

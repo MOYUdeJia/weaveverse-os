@@ -1,11 +1,22 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 
 import { createBlock, deleteBlock, getNavItem, updateBlock } from '../api/client'
 import { blockComponents, blockOptions, defaultBlockContent } from '../blocks/registry.js'
+import BookmarksPage from '../focus/BookmarksPage.vue'
+import DocPage from '../focus/DocPage.vue'
+import PlainPage from '../focus/PlainPage.vue'
+import { focusPageByType } from '../specialAdds/registry.js'
 import BookshelfPanel from './BookshelfPanel.vue'
 import GroupOverview from './GroupOverview.vue'
 import NavIcon from './NavIcon.vue'
+
+const focusViews = {
+  doc: DocPage,
+  plain: PlainPage,
+  bookmarks: BookmarksPage,
+  canvas: defineAsyncComponent(() => import('../focus/CanvasPage.vue')),
+}
 
 const props = defineProps({
   item: {
@@ -46,6 +57,14 @@ const pageError = ref('')
 const pickerOpen = ref(false)
 
 const blocks = computed(() => page.value?.blocks ?? [])
+const focusSpec = computed(() => focusPageByType(page.value?.page_type || props.item?.page_type))
+const focusView = computed(() => focusViews[focusSpec.value?.pageType] || null)
+const focusBlock = computed(() => {
+  if (!focusSpec.value) {
+    return null
+  }
+  return blocks.value[0] || null
+})
 
 watch(
   () => props.item?.id,
@@ -75,8 +94,15 @@ function componentFor(block) {
 }
 
 async function saveBlock(block, content) {
+  return saveBlockById(block.id, content)
+}
+
+async function saveBlockById(blockId, content) {
   try {
-    const updated = await updateBlock(block.id, { content })
+    const updated = await updateBlock(blockId, { content })
+    if (!page.value) {
+      return
+    }
     page.value = {
       ...page.value,
       blocks: page.value.blocks.map((item) => (item.id === updated.id ? updated : item)),
@@ -122,10 +148,10 @@ async function addBlock(blockType) {
 </script>
 
 <template>
-  <section class="relative flex min-w-0 flex-1 flex-col bg-[#fcfaf5]">
+  <section class="relative flex h-screen min-h-0 min-w-0 flex-1 flex-col bg-[#fcfaf5]">
     <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-moss via-ember to-aurora" />
 
-    <div v-if="overviewGroup && !loading && !errorMessage" class="flex-1 overflow-y-auto px-10 py-12">
+    <div v-if="overviewGroup && !loading && !errorMessage" class="min-h-0 flex-1 overflow-y-auto px-10 py-12">
       <GroupOverview
         :group="overviewGroup"
         :items="overviewItems"
@@ -142,7 +168,32 @@ async function addBlock(blockType) {
       :notice-message="noticeMessage"
     />
 
-    <div v-else class="flex-1 overflow-y-auto px-10 py-12">
+    <div
+      v-else-if="item && focusView && !loading && !errorMessage && !empty"
+      class="flex min-h-0 flex-1 flex-col"
+    >
+      <header class="flex shrink-0 items-center gap-3 border-b border-black/10 px-6 py-3">
+        <NavIcon :icon="item.icon" box="h-9 w-9 bg-dawn text-base" />
+        <div class="min-w-0">
+          <h2 class="truncate text-lg font-semibold text-ink">{{ item.title }}</h2>
+          <p v-if="noticeMessage" class="truncate text-xs text-moss">{{ noticeMessage }}</p>
+        </div>
+      </header>
+      <div class="min-h-0 flex-1" :class="focusSpec?.pageType === 'canvas' ? 'overflow-hidden' : 'overflow-y-auto'">
+        <p v-if="pageLoading" class="px-6 py-8 text-sm text-ink/60">正在加载...</p>
+        <p v-else-if="pageError" class="px-6 py-8 text-sm text-ember">{{ pageError }}</p>
+        <p v-else-if="!focusBlock" class="px-6 py-8 text-sm text-ink/60">这块专用页缺少内容。</p>
+        <component
+          :is="focusView"
+          v-else
+          class="h-full"
+          :block="focusBlock"
+          @save="saveBlockById($event.blockId, $event.content)"
+        />
+      </div>
+    </div>
+
+    <div v-else class="min-h-0 flex-1 overflow-y-auto px-8 py-8">
       <div class="mx-auto w-full max-w-3xl">
         <p class="text-sm font-semibold uppercase tracking-[0.28em] text-aurora">Workspace</p>
         <div v-if="noticeMessage" class="mt-4 rounded-md border border-moss/25 bg-moss/10 px-4 py-3 text-sm text-moss">
@@ -169,7 +220,7 @@ async function addBlock(blockType) {
           <p v-if="pageLoading" class="mt-8 text-sm text-ink/60">正在加载区块...</p>
           <p v-else-if="pageError" class="mt-8 text-sm text-ember">{{ pageError }}</p>
 
-          <div v-else class="mt-8 space-y-4">
+          <div v-else class="mt-6 space-y-2">
             <template v-for="block in blocks" :key="block.id">
               <component
                 :is="componentFor(block)"
@@ -184,8 +235,9 @@ async function addBlock(blockType) {
             </template>
 
             <button
+              v-if="!focusSpec"
               type="button"
-              class="h-11 w-full rounded-md border border-dashed border-moss/40 text-sm font-medium text-moss hover:bg-moss/10"
+              class="h-9 w-full rounded-md border border-dashed border-moss/40 text-sm font-medium text-moss hover:bg-moss/10"
               @click="pickerOpen = true"
             >
               + 添加区块

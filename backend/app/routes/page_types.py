@@ -16,6 +16,12 @@ router = APIRouter(prefix="/page-types", tags=["page-types"])
 # Return metadata for every registered page type.
 def get_page_types() -> list[dict]:
     return [
-        {"type": key, "label": spec["label"], "multi_instance": spec["multi_instance"]}
+        {
+            "type": key,
+            "label": spec["label"],
+            "multi_instance": spec["multi_instance"],
+            "layer": spec.get("layer") or "flex",
+            "default_icon": spec.get("default_icon") or "",
+        }
         for key, spec in PAGE_TYPES.items()
     ]

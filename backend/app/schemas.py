@@ -11,7 +11,7 @@ import re
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, BeforeValidator, Field, ValidationError, field_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError, field_validator
 
 
 class MarkdownContent(BaseModel):
@@ -127,6 +127,96 @@ class ChartContent(BaseModel):
     data: list[ChartPoint] = Field(default_factory=list)
 
 
+class PlainLine(BaseModel):
+    text: str = ""
+    color: str = ""
+
+    @field_validator("color")
+    @classmethod
+    # 空字符串是默认墨色。自定义只收 #RRGGBB。
+    # Empty means the default ink color. Custom colors are #RRGGBB only.
+    def check_color(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            return ""
+        if re.fullmatch(r"#[0-9a-fA-F]{6}", stripped) is None:
+            raise ValueError("颜色须为 #RRGGBB")
+        return stripped.lower()
+
+
+class PlainTextContent(BaseModel):
+    mode: Literal["numbered", "bullets"] = "numbered"
+    lines: list[PlainLine] = Field(default_factory=lambda: [PlainLine()])
+
+
+class BookmarkItem(BaseModel):
+    title: str = ""
+    url: str = ""
+    tags: list[str] = Field(default_factory=list)
+
+    @field_validator("title", "url")
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("tags")
+    @classmethod
+    # 去掉 # 前缀和空标签，同一条里不重复。
+    # Drop hash prefixes and blanks, and keep each tag once per item.
+    def clean_tags(cls, value: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for tag in value:
+            text = str(tag).strip().lstrip("#").strip()
+            if text and text not in cleaned:
+                cleaned.append(text[:40])
+        return cleaned[:12]
+
+
+class BookmarkSection(BaseModel):
+    name: str = "收藏"
+    items: list[BookmarkItem] = Field(default_factory=list)
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, value: str) -> str:
+        stripped = value.strip()
+        return stripped[:40] or "收藏"
+
+
+class BookmarksContent(BaseModel):
+    sections: list[BookmarkSection] = Field(default_factory=lambda: [BookmarkSection()])
+
+    @field_validator("sections")
+    @classmethod
+    def ensure_section(cls, value: list[BookmarkSection]) -> list[BookmarkSection]:
+        return value or [BookmarkSection()]
+
+
+CODE_LANGUAGES = {"plain", "javascript", "python", "json", "html", "css", "sql", "markdown"}
+
+
+class CodeContent(BaseModel):
+    language: str = "plain"
+    text: str = ""
+    highlight: bool = False
+
+    @field_validator("language")
+    @classmethod
+    def check_language(cls, value: str) -> str:
+        language = value.strip().lower() or "plain"
+        if language not in CODE_LANGUAGES:
+            raise ValueError("不支持的语言")
+        return language
+
+
+class CanvasContent(BaseModel):
+    """Fabric canvas JSON. Extra keys such as version and viewportTransform are kept."""
+
+    model_config = ConfigDict(extra="allow")
+
+    objects: list[Any] = Field(default_factory=list)
+
+
 BLOCK_CONTENT_MODELS = {
     "markdown": MarkdownContent,
     "todo": TodoContent,
@@ -135,6 +225,10 @@ BLOCK_CONTENT_MODELS = {
     "schedule": ScheduleContent,
     "progress": ProgressContent,
     "chart": ChartContent,
+    "plain_text": PlainTextContent,
+    "bookmarks": BookmarksContent,
+    "code": CodeContent,
+    "canvas": CanvasContent,
 }
 
 
@@ -188,10 +282,29 @@ class NavItemBase(BaseModel):
         return check_icon_ref(value)
 
 
-class NavItemCreate(NavItemBase):
+class NavItemCreate(BaseModel):
+    """Create payload. Icon may be empty; focus pages then receive their default icon."""
+
+    title: str = Field(min_length=1, max_length=50)
+    icon: str = Field(default="", max_length=20)
     page_type: str | None = None
     template_id: str | None = None
     group_id: int | None = Field(default=None, ge=1)
+
+    @field_validator("title")
+    @classmethod
+    def strip_title(cls, value: str) -> str:
+        return strip_required_text(value)
+
+    @field_validator("icon")
+    @classmethod
+    # 空图标留给路由补默认值。普通页和模板仍会在路由里要求非空。
+    # An empty icon is filled by the route. Blank pages and templates still require one.
+    def check_icon(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            return ""
+        return check_icon_ref(stripped)
 
     @field_validator("page_type", "template_id")
     @classmethod
@@ -237,6 +350,7 @@ class NavItemRead(NavItemBase):
     page_type: str
     group_id: int
     pinned: bool
+    locked: bool = False
     sort_order: int
     created_at: datetime
     updated_at: datetime
@@ -283,6 +397,8 @@ class PageTypeRead(BaseModel):
     type: str
     label: str
     multi_instance: bool
+    layer: str = "flex"
+    default_icon: str = ""
 
 
 class TemplateRead(BaseModel):
@@ -408,6 +524,7 @@ class GroupRead(GroupBase):
     id: int
     description: str
     is_system: bool
+    locked: bool = False
     sort_order: int
     item_count: int
     overview_id: int

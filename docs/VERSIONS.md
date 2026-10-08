@@ -366,3 +366,75 @@
   - 新增 `frontend/src/components/GroupEditDialog.vue`
   - 新增 `frontend/src/components/GroupOverview.vue`
   - 修改 `docs/VERSIONS.md`
+
+## M6 阶段 1 · 2026-10-08
+- **任务**：专用页 doc / plain / bookmarks，区块收紧，代码区块。白板、锁定和导航按钮精简留到阶段 2。
+- **实现**：
+  - 专用页创建时自动放一块不能删的固定区块，复用 `blocks` 表。长文用已有 `markdown`，笔记是 `plain_text`，网址集是 `bookmarks`。
+  - 「+」菜单三个入口：新建积木页、从模板创建、新建专用页。不填图标时用该类型的默认图标。
+  - 积木页区块标题可折叠，折叠状态记在本机。代码区块有语言下拉，高亮用页面内正则，不引库。
+- **技术架构**：页面层级用 `layer`：`flex` 积木页、`focus` 专用页、`core` 系统页。专用页再追加区块或删除主区块都返回 409。
+- **与 M5 相比的变化**：
+  - 新建菜单从「空白页 / 模板」变成「积木页 / 模板 / 专用页」
+  - 新增区块类型 `plain_text`、`bookmarks`、`code`
+- **已知问题**：
+  - 阶段 1 结束时笔记的分条点偏小，颜色选择器一拖就关，一行不能随宽度换行。阶段 2 修掉。
+- **文件变更**：
+  - 修改 `backend/app/page_types.py`
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/app/routes/nav.py`
+  - 修改 `backend/app/routes/blocks.py`
+  - 修改 `backend/app/routes/page_types.py`
+  - 修改 `frontend/src/blocks/registry.js`
+  - 修改 `frontend/src/specialAdds/registry.js`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/components/NavEditDialog.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改各积木区块组件
+  - 新增 `frontend/src/blocks/BlockShell.vue`
+  - 新增 `frontend/src/blocks/CodeBlock.vue`
+  - 新增 `frontend/src/blocks/highlight.js`
+  - 新增 `frontend/src/blocks/queuedSave.js`
+  - 新增 `frontend/src/focus/DocPage.vue`
+  - 新增 `frontend/src/focus/PlainPage.vue`
+  - 新增 `frontend/src/focus/BookmarksPage.vue`
+
+## M6 阶段 2 · 2026-10-08
+- **任务**：fabric.js 白板、分组和导航锁定、导航项去掉悬停编辑/删除、笔记换行和取色、网址集拖动排序。
+- **实现**：
+  - 白板页 `canvas`，默认图标 🎨。底部工具栏有选择、拖动画布、画笔、矩形、圆、直线、箭头、文本、颜色、撤销、重做。滚轮缩放。内容用 `canvas.toJSON()` 写入 `Block.content`，打开时 `loadFromJSON`。多个白板页各有自己的区块。
+  - `groups.locked` 和 `nav_items.locked` 都是布尔，默认 false。右键「锁定 / 解锁」。锁定后仍可编辑，DELETE 返回 409，右键删除置灰。分组栏和导航栏在锁定时显示锁，置顶时显示图钉。悬停不再出现编辑和删除按钮。
+  - 笔记分条改成 0.7rem 圆点。每条是 `autosize` 管高度的 textarea，宽度跟着容器，回车才新开一条。颜色用 `vanilla-colorful` 的 `hex-color-picker`，拖动时面板不关。
+  - 网址集的分区和链接用已有的 vuedraggable 4.1.0 上下排序。
+- **技术架构**：迁移 `20261008_0005` 给两张表加 `locked`。锁定接口是 `PATCH /api/nav/{id}/lock` 和 `PATCH /api/groups/{id}/lock`。白板 JSON 允许 fabric 的额外字段（`version`、`viewportTransform`）。fabric 只在打开白板时加载。页面层级的代码 key 是 `flex` / `focus` / `core`，界面中文是积木页 / 专用页 / 系统页。
+- **与 M5 相比的变化**：
+  - 积木页、专用页（长文、笔记、网址集、白板）、代码区块、锁定、导航状态图标
+  - 分组系统、书架、阅读器的原有流程还在。分组栏里原来那个控制窄屏收起的变量改名为 `narrow`，避免和锁定字段撞名
+- **已知问题**：
+  - 撤销最多保留 40 步。只滚轮缩放不会单独变成一步撤销，下一次落笔或拖动画布时会把当前视口写进历史。
+  - 浏览器里确认了积木页折叠和代码区块；白板落笔、取色拖动和网址拖动需要在应用里再手确认一次。
+- **文件变更**：
+  - 新增 `backend/alembic/versions/20261008_0005_locked.py`
+  - 新增 `frontend/src/focus/CanvasPage.vue`
+  - 修改 `backend/app/models.py`
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/app/crud.py`
+  - 修改 `backend/app/group_crud.py`
+  - 修改 `backend/app/page_types.py`
+  - 修改 `backend/app/routes/nav.py`
+  - 修改 `backend/app/routes/groups.py`
+  - 修改 `backend/app/routes/page_types.py`
+  - 修改 `frontend/package.json`
+  - 修改 `frontend/package-lock.json`
+  - 修改 `frontend/vite.config.js`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/components/SidebarNav.vue`
+  - 修改 `frontend/src/components/GroupBar.vue`
+  - 修改 `frontend/src/components/NavEditDialog.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改 `frontend/src/specialAdds/registry.js`
+  - 修改 `frontend/src/focus/PlainPage.vue`
+  - 修改 `frontend/src/focus/BookmarksPage.vue`
+  - 修改 `docs/VERSIONS.md`

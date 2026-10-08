@@ -23,7 +23,15 @@ function readBackendPort() {
 const backendPort = readBackendPort()
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue({
+      template: {
+        compilerOptions: {
+          isCustomElement: (tag) => tag === 'hex-color-picker',
+        },
+      },
+    }),
+  ],
   server: {
     host: '127.0.0.1',
     port: 5173,

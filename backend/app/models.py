@@ -30,6 +30,7 @@ class Group(SQLModel, table=True):
         sa_column=Column(Text, nullable=False, server_default=""),
     )
     is_system: bool = Field(default=False, nullable=False, index=True)
+    locked: bool = Field(default=False, nullable=False)
     sort_order: int = Field(default=0, nullable=False, index=True)
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
     updated_at: datetime = Field(default_factory=utc_now, nullable=False)
@@ -52,6 +53,7 @@ class NavItem(SQLModel, table=True):
         ondelete="CASCADE",
     )
     pinned: bool = Field(default=False, nullable=False)
+    locked: bool = Field(default=False, nullable=False)
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
     updated_at: datetime = Field(default_factory=utc_now, nullable=False)
 

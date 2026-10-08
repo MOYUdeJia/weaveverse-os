@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 
 import { attachmentUrl, deleteAttachment, uploadImage } from '../api/client'
+import BlockShell from './BlockShell.vue'
 
 const props = defineProps({
   block: {
@@ -71,15 +72,8 @@ function confirmDelete() {
 </script>
 
 <template>
-  <article class="rounded-md border border-black/10 bg-white/80 p-4 shadow-sm">
-    <div class="mb-3 flex items-center justify-between gap-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-moss">画廊</p>
-      <button type="button" class="grid h-8 w-8 place-items-center rounded-md hover:bg-black/5" title="删除" @click="confirmDelete">
-        🗑️
-      </button>
-    </div>
-
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+  <BlockShell title="画廊" :block-id="block.id" @delete="confirmDelete">
+    <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
       <figure v-for="(image, index) in images" :key="image.filename" class="group relative overflow-hidden rounded-md bg-dawn">
         <img :src="attachmentUrl(image.filename)" :alt="image.caption" class="h-32 w-full object-cover" />
         <figcaption class="truncate px-2 py-1 text-xs text-ink/60">{{ image.caption }}</figcaption>
@@ -96,11 +90,11 @@ function confirmDelete() {
     <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden" @change="onFileChange" />
     <button
       type="button"
-      class="mt-3 h-10 rounded-md border border-dashed border-moss/40 px-4 text-sm font-medium text-moss hover:bg-moss/10"
+      class="mt-2 h-8 rounded-md border border-dashed border-moss/40 px-3 text-sm font-medium text-moss hover:bg-moss/10"
       :disabled="isUploading"
       @click="fileInput?.click()"
     >
       {{ isUploading ? '上传中...' : '+ 上传图片' }}
     </button>
-  </article>
+  </BlockShell>
 </template>

@@ -1,6 +1,8 @@
 <script setup>
 import { ref, watch } from 'vue'
 
+import BlockShell from './BlockShell.vue'
+
 const props = defineProps({
   block: {
     type: Object,
@@ -61,20 +63,14 @@ function confirmDelete() {
 </script>
 
 <template>
-  <article class="rounded-md border border-black/10 bg-white/80 p-4 shadow-sm">
-    <div class="mb-3 flex items-center justify-between gap-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-moss">待办</p>
-      <button type="button" class="grid h-8 w-8 place-items-center rounded-md hover:bg-black/5" title="删除" @click="confirmDelete">
-        🗑️
-      </button>
-    </div>
+  <BlockShell title="待办" :block-id="block.id" @delete="confirmDelete">
 
     <ul class="space-y-2">
       <li v-for="(item, index) in items" :key="`${index}-${item.text}`" class="flex items-center gap-2">
         <input type="checkbox" :checked="item.done" @change="toggle(index)" />
         <input
           :value="item.text"
-          class="h-9 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm outline-none focus:border-moss"
+          class="h-8 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm outline-none focus:border-moss"
           :class="item.done ? 'text-ink/40 line-through' : 'text-ink'"
           @change="updateText(index, $event.target.value)"
         />
@@ -82,13 +78,13 @@ function confirmDelete() {
       </li>
     </ul>
 
-    <form class="mt-3 flex gap-2" @submit.prevent="addItem">
+    <form class="mt-2 flex gap-2" @submit.prevent="addItem">
       <input
         v-model="newText"
-        class="h-10 flex-1 rounded-md border border-black/15 bg-white px-3 text-sm outline-none focus:border-moss"
+        class="h-8 flex-1 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss"
         placeholder="添加待办"
       />
-      <button type="submit" class="h-10 rounded-md bg-ink px-3 text-sm font-semibold text-white hover:bg-moss">+</button>
+      <button type="submit" class="h-8 rounded-md bg-ink px-3 text-sm font-semibold text-white hover:bg-moss">+</button>
     </form>
-  </article>
+  </BlockShell>
 </template>

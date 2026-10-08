@@ -11,7 +11,7 @@ from app.db import get_session
 from app.errors import raise_api_error
 from app.icon_files import release_icon
 from app.models import NavItem
-from app.page_types import OVERVIEW_PAGE_TYPE, PAGE_TYPES
+from app.page_types import OVERVIEW_PAGE_TYPE, PAGE_TYPES, default_icon_for, is_focus_page
 from app.schemas import (
     BlockCreate,
     NavItemCreate,
@@ -61,6 +61,17 @@ def _resolve_group_id(session: Session, page_type: str, requested: int | None) -
     return requested
 
 
+# 没填图标时，专用页用注册表里的默认图标。其他类型仍必须自己填。
+# Focus pages without an icon get the registry default. Other types must supply one.
+def _apply_default_icon(data: NavItemCreate, page_type: str) -> None:
+    if data.icon:
+        return
+    icon = default_icon_for(page_type)
+    if not icon:
+        raise_api_error(400, "icon", "请填写图标")
+    data.icon = icon
+
+
 # 单实例类型不能移出系统分组。
 # Single-instance types cannot leave the system group.
 def _ensure_can_move(session: Session, item: NavItem, group_id: int) -> None:
@@ -100,6 +111,7 @@ def create_nav(data: NavItemCreate, session: Session = Depends(get_session)):
         if spec["page_type"] == OVERVIEW_PAGE_TYPE:
             raise_api_error(400, "template_id", "分组导览由系统创建，不能手动新建")
         _ensure_single_instance(session, spec["page_type"])
+        _apply_default_icon(data, spec["page_type"])
         group_id = _resolve_group_id(session, spec["page_type"], data.group_id)
         try:
             item = crud.create_nav_item(
@@ -121,6 +133,7 @@ def create_nav(data: NavItemCreate, session: Session = Depends(get_session)):
     if page_type == OVERVIEW_PAGE_TYPE:
         raise_api_error(400, "page_type", "分组导览由系统创建，不能手动新建")
     _ensure_single_instance(session, page_type)
+    _apply_default_icon(data, page_type)
     group_id = _resolve_group_id(session, page_type, data.group_id)
     try:
         item = crud.create_nav_item(session, data, page_type=page_type, group_id=group_id)
@@ -227,6 +240,17 @@ def pin_nav(nav_id: int, session: Session = Depends(get_session)):
     return crud.toggle_pin(session, item)
 
 
+@router.patch("/{nav_id}/lock", response_model=NavItemRead)
+# 切换导航项锁定。
+# Toggle whether a nav item is locked.
+def lock_nav(nav_id: int, session: Session = Depends(get_session)):
+    item = crud.get_nav_item(session, nav_id)
+    if item is None:
+        raise_api_error(404, "id", "导航项不存在")
+    _reject_overview(item)
+    return crud.toggle_lock(session, item)
+
+
 @router.delete("/{nav_id}")
 # 删除导航项及其区块。
 # Delete a navigation item and its blocks.
@@ -236,6 +260,8 @@ def delete_nav(nav_id: int, session: Session = Depends(get_session)) -> dict[str
         raise_api_error(404, "id", "导航项不存在")
     if item.page_type == OVERVIEW_PAGE_TYPE:
         raise_api_error(409, "id", "分组导览不能单独删除")
+    if item.locked:
+        raise_api_error(409, "id", "已锁定，不能删除")
     previous_icon = item.icon
     crud.delete_nav_item(session, item)
     release_icon(session, previous_icon)
@@ -259,6 +285,8 @@ def create_nav_block(nav_id: int, data: BlockCreate, session: Session = Depends(
     item = crud.get_nav_item(session, nav_id)
     if item is None:
         raise_api_error(404, "id", "导航项不存在")
+    if is_focus_page(item.page_type):
+        raise_api_error(409, "page_type", "专用页不能再添加区块")
     try:
         block = crud.create_block(session, nav_id, data)
     except ValueError as exc:

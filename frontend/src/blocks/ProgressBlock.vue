@@ -2,6 +2,8 @@
 // 进度追踪区块：用 CSS 宽度画进度条，编辑后立刻保存。
 import { ref, watch } from 'vue'
 
+import BlockShell from './BlockShell.vue'
+
 const props = defineProps({
   block: {
     type: Object,
@@ -81,17 +83,11 @@ function confirmDelete() {
 </script>
 
 <template>
-  <article class="rounded-md border border-black/10 bg-white/80 p-4 shadow-sm">
-    <div class="mb-3 flex items-center justify-between gap-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-moss">进度</p>
-      <button type="button" class="grid h-8 w-8 place-items-center rounded-md hover:bg-black/5" title="删除" @click="confirmDelete">
-        🗑️
-      </button>
-    </div>
+  <BlockShell title="进度" :block-id="block.id" @delete="confirmDelete">
 
     <p v-if="items.length === 0" class="text-sm text-ink/50">还没有进度项</p>
 
-    <ul v-else class="space-y-4">
+    <ul v-else class="space-y-2">
       <li v-for="(item, index) in items" :key="index">
         <div class="mb-1 flex items-center justify-between gap-3 text-sm">
           <span class="truncate font-medium text-ink">{{ item.label }}</span>
@@ -130,12 +126,12 @@ function confirmDelete() {
       </li>
     </ul>
 
-    <form class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-[1fr_5rem_5rem_4rem_auto]" @submit.prevent="addItem">
-      <input v-model="draft.label" class="h-10 rounded-md border border-black/15 bg-white px-3 text-sm outline-none focus:border-moss" placeholder="标签" />
-      <input v-model.number="draft.current" type="number" step="any" class="h-10 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" />
-      <input v-model.number="draft.total" type="number" step="any" class="h-10 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" />
-      <input v-model="draft.unit" class="h-10 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" />
-      <button type="submit" class="h-10 rounded-md bg-ink px-3 text-sm font-semibold text-white hover:bg-moss">+ 添加进度项</button>
+    <form class="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-[1fr_5rem_5rem_4rem_auto]" @submit.prevent="addItem">
+      <input v-model="draft.label" class="h-8 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" placeholder="标签" />
+      <input v-model.number="draft.current" type="number" step="any" class="h-8 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" />
+      <input v-model.number="draft.total" type="number" step="any" class="h-8 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" />
+      <input v-model="draft.unit" class="h-8 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" />
+      <button type="submit" class="h-8 rounded-md bg-ink px-3 text-sm font-semibold text-white hover:bg-moss">+ 添加进度项</button>
     </form>
-  </article>
+  </BlockShell>
 </template>

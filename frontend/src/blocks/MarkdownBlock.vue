@@ -4,6 +4,7 @@ import { marked } from 'marked'
 import { computed, ref, watch } from 'vue'
 
 import { openExternalLink } from '../openExternal.js'
+import BlockShell from './BlockShell.vue'
 
 const props = defineProps({
   block: {
@@ -72,24 +73,18 @@ function onContentClick(event) {
 </script>
 
 <template>
-  <article class="rounded-md border border-black/10 bg-white/80 p-4 shadow-sm">
-    <div class="mb-3 flex items-center justify-between gap-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-moss">Markdown</p>
-      <div class="flex gap-1">
-        <button type="button" class="grid h-8 w-8 place-items-center rounded-md hover:bg-black/5" title="编辑" @click="startEdit">
-          ✏️
-        </button>
-        <button type="button" class="grid h-8 w-8 place-items-center rounded-md hover:bg-black/5" title="删除" @click="confirmDelete">
-          🗑️
-        </button>
-      </div>
-    </div>
+  <BlockShell title="Markdown" :block-id="block.id" @delete="confirmDelete">
+    <template #actions>
+      <button type="button" class="grid h-6 w-6 place-items-center rounded text-xs hover:bg-black/5" title="编辑" @click="startEdit">
+        ✏️
+      </button>
+    </template>
 
     <textarea
       v-if="isEditing"
       ref="editor"
       v-model="draft"
-      class="min-h-48 w-full rounded-md border border-black/15 bg-white p-3 text-sm leading-6 outline-none focus:border-moss"
+      class="min-h-36 w-full rounded-md border border-black/15 bg-white p-2 text-sm leading-6 outline-none focus:border-moss"
       @keydown.ctrl.enter="save"
     />
     <div
@@ -100,9 +95,9 @@ function onContentClick(event) {
       v-html="renderedHtml || '<p class=&quot;text-ink/40&quot;>双击或点编辑，开始写点什么。</p>'"
     />
 
-    <div v-if="isEditing" class="mt-3 flex justify-end gap-2">
-      <button type="button" class="h-9 rounded-md px-3 text-sm text-ink/70 hover:bg-black/5" @click="cancel">取消</button>
-      <button type="button" class="h-9 rounded-md bg-moss px-4 text-sm font-semibold text-white hover:bg-ink" @click="save">保存</button>
+    <div v-if="isEditing" class="mt-2 flex justify-end gap-2">
+      <button type="button" class="h-8 rounded-md px-3 text-sm text-ink/70 hover:bg-black/5" @click="cancel">取消</button>
+      <button type="button" class="h-8 rounded-md bg-moss px-3 text-sm font-semibold text-white hover:bg-ink" @click="save">保存</button>
     </div>
-  </article>
+  </BlockShell>
 </template>

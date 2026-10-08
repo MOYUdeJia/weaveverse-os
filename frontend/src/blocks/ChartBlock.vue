@@ -2,6 +2,8 @@
 // 图表区块：用原生 SVG 画折线或柱状图，不依赖图表库。
 import { computed, ref, watch } from 'vue'
 
+import BlockShell from './BlockShell.vue'
+
 const props = defineProps({
   block: {
     type: Object,
@@ -138,15 +140,8 @@ function formatTick(value) {
 </script>
 
 <template>
-  <article class="rounded-md border border-black/10 bg-white/80 p-4 shadow-sm">
-    <div class="mb-3 flex items-center justify-between gap-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-moss">图表</p>
-      <button type="button" class="grid h-8 w-8 place-items-center rounded-md hover:bg-black/5" title="删除" @click="confirmDelete">
-        🗑️
-      </button>
-    </div>
-
-    <div class="mb-3 flex flex-wrap gap-2">
+  <BlockShell title="图表" :block-id="block.id" @delete="confirmDelete">
+    <div class="mb-2 flex flex-wrap gap-1.5">
       <select
         :value="chartType"
         class="h-9 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss"
@@ -221,10 +216,10 @@ function formatTick(value) {
       </li>
     </ul>
 
-    <form class="mt-3 flex gap-2" @submit.prevent="addPoint">
-      <input v-model="draft.label" class="h-10 flex-1 rounded-md border border-black/15 bg-white px-3 text-sm outline-none focus:border-moss" placeholder="标签" />
-      <input v-model.number="draft.value" type="number" step="any" class="h-10 w-24 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" />
-      <button type="submit" class="h-10 rounded-md bg-ink px-3 text-sm font-semibold text-white hover:bg-moss">+ 添加数据点</button>
+    <form class="mt-2 flex gap-1.5" @submit.prevent="addPoint">
+      <input v-model="draft.label" class="h-8 flex-1 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" placeholder="标签" />
+      <input v-model.number="draft.value" type="number" step="any" class="h-8 w-24 rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-moss" />
+      <button type="submit" class="h-8 rounded-md bg-ink px-3 text-sm font-semibold text-white hover:bg-moss">+ 添加数据点</button>
     </form>
-  </article>
+  </BlockShell>
 </template>

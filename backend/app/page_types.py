@@ -37,6 +37,51 @@ PAGE_TYPES = {
             {"block_type": "link", "content": {"links": []}},
         ],
     },
+    # 专用页：创建时自动放一块固定区块，用户不能删，也不能再追加区块。
+    # Focus pages start with one fixed block. It cannot be deleted or joined by others.
+    "doc": {
+        "layer": "focus",
+        "label": "长文",
+        "multi_instance": True,
+        "default_icon": "📄",
+        "fixed_block": "markdown",
+        "default_blocks": [
+            {"block_type": "markdown", "content": {"text": ""}},
+        ],
+    },
+    "plain": {
+        "layer": "focus",
+        "label": "笔记",
+        "multi_instance": True,
+        "default_icon": "📝",
+        "fixed_block": "plain_text",
+        "default_blocks": [
+            {
+                "block_type": "plain_text",
+                "content": {"mode": "numbered", "lines": [{"text": "", "color": ""}]},
+            },
+        ],
+    },
+    "bookmarks": {
+        "layer": "focus",
+        "label": "网址集",
+        "multi_instance": True,
+        "default_icon": "🔖",
+        "fixed_block": "bookmarks",
+        "default_blocks": [
+            {"block_type": "bookmarks", "content": {"sections": [{"name": "收藏", "items": []}]}},
+        ],
+    },
+    "canvas": {
+        "layer": "focus",
+        "label": "白板",
+        "multi_instance": True,
+        "default_icon": "🎨",
+        "fixed_block": "canvas",
+        "default_blocks": [
+            {"block_type": "canvas", "content": {"objects": []}},
+        ],
+    },
     "bookshelf": {"label": "书架", "multi_instance": False, "default_blocks": []},
     "idea_box": {"label": "IDEA 栏", "multi_instance": False, "default_blocks": []},
     "vault": {"label": "密码箱", "multi_instance": False, "default_blocks": []},
@@ -51,3 +96,26 @@ PAGE_TYPES = {
         "default_blocks": [],
     },
 }
+
+
+# 页面层级。没写 layer 的类型都是积木页（flex）。
+# Layer of a page type. Entries without one are flex pages.
+def page_layer(page_type: str) -> str:
+    spec = PAGE_TYPES.get(page_type) or {}
+    return spec.get("layer") or "flex"
+
+
+def is_focus_page(page_type: str) -> bool:
+    return page_layer(page_type) == "focus"
+
+
+# 专用页那一块不能删的区块类型。普通页返回空。
+# Block type pinned to a focus page. Ordinary pages return nothing.
+def fixed_block_type(page_type: str) -> str | None:
+    spec = PAGE_TYPES.get(page_type) or {}
+    return spec.get("fixed_block")
+
+
+def default_icon_for(page_type: str) -> str:
+    spec = PAGE_TYPES.get(page_type) or {}
+    return spec.get("default_icon") or ""

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app import crud, group_crud
 from app.db import get_session
 from app.errors import raise_api_error
 from app.group_crud import MissingOverview
 from app.icon_files import release_icon
+from app.models import NavItem
 from app.schemas import GroupCreate, GroupDetail, GroupRead, GroupReorder, GroupUpdate
 
 
@@ -109,6 +110,20 @@ def update_group(group_id: int, data: GroupUpdate, session: Session = Depends(ge
         raise_api_error(500, "id", "分组缺少导览页")
 
 
+@router.patch("/{group_id}/lock", response_model=GroupRead)
+# 切换分组锁定。锁定后不能删除，仍可以编辑。
+# Toggle a group's lock. Locked groups cannot be deleted, but they can be edited.
+def lock_group(group_id: int, session: Session = Depends(get_session)):
+    group = group_crud.get_group(session, group_id)
+    if group is None:
+        raise_api_error(404, "id", "分组不存在")
+    try:
+        updated = group_crud.toggle_group_lock(session, group)
+        return group_crud.group_to_dict(session, updated)
+    except MissingOverview:
+        raise_api_error(500, "id", "分组缺少导览页")
+
+
 @router.delete("/{group_id}")
 # 删除分组及其导航项。系统分组不能删。
 # Delete a group and its nav items. The system group cannot be deleted.
@@ -118,6 +133,13 @@ def delete_group(group_id: int, session: Session = Depends(get_session)) -> dict
         raise_api_error(404, "id", "分组不存在")
     if group.is_system:
         raise_api_error(409, "id", "系统分组不能删除")
+    if group.locked:
+        raise_api_error(409, "id", "分组已锁定，不能删除")
+    locked_child = session.exec(
+        select(NavItem.id).where(NavItem.group_id == group.id, NavItem.locked.is_(True))
+    ).first()
+    if locked_child is not None:
+        raise_api_error(409, "id", "分组里有锁定的导航项，不能删除")
 
     icons = group_crud.delete_group(session, group)
     for icon in icons:

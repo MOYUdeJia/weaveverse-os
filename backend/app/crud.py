@@ -205,6 +205,17 @@ def toggle_pin(session: Session, item: NavItem) -> NavItem:
     return item
 
 
+# 切换导航项锁定。锁定后不能删除，标题和图标仍可改。
+# Toggle the nav lock. A locked item cannot be deleted, but its title and icon can change.
+def toggle_lock(session: Session, item: NavItem) -> NavItem:
+    item.locked = not item.locked
+    item.updated_at = utc_now()
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    return item
+
+
 # 删除导航项；依赖外键级联删掉它的区块。
 # Delete a navigation item; FK cascade removes its blocks.
 def delete_nav_item(session: Session, item: NavItem) -> None:
@@ -311,6 +322,7 @@ def nav_item_to_detail(session: Session, item: NavItem) -> dict:
         "page_type": item.page_type,
         "group_id": item.group_id,
         "pinned": item.pinned,
+        "locked": item.locked,
         "sort_order": item.sort_order,
         "created_at": item.created_at,
         "updated_at": item.updated_at,

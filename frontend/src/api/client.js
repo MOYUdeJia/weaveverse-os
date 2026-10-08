@@ -126,6 +126,18 @@ export function pinNav(id) {
   })
 }
 
+export function lockNav(id) {
+  return request(`/nav/${id}/lock`, {
+    method: 'PATCH',
+  })
+}
+
+export function lockGroup(id) {
+  return request(`/groups/${id}/lock`, {
+    method: 'PATCH',
+  })
+}
+
 export function deleteNav(id) {
   return request(`/nav/${id}`, {
     method: 'DELETE',

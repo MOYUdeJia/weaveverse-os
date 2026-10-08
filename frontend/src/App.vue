@@ -9,6 +9,8 @@ import {
   getGroups,
   getHealth,
   getNav,
+  lockGroup,
+  lockNav,
   patchNav,
   pinNav,
   reorderGroups,
@@ -251,6 +253,26 @@ async function persistNavOrder(ids) {
   }
 }
 
+async function toggleLock(item) {
+  try {
+    const updated = await lockNav(item.id)
+    navItems.value = navItems.value.map((navItem) => (navItem.id === updated.id ? { ...navItem, ...updated } : navItem))
+  } catch (error) {
+    console.error('Failed to lock nav:', error)
+    alert(error.message || '锁定失败')
+  }
+}
+
+async function toggleGroupLock(group) {
+  try {
+    const updated = await lockGroup(group.id)
+    replaceGroup(updated)
+  } catch (error) {
+    console.error('Failed to lock group:', error)
+    alert(error.message || '锁定失败')
+  }
+}
+
 async function togglePin(item) {
   try {
     await pinNav(item.id)
@@ -386,6 +408,7 @@ onMounted(loadShellData)
         @create="openCreateGroup"
         @edit="openEditGroup"
         @remove="removeGroup"
+        @lock="toggleGroupLock"
         @reorder="persistGroupOrder"
       />
       <SidebarNav
@@ -402,6 +425,7 @@ onMounted(loadShellData)
         @delete="removeNavItem"
         @reorder="persistNavOrder"
         @pin="togglePin"
+        @lock="toggleLock"
         @move="moveNavItem"
         @open-overview="selectGroup(activeGroupId, null, true)"
       />
