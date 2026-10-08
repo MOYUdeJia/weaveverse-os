@@ -59,8 +59,40 @@ export function getTemplates() {
   return request('/templates')
 }
 
-export function getNav() {
-  return request('/nav')
+export function getGroups() {
+  return request('/groups')
+}
+
+export function createGroup(data) {
+  return request('/groups', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export function updateGroup(id, data) {
+  return request(`/groups/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+export function deleteGroup(id) {
+  return request(`/groups/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export function reorderGroups(ids) {
+  return request('/groups/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  })
+}
+
+export function getNav(groupId) {
+  const query = groupId == null ? '' : `?group_id=${encodeURIComponent(groupId)}`
+  return request(`/nav${query}`)
 }
 
 export function getNavItem(id) {
@@ -78,6 +110,19 @@ export function updateNav(id, data) {
   return request(`/nav/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
+  })
+}
+
+export function patchNav(id, data) {
+  return request(`/nav/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+export function pinNav(id) {
+  return request(`/nav/${id}/pin`, {
+    method: 'PATCH',
   })
 }
 
@@ -173,4 +218,20 @@ export function getBookContent(id, chapter = 0) {
 
 export function bookCoverUrl(id) {
   return `${API_PREFIX}/books/${id}/cover`
+}
+
+export function uploadIcon(blob) {
+  const body = new FormData()
+  body.append('file', blob, 'icon.png')
+  return request('/icons', {
+    method: 'POST',
+    body,
+  })
+}
+
+export function deleteIcon(icon) {
+  const id = String(icon || '').replace('@file:', '')
+  return request(`/icons/${encodeURIComponent(id)}.png`, {
+    method: 'DELETE',
+  })
 }

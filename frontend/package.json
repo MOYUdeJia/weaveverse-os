@@ -9,9 +9,12 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
+    "@imengyu/vue3-context-menu": "1.5.6",
+    "cropperjs": "1.6.2",
     "dompurify": "3.2.6",
     "marked": "15.0.12",
-    "vue": "3.5.43"
+    "vue": "3.5.43",
+    "vuedraggable": "4.1.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "6.0.9",

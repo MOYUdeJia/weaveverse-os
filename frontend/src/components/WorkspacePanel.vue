@@ -4,6 +4,8 @@ import { computed, ref, watch } from 'vue'
 import { createBlock, deleteBlock, getNavItem, updateBlock } from '../api/client'
 import { blockComponents, blockOptions, defaultBlockContent } from '../blocks/registry.js'
 import BookshelfPanel from './BookshelfPanel.vue'
+import GroupOverview from './GroupOverview.vue'
+import NavIcon from './NavIcon.vue'
 
 const props = defineProps({
   item: {
@@ -26,7 +28,17 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  overviewGroup: {
+    type: Object,
+    default: null,
+  },
+  overviewItems: {
+    type: Array,
+    default: () => [],
+  },
 })
+
+const emit = defineEmits(['open-nav', 'rename-group', 'describe-group'])
 
 const page = ref(null)
 const pageLoading = ref(false)
@@ -113,8 +125,18 @@ async function addBlock(blockType) {
   <section class="relative flex min-w-0 flex-1 flex-col bg-[#fcfaf5]">
     <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-moss via-ember to-aurora" />
 
+    <div v-if="overviewGroup && !loading && !errorMessage" class="flex-1 overflow-y-auto px-10 py-12">
+      <GroupOverview
+        :group="overviewGroup"
+        :items="overviewItems"
+        @open="emit('open-nav', $event)"
+        @rename="(name, done) => emit('rename-group', name, done)"
+        @describe="(text, done) => emit('describe-group', text, done)"
+      />
+    </div>
+
     <BookshelfPanel
-      v-if="item && item.page_type === 'bookshelf' && !loading && !errorMessage && !empty"
+      v-else-if="item && item.page_type === 'bookshelf' && !loading && !errorMessage && !empty"
       :title="item.title"
       :icon="item.icon"
       :notice-message="noticeMessage"
@@ -137,9 +159,7 @@ async function addBlock(blockType) {
 
         <template v-else-if="item">
           <div class="mt-5 flex items-center gap-4">
-            <span class="grid h-16 w-16 place-items-center rounded-md bg-dawn text-4xl shadow-sm">
-              {{ item.icon }}
-            </span>
+            <NavIcon :icon="item.icon" box="h-16 w-16 bg-dawn text-2xl shadow-sm" />
             <div>
               <h2 class="text-4xl font-semibold text-ink">{{ item.title }}</h2>
               <p class="mt-1 text-sm text-ink/50">{{ page?.page_type || item.page_type || 'markdown' }}</p>

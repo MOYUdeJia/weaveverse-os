@@ -226,3 +226,143 @@
   - 新增 `frontend/src/components/BookCover.vue`
   - 新增 `frontend/src/components/BookReader.vue`
   - 修改 `docs/VERSIONS.md`
+
+## M4.1 · 2026-10-07
+- **任务**：修书架进度数字和单实例重复创建，并加上导航图标选择与裁剪上传
+- **实现**：
+  - 最近阅读卡片在进度条旁显示百分比
+  - 创建单实例页面类型时，已有同类项返回 409
+  - 新建菜单里，已有书架后不再出现「书架」；idea_box / vault / future_plan / habit_tracker 仍不出现在菜单里，但接口同样拒绝第二个
+  - 导航图标固定在方框内，多出来的字符被截断
+  - 编辑弹窗提供 emoji 选择器，也可手输
+  - 上传图片后在 192×192 窗口里拖动和缩放，保存成 64×64 PNG
+  - 图标文件放在 `backend/data/icons/`，`nav_items.icon` 写成 `@file:` 加 12 位编号，旧 emoji 不用迁移
+- **技术架构**：不新增字段，也不改 `icon` 的 20 字符上限。`@file:` 加 12 位十六进制是 18 个字符，能放进现有校验。侧边栏图标槽是 32px，导出 64px 是为了在两倍屏上仍清晰，同时保持正方形。删除或换掉导航图标时，若没有其他导航再引用这张图，文件一并删除。已有的重复书架不会自动合并或删除。
+- **与 M4 相比的变化**：
+  - `POST /api/nav` 对单实例类型增加 409
+  - 新增 `POST /api/icons`、`GET /api/icons/{id}.png`、`DELETE /api/icons/{id}.png`
+  - 新建空白页在已有书架时隐藏「书架」选项
+  - 最近阅读卡片补上百分比数字
+  - 导航图标从纯文本框改为文本框加选择器，并支持裁剪上传
+- **已知问题**：
+  - 已经建出的重复单实例项不会自动清理，只是不能再新增。
+  - 在裁剪窗里上传后如果保存失败，这次新图标要等关闭弹窗才会删；保存成功后的旧图由后端在换图标或删导航时清理。
+  - EPUB 章节图片和 CSS 仍没有资源接口，阅读器逻辑这次没改。
+  - 自定义封面和书籍分类没做，记在 `docs/FEATURES.md`。
+- **文件变更**：
+  - 修改 `.gitignore`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/app/config.py`
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/app/routes/nav.py`
+  - 新增 `backend/app/icon_files.py`
+  - 新增 `backend/app/routes/icons.py`
+  - 新增 `backend/data/icons/.gitkeep`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/components/SidebarNav.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改 `frontend/src/components/BookshelfPanel.vue`
+  - 修改 `frontend/src/components/NavEditDialog.vue`
+  - 新增 `frontend/src/components/NavIcon.vue`
+  - 新增 `frontend/src/components/IconField.vue`
+  - 修改 `docs/FEATURES.md`
+  - 修改 `docs/VERSIONS.md`
+
+## M5 阶段 1 · 2026-10-08
+- **任务**：分组的数据层和后端。前端三栏、分组界面、图标裁剪留到后面的阶段。
+- **实现**：
+  - 新增 `groups` 表。现有 11 条导航都挂到「系统」分组，id、标题、图标、页面类型、排序、区块和书籍都没改。
+  - 「系统」分组自动有一条 `group_overview` 导览页，不出现在导航列表里。
+  - 分组可新建、查看、修改、删除、排序。系统分组不能删、不能改名。
+  - 导航可在分组间移动，可置顶。同分组标题去空白、忽略大小写后不能重名。
+  - 单实例页面类型新建时强制放进系统分组。手动新建 `group_overview` 会返回 400。
+- **技术架构**：SQLite 不能用 Alembic 的 `add_column(ForeignKey)`，迁移用原始 `ALTER TABLE` 把 `group_id` 和外键写进表定义，已有行默认进 id 为 1 的系统分组。导览页是每个分组一条，注册表里 `multi_instance` 仍是 False，只用来挡住新建菜单；全局「只能有一个」的校验不用于它。简介放在 `groups.description`，因为导览页的默认区块是空的，阶段 3 要编辑简介就得有地方存。
+- **与 M4.1 相比的变化**：
+  - 新增 `GET/POST /api/groups`、`GET/PATCH/DELETE /api/groups/{id}`、`POST /api/groups/reorder`
+  - `GET /api/nav` 增加可选 `group_id`，响应多了 `group_id` 和 `pinned`，并且不含导览页
+  - 保留原来的 `PUT /api/nav/{id}`，另外新增 `PATCH /api/nav/{id}` 和 `PATCH /api/nav/{id}/pin`
+  - 同分组重名返回 409。已经存在的两条标题都是「1」的导航没有改名，标题不改时仍可保存。
+  - 导航重排改成一次只排一个分组。现在全部导航都在系统分组里，现有前端把全部 id 发上来仍然可用。
+- **已知问题**：
+  - 阶段 2、阶段 3 还没做，界面仍是原来的单列导航。
+  - 数据库里已有两条标题同为「1」的导航（id 4 和 19）。迁移没有改它们。
+  - 分组名允许重复，任务书没有要求分组名唯一。
+- **文件变更**：
+  - 修改 `backend/app/models.py`
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/app/page_types.py`
+  - 修改 `backend/app/crud.py`
+  - 修改 `backend/app/seed.py`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/app/icon_files.py`
+  - 修改 `backend/app/routes/nav.py`
+  - 新增 `backend/app/group_crud.py`
+  - 新增 `backend/app/routes/groups.py`
+  - 新增 `backend/alembic/versions/20261008_0004_groups.py`
+  - 修改 `docs/VERSIONS.md`
+
+## M5 阶段 2 · 2026-10-08
+- **任务**：前端改成三栏。分组栏 48px，悬停展开到 200px；导航栏 240px；工作区不动。分组的新建、导览页和右键菜单留到阶段 3。
+- **实现**：
+  - 新增分组栏。点分组后，中间栏只显示该分组的导航项。
+  - 窗口宽度小于 900px 时，分组栏不再展开。
+  - 原来的编辑、删除、添加还在导航栏里。
+  - 同分组排序改用 vuedraggable 4.1.0。跨分组拖拽没做。
+- **技术架构**：分组栏用 CSS 宽度过渡 300ms，不覆盖在导航栏上面，展开时工作区跟着变窄。窄窗口用 `matchMedia` 关掉悬停展开。新建导航项会带上当前分组 id；单实例类型仍由后端放进系统分组。
+- **与阶段 1 相比的变化**：
+  - 前端开始请求 `GET /api/groups` 和 `GET /api/nav?group_id=`
+  - 侧边栏从一列变成分组栏加导航栏
+  - 拖拽实现从原生 HTML5 换成 vuedraggable
+- **已知问题**：
+  - 分组的「+」、改名、删除、导览页、右键菜单都还没有。
+  - 浏览器自动化没能完成一次真实拖拽。排序代码已接上，需要在应用里用手拖一次确认。
+- **文件变更**：
+  - 修改 `frontend/package.json`
+  - 修改 `frontend/package-lock.json`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/components/SidebarNav.vue`
+  - 新增 `frontend/src/components/GroupBar.vue`
+  - 修改 `docs/VERSIONS.md`
+
+## M5 阶段 3 · 2026-10-08
+- **任务**：分组的新建、编辑、删除和排序，分组导览页，导航项的置顶、移动和删除确认，右键菜单，以及图标裁剪改成 QQ 头像逻辑。
+- **实现**：
+  - 分组栏底部可以新建分组。右键可以编辑、删除。系统分组的菜单只有「编辑图标」。
+  - 已移除三点按钮。悬停分组项时背景会轻轻变深，提示可以右键。
+  - 删除分组前会说明该分组有多少个导航项。
+  - 点分组图标或中间栏的分组名，右侧打开导览页。可以改简介；非系统分组还可以改名。导览页列出该分组的导航项，点一下就跳进去。
+  - 导航项右键可以置顶、移动到其他分组、编辑、删除。原来的编辑和删除按钮还在。
+  - 图标裁剪改用 cropperjs：图片盖住方框，拖不出白边，缩放以方框中心为准，最大不超过原图像素，旁边有 64×64 预览。
+  - `frontend/src/specialAdds/registry.js` 是空映射，新建菜单会读它，现在没有条目。
+- **技术架构**：右键菜单用 `@imengyu/vue3-context-menu` 1.5.6，不是一整套 UI 组件库。分组排序和导航排序都用已有的 vuedraggable。跨分组拖拽没有做，因为分组栏放的是分组而不是导航项，拖进去会把两种列表混在一起；移动用右键「移动到...」。新建分组可以同时带简介。
+- **与阶段 2 相比的变化**：
+  - 打开分组时，右侧先显示导览页，而不是自动打开第一条导航
+  - 删除导航和删除分组都改成页面内确认框
+  - 新增分组编辑弹窗、导览页、右键菜单
+  - 图标裁剪从手写画布换成 cropperjs
+- **已知问题**：
+  - 跨分组拖拽没做。
+  - 分组拖拽排序已接上，这次浏览器自动化没有亲手拖过分组图标，需要在应用里拖一次确认。
+- **文件变更**：
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/app/group_crud.py`
+  - 修改 `backend/app/routes/groups.py`
+  - 修改 `frontend/package.json`
+  - 修改 `frontend/package-lock.json`
+  - 修改 `frontend/src/main.js`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/components/GroupBar.vue`
+  - 修改 `frontend/src/components/SidebarNav.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改 `frontend/src/components/NavEditDialog.vue`
+  - 修改 `frontend/src/components/IconField.vue`
+  - 新增 `frontend/src/contextMenu.js`
+  - 新增 `frontend/src/specialAdds/registry.js`
+  - 新增 `frontend/src/components/ConfirmDialog.vue`
+  - 新增 `frontend/src/components/GroupEditDialog.vue`
+  - 新增 `frontend/src/components/GroupOverview.vue`
+  - 修改 `docs/VERSIONS.md`

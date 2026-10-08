@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlmodel import Session
 
 from app.db import engine
+from app.group_crud import get_system_group
 from app.models import NavItem
 
 
@@ -25,6 +26,16 @@ def seed_initial_nav_items(should_seed: bool) -> None:
         return
 
     with Session(engine) as session:
+        system = get_system_group(session)
+        if system is None or system.id is None:
+            raise RuntimeError("缺少系统分组，无法写入默认导航")
         for sort_order, item in enumerate(DEFAULT_NAV_ITEMS):
-            session.add(NavItem(sort_order=sort_order, **item))
+            session.add(
+                NavItem(
+                    sort_order=sort_order,
+                    group_id=system.id,
+                    pinned=False,
+                    **item,
+                )
+            )
         session.commit()

@@ -7,6 +7,7 @@ without changing the database: they are still JSON inside Block.content.
 from __future__ import annotations
 
 import math
+import re
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -155,24 +156,42 @@ def parse_block_content(block_type: str, content: Any) -> dict:
         raise ValueError(f"{field}: {first.get('msg') or '内容格式错误'}") from exc
 
 
+# 去掉首尾空白，拒绝空字符串。
+# Strip surrounding whitespace and reject empty values.
+def strip_required_text(value: str) -> str:
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("不能为空")
+    return stripped
+
+
+# 上传图标是 @file: 加 12 位编号。普通 emoji 原样通过。
+# Uploaded icons are @file: plus 12 hex chars. Plain emoji passes through.
+def check_icon_ref(value: str) -> str:
+    if value.startswith("@file:") and re.fullmatch(r"@file:[0-9a-f]{12}", value) is None:
+        raise ValueError("图标引用无效")
+    return value
+
+
 class NavItemBase(BaseModel):
     title: str = Field(min_length=1, max_length=50)
     icon: str = Field(min_length=1, max_length=20)
 
     @field_validator("title", "icon")
     @classmethod
-    # 去掉首尾空白，拒绝空字符串。
-    # Strip surrounding whitespace and reject empty values.
     def strip_text(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("不能为空")
-        return stripped
+        return strip_required_text(value)
+
+    @field_validator("icon")
+    @classmethod
+    def check_icon(cls, value: str) -> str:
+        return check_icon_ref(value)
 
 
 class NavItemCreate(NavItemBase):
     page_type: str | None = None
     template_id: str | None = None
+    group_id: int | None = Field(default=None, ge=1)
 
     @field_validator("page_type", "template_id")
     @classmethod
@@ -191,9 +210,33 @@ class NavItemUpdate(NavItemBase):
     pass
 
 
+class NavItemPatch(BaseModel):
+    """Partial nav update. group_id moves the item into another group."""
+
+    title: str | None = Field(default=None, min_length=1, max_length=50)
+    icon: str | None = Field(default=None, min_length=1, max_length=20)
+    group_id: int | None = Field(default=None, ge=1)
+
+    @field_validator("title", "icon")
+    @classmethod
+    def strip_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return strip_required_text(value)
+
+    @field_validator("icon")
+    @classmethod
+    def check_icon(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return check_icon_ref(value)
+
+
 class NavItemRead(NavItemBase):
     id: int
     page_type: str
+    group_id: int
+    pinned: bool
     sort_order: int
     created_at: datetime
     updated_at: datetime
@@ -306,6 +349,78 @@ class BookUpdate(BaseModel):
         if value is None:
             return None
         return value.strip()
+
+
+class GroupBase(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+    icon: str = Field(min_length=1, max_length=20)
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, value: str) -> str:
+        return strip_required_text(value)
+
+    @field_validator("icon")
+    @classmethod
+    def check_icon(cls, value: str) -> str:
+        return check_icon_ref(strip_required_text(value))
+
+
+class GroupCreate(GroupBase):
+    description: str = Field(default="", max_length=2000)
+
+    @field_validator("description")
+    @classmethod
+    def strip_description(cls, value: str) -> str:
+        return value.strip()
+
+
+class GroupUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=50)
+    icon: str | None = Field(default=None, min_length=1, max_length=20)
+    description: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("name", "icon")
+    @classmethod
+    def strip_optional(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return strip_required_text(value)
+
+    @field_validator("icon")
+    @classmethod
+    def check_icon(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return check_icon_ref(value)
+
+    @field_validator("description")
+    @classmethod
+    # 简介允许清空，只去掉首尾空白。
+    # Allow clearing the description, and only strip surrounding whitespace.
+    def strip_description(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip()
+
+
+class GroupRead(GroupBase):
+    id: int
+    description: str
+    is_system: bool
+    sort_order: int
+    item_count: int
+    overview_id: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class GroupDetail(GroupRead):
+    nav_items: list[NavItemRead] = Field(default_factory=list)
+
+
+class GroupReorder(BaseModel):
+    ids: list[int]
 
 
 class BookContent(BaseModel):
