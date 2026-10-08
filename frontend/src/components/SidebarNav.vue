@@ -1,8 +1,26 @@
 <script setup>
+import { ref, watch } from 'vue'
+import draggable from 'vuedraggable'
+
+import { showMenu } from '../contextMenu'
+import NavIcon from './NavIcon.vue'
+
 const props = defineProps({
   items: {
     type: Array,
     required: true,
+  },
+  groups: {
+    type: Array,
+    default: () => [],
+  },
+  groupId: {
+    type: Number,
+    default: null,
+  },
+  groupName: {
+    type: String,
+    default: '',
   },
   activeId: {
     type: Number,
@@ -18,49 +36,55 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select', 'create', 'edit', 'delete', 'reorder'])
+const emit = defineEmits(['select', 'create', 'edit', 'delete', 'reorder', 'pin', 'move', 'open-overview'])
 
-// 开始拖拽时写入被拖项的 id。
-// Store the dragged item id when a drag starts.
-function onDragStart(item, event) {
-  event.dataTransfer.effectAllowed = 'move'
-  event.dataTransfer.setData('text/plain', String(item.id))
-}
+const localItems = ref([])
 
-// 允许在其他导航项上释放。
-// Allow dropping onto another navigation item.
-function onDragOver(event) {
-  event.preventDefault()
-  event.dataTransfer.dropEffect = 'move'
-}
+watch(
+  () => props.items,
+  (items) => {
+    localItems.value = [...items]
+  },
+  { immediate: true },
+)
 
-// 把拖动项插到目标项前面，然后通知父组件保存顺序。
-// Insert the dragged item before the drop target, then persist the new order.
-function onDrop(target, event) {
-  event.preventDefault()
-  const sourceId = Number(event.dataTransfer.getData('text/plain'))
-  if (!sourceId || sourceId === target.id) {
+function onDragEnd() {
+  const ids = localItems.value.map((item) => item.id)
+  const previous = props.items.map((item) => item.id)
+  if (ids.length === previous.length && ids.every((id, index) => id === previous[index])) {
     return
   }
-
-  const ids = props.items.map((item) => item.id)
-  const from = ids.indexOf(sourceId)
-  const to = ids.indexOf(target.id)
-  if (from < 0 || to < 0) {
-    return
-  }
-
-  ids.splice(from, 1)
-  ids.splice(to, 0, sourceId)
   emit('reorder', ids)
+}
+
+function onItemMenu(event, item) {
+  const others = props.groups.filter((group) => group.id !== props.groupId)
+  showMenu(event, [
+    {
+      label: item.pinned ? '取消置顶' : '置顶',
+      onClick: () => emit('pin', item),
+    },
+    {
+      label: '移动到...',
+      disabled: others.length === 0,
+      children: others.map((group) => ({
+        label: group.name,
+        onClick: () => emit('move', item, group.id),
+      })),
+    },
+    { label: '编辑', onClick: () => emit('edit', item) },
+    { label: '删除', onClick: () => emit('delete', item) },
+  ])
 }
 </script>
 
 <template>
-  <aside class="flex w-72 shrink-0 flex-col border-r border-black/10 bg-[#f8f5ee]/88 px-5 py-6">
-    <div class="mb-8">
-      <p class="text-xs font-semibold uppercase tracking-[0.24em] text-moss">Weaveverse</p>
-      <h1 class="mt-2 text-2xl font-semibold text-ink">个人宇宙</h1>
+  <aside class="flex h-screen w-[240px] shrink-0 flex-col border-r border-black/10 bg-[#f8f5ee]/88 px-4 py-6">
+    <div class="mb-6">
+      <p class="text-xs font-semibold uppercase tracking-[0.22em] text-moss">Weaveverse</p>
+      <button type="button" class="mt-2 block w-full truncate text-left text-xl font-semibold text-ink" @click="emit('open-overview')">
+        {{ groupName || '导航' }}
+      </button>
     </div>
 
     <div v-if="loading" class="rounded-md border border-black/10 bg-white/65 px-4 py-3 text-sm text-ink/70">
@@ -71,59 +95,64 @@ function onDrop(target, event) {
       {{ errorMessage }}
     </div>
 
-    <nav v-else class="space-y-2">
-      <div
-        v-for="item in items"
-        :key="item.id"
-        draggable="true"
-        class="group flex h-12 w-full cursor-grab items-center gap-2 rounded-md px-3 text-sm font-medium transition active:cursor-grabbing"
-        :class="
-          item.id === activeId
-            ? 'bg-moss text-white shadow-sm'
-            : 'text-ink/72 hover:bg-white/70 hover:text-ink'
-        "
-        @dragstart="onDragStart(item, $event)"
-        @dragover="onDragOver"
-        @drop="onDrop(item, $event)"
-      >
-        <button type="button" class="flex min-w-0 flex-1 items-center gap-3 text-left" @click="$emit('select', item.id)">
-          <span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-white/20 text-lg">{{ item.icon }}</span>
-          <span class="truncate">{{ item.title }}</span>
-        </button>
-        <div class="flex shrink-0 gap-1 opacity-0 transition group-hover:opacity-100">
-          <button
-            type="button"
-            class="grid h-8 w-8 place-items-center rounded-md hover:bg-white/25"
-            title="编辑"
-            @click.stop="$emit('edit', item)"
-          >
-            ✏️
+    <draggable
+      v-else
+      v-model="localItems"
+      item-key="id"
+      tag="div"
+      class="min-h-0 flex-1 space-y-2 overflow-y-auto"
+      filter=".nav-action"
+      :prevent-on-filter="false"
+      :animation="200"
+      @end="onDragEnd"
+    >
+      <template #item="{ element }">
+        <div
+          class="group flex h-12 w-full cursor-grab items-center gap-2 rounded-md px-2 text-sm font-medium active:cursor-grabbing"
+          :class="
+            element.id === activeId
+              ? 'bg-moss text-white shadow-sm'
+              : 'text-ink/72 hover:bg-white/70 hover:text-ink'
+          "
+          @contextmenu="onItemMenu($event, element)"
+        >
+          <button type="button" class="flex min-w-0 flex-1 items-center gap-3 text-left" @click="emit('select', element.id)">
+            <NavIcon :icon="element.icon" />
+            <span class="truncate">{{ element.title }}</span>
+            <span v-if="element.pinned" class="text-xs opacity-70">置顶</span>
           </button>
-          <button
-            type="button"
-            class="grid h-8 w-8 place-items-center rounded-md hover:bg-white/25"
-            title="删除"
-            @click.stop="$emit('delete', item)"
-          >
-            🗑️
-          </button>
+          <div class="nav-action flex shrink-0 gap-1 opacity-0 transition group-hover:opacity-100">
+            <button
+              type="button"
+              class="grid h-8 w-8 place-items-center rounded-md hover:bg-white/25"
+              title="编辑"
+              @click.stop="emit('edit', element)"
+            >
+              ✏️
+            </button>
+            <button
+              type="button"
+              class="grid h-8 w-8 place-items-center rounded-md hover:bg-white/25"
+              title="删除"
+              @click.stop="emit('delete', element)"
+            >
+              🗑️
+            </button>
+          </div>
         </div>
-      </div>
-    </nav>
+      </template>
+    </draggable>
 
     <div class="mt-auto border-t border-black/10 pt-5">
       <button
         type="button"
         class="mb-5 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-ink text-sm font-semibold text-white transition hover:bg-moss"
-        @click="$emit('create')"
+        @click="emit('create')"
       >
         <span class="text-lg">+</span>
         <span>添加</span>
       </button>
-      <div class="text-xs leading-5 text-ink/55">
-        M2 pages + blocks<br />
-        拖拽可排序
-      </div>
+      <div class="text-xs leading-5 text-ink/55">右键可置顶、移动或删除</div>
     </div>
   </aside>
 </template>

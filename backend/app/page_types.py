@@ -3,6 +3,11 @@
 Add a new page type by inserting one entry here. Do not change routes.
 """
 
+# 分组导览的类型名。每个分组一条，只能由分组接口创建。
+# Page type for the per-group overview. Group routes create it; users cannot.
+OVERVIEW_PAGE_TYPE = "group_overview"
+
+
 PAGE_TYPES = {
     "markdown": {
         "label": "文档",
@@ -37,4 +42,12 @@ PAGE_TYPES = {
     "vault": {"label": "密码箱", "multi_instance": False, "default_blocks": []},
     "future_plan": {"label": "未来规划", "multi_instance": False, "default_blocks": []},
     "habit_tracker": {"label": "习惯追踪", "multi_instance": False, "default_blocks": []},
+    # multi_instance 为 False 只表示新建菜单不能选它。
+    # 每个分组仍有自己的一条导览页，不走全局「只能有一个」校验。
+    "group_overview": {
+        "layer": "core",
+        "label": "分组导览",
+        "multi_instance": False,
+        "default_blocks": [],
+    },
 }

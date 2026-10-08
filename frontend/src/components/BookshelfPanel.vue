@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { deleteBook, listBooks, uploadBook } from '../api/client'
 import BookCover from './BookCover.vue'
 import BookReader from './BookReader.vue'
+import NavIcon from './NavIcon.vue'
 
 const SLOW_UPLOAD_BYTES = 50 * 1024 * 1024
 
@@ -174,7 +175,7 @@ watch([sort, format], loadBooks, { immediate: true })
     <div class="mx-auto flex w-full max-w-6xl flex-col">
       <div class="flex flex-wrap items-end justify-between gap-4">
         <div class="flex items-center gap-4">
-          <span class="grid h-14 w-14 place-items-center rounded-md bg-dawn text-3xl shadow-sm">{{ icon }}</span>
+          <NavIcon :icon="icon" box="h-14 w-14 bg-dawn text-2xl shadow-sm" />
           <div>
             <p class="text-sm font-semibold uppercase tracking-[0.28em] text-aurora">Bookshelf</p>
             <h2 class="mt-1 text-4xl font-semibold text-ink">{{ title }}</h2>
@@ -243,8 +244,11 @@ watch([sort, format], loadBooks, { immediate: true })
               <BookCover :book="book" />
               <h4 class="mt-3 truncate text-base font-semibold">{{ book.title }}</h4>
               <p class="truncate text-xs text-ink/50">{{ book.author || '未知作者' }}</p>
-              <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-black/10">
-                <div class="h-full bg-moss" :style="{ width: `${percent(book)}%` }" />
+              <div class="mt-3 flex items-center gap-2">
+                <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-black/10">
+                  <div class="h-full bg-moss" :style="{ width: `${percent(book)}%` }" />
+                </div>
+                <span class="text-xs text-ink/50">{{ percent(book) }}%</span>
               </div>
             </article>
           </div>

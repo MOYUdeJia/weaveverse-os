@@ -3,6 +3,8 @@
 import { computed, ref, watch } from 'vue'
 
 import { getPageTypes, getTemplates } from '../api/client'
+import { specialAdds } from '../specialAdds/registry'
+import IconField from './IconField.vue'
 
 const props = defineProps({
   open: {
@@ -17,6 +19,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  navItems: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['close', 'save'])
@@ -29,6 +35,7 @@ const pageTypes = ref([])
 const templates = ref([])
 const selectedTemplate = ref(null)
 const loadError = ref('')
+const iconField = ref(null)
 
 const dialogTitle = computed(() => {
   if (props.mode === 'edit') {
@@ -43,8 +50,19 @@ const dialogTitle = computed(() => {
   return '添加导航项'
 })
 const canSave = computed(() => title.value.trim().length > 0 && icon.value.trim().length > 0)
+const specialAddList = computed(() =>
+  Object.entries(specialAdds).map(([id, spec]) => ({ id, ...spec })),
+)
 const creatableTypes = computed(() =>
-  pageTypes.value.filter((item) => item.multi_instance || item.type === 'bookshelf'),
+  pageTypes.value.filter((type) => {
+    if (type.multi_instance) {
+      return true
+    }
+    if (type.type !== 'bookshelf') {
+      return false
+    }
+    return !props.navItems.some((item) => item.page_type === 'bookshelf')
+  }),
 )
 
 watch(
@@ -63,6 +81,14 @@ watch(
   },
   { immediate: true },
 )
+
+function chooseSpecial(add) {
+  if (typeof add.create === 'function') {
+    add.create()
+    return
+  }
+  loadError.value = '这个添加方式还没实现'
+}
 
 async function chooseBlank() {
   selectedTemplate.value = null
@@ -123,7 +149,11 @@ function save() {
   } else if (props.mode === 'create') {
     payload.page_type = pageType.value
   }
-  emit('save', payload)
+  emit('save', payload, (ok) => {
+    if (ok) {
+      iconField.value?.saved()
+    }
+  })
 }
 </script>
 
@@ -159,6 +189,15 @@ function save() {
             <span class="block text-base font-semibold">从模板创建</span>
             <span class="mt-1 block text-sm opacity-70">用一套搭好的区块开始</span>
           </button>
+          <button
+            v-for="add in specialAddList"
+            :key="add.id"
+            type="button"
+            class="rounded-md bg-white px-4 py-4 text-left shadow-sm hover:bg-moss hover:text-white"
+            @click="chooseSpecial(add)"
+          >
+            <span class="block text-base font-semibold">{{ add.icon }} {{ add.label }}</span>
+          </button>
         </div>
 
         <div v-else-if="step === 'templates'" class="grid grid-cols-2 gap-3">
@@ -186,13 +225,7 @@ function save() {
           />
 
           <label class="mt-5 block text-sm font-medium text-ink/75" for="nav-icon">图标</label>
-          <input
-            id="nav-icon"
-            v-model="icon"
-            class="mt-2 h-11 w-full rounded-md border border-black/15 bg-white px-3 text-xl outline-none focus:border-moss"
-            maxlength="20"
-            autocomplete="off"
-          />
+          <IconField ref="iconField" v-model="icon" />
 
           <template v-if="step === 'blank'">
             <label class="mt-5 block text-sm font-medium text-ink/75" for="nav-page-type">页面类型</label>

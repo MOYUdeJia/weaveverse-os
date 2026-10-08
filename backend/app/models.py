@@ -17,6 +17,24 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class Group(SQLModel, table=True):
+    """A sidebar folder that owns navigation items and one overview page."""
+
+    __tablename__ = "groups"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(min_length=1, max_length=50, nullable=False)
+    icon: str = Field(min_length=1, max_length=20, nullable=False)
+    description: str = Field(
+        default="",
+        sa_column=Column(Text, nullable=False, server_default=""),
+    )
+    is_system: bool = Field(default=False, nullable=False, index=True)
+    sort_order: int = Field(default=0, nullable=False, index=True)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    updated_at: datetime = Field(default_factory=utc_now, nullable=False)
+
+
 class NavItem(SQLModel, table=True):
     """A top-level workspace entry shown in the sidebar."""
 
@@ -27,6 +45,13 @@ class NavItem(SQLModel, table=True):
     icon: str = Field(min_length=1, max_length=20, nullable=False)
     sort_order: int = Field(default=0, nullable=False, index=True)
     page_type: str = Field(default="markdown", max_length=50, nullable=False, index=True)
+    group_id: int = Field(
+        foreign_key="groups.id",
+        nullable=False,
+        index=True,
+        ondelete="CASCADE",
+    )
+    pinned: bool = Field(default=False, nullable=False)
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
     updated_at: datetime = Field(default_factory=utc_now, nullable=False)
 

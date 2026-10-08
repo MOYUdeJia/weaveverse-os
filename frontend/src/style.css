@@ -21,6 +21,10 @@ button {
   font: inherit;
 }
 
+.cropper-container img {
+  max-width: none;
+}
+
 .prose-block a {
   color: #3c82c4;
   text-decoration: underline;
