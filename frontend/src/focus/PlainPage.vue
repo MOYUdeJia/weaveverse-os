@@ -1,7 +1,8 @@
 <script setup>
+import Pickr from '@simonwep/pickr'
 import autosize from 'autosize'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import 'vanilla-colorful'
+import '@simonwep/pickr/dist/themes/classic.min.css'
 
 import { useQueuedSave } from '../blocks/queuedSave.js'
 
@@ -25,8 +26,11 @@ const emit = defineEmits(['save'])
 const mode = ref('numbered')
 const lines = ref([{ text: '', color: '' }])
 const paletteIndex = ref(-1)
+const pickerHost = ref(null)
 const areas = ref([])
 const list = ref(null)
+let pickr = null
+let pickerToken = 0
 
 function readContent() {
   const source = lines.value.length ? lines.value : [{ text: '', color: '' }]
@@ -68,10 +72,6 @@ function setMode(next) {
   flush()
 }
 
-function pickerColor(line) {
-  return line.color || '#16201d'
-}
-
 function setColor(index, color, close) {
   lines.value[index].color = color
   if (close) {
@@ -81,13 +81,72 @@ function setColor(index, color, close) {
   flush()
 }
 
-function onPicker(index, event) {
-  const value = event.detail?.value
-  if (!value) {
+function toHex(color) {
+  const raw = String(color.toHEXA())
+  return raw.length >= 7 ? raw.slice(0, 7) : raw
+}
+
+function destroyPicker() {
+  if (!pickr) {
     return
   }
-  setColor(index, value, false)
+  pickr.destroyAndRemove()
+  pickr = null
 }
+
+function bindPickerHost(element) {
+  pickerHost.value = element
+}
+
+watch(paletteIndex, async (index) => {
+  const token = ++pickerToken
+  destroyPicker()
+  if (index < 0) {
+    return
+  }
+  await nextTick()
+  if (token !== pickerToken || !pickerHost.value) {
+    return
+  }
+  const current = lines.value[index]?.color || '#16201d'
+  pickr = Pickr.create({
+    el: pickerHost.value,
+    theme: 'classic',
+    inline: true,
+    showAlways: true,
+    default: current,
+    defaultRepresentation: 'HEX',
+    lockOpacity: true,
+    comparison: false,
+    appClass: 'plain-pickr',
+    components: {
+      palette: true,
+      preview: true,
+      opacity: false,
+      hue: true,
+      interaction: {
+        hex: true,
+        input: true,
+        save: false,
+        cancel: false,
+        clear: false,
+      },
+    },
+  })
+  const applySeed = () => {
+    pickr?.setColor(current, true)
+  }
+  pickr.on('init', applySeed)
+  pickr.on('change', (color) => {
+    const hex = toHex(color)
+    const shown = (lines.value[index]?.color || '#16201d').toLowerCase()
+    if (!hex || hex.toLowerCase() === shown) {
+      return
+    }
+    lines.value[index].color = hex
+    touch()
+  })
+})
 
 function refreshAreas() {
   nextTick(() => {
@@ -140,7 +199,7 @@ function onPointerDown(event) {
     return
   }
   const target = event.target
-  if (target?.closest?.('.plain-palette') || target?.closest?.('.plain-swatch')) {
+  if (target?.closest?.('.plain-palette') || target?.closest?.('.plain-swatch') || target?.closest?.('.pcr-app')) {
     return
   }
   paletteIndex.value = -1
@@ -158,6 +217,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  destroyPicker()
   document.removeEventListener('pointerdown', onPointerDown)
   observer?.disconnect()
   areas.value.forEach((area) => {
@@ -235,7 +295,7 @@ onBeforeUnmount(() => {
               @click="setColor(index, preset.value, true)"
             />
           </div>
-          <hex-color-picker :color="pickerColor(line)" @color-changed="onPicker(index, $event)" />
+          <div v-once :ref="bindPickerHost" class="plain-picker-host"></div>
         </div>
       </div>
     </div>

@@ -180,6 +180,15 @@ export function uploadImage(blockId, file) {
   })
 }
 
+export function uploadFile(blockId, file) {
+  const body = new FormData()
+  body.append('file', file)
+  return request(`/blocks/${blockId}/files`, {
+    method: 'POST',
+    body,
+  })
+}
+
 export function deleteAttachment(filename) {
   return request(`/attachments/${encodeURIComponent(filename)}`, {
     method: 'DELETE',

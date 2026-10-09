@@ -438,3 +438,33 @@
   - 修改 `frontend/src/focus/PlainPage.vue`
   - 修改 `frontend/src/focus/BookmarksPage.vue`
   - 修改 `docs/VERSIONS.md`
+
+## M6.1 · 2026-10-09
+- **任务**：doc 专用页换成富文本编辑器，并修笔记颜色选择器。搜索和便携笔记留到 M6.2。
+- **实现**：
+  - 长文用 TipTap 3.31.4（`@tiptap/vue-3` + StarterKit + `@tiptap/markdown`）。工具栏在编辑器上方：标题、粗斜体、下划线、删除线、列表、引用、代码、表格、分割线、链接、撤销重做。右键菜单复用已有的 `@imengyu/vue3-context-menu`。
+  - 内容仍是 `{text: markdown}`。旧长文直接按 Markdown 打开，不改数据库。下划线存成 `++文字++`，表格走 GFM，刷新后能再读回来。
+  - 粘贴或拖入截图走原来的 `POST /api/blocks/{id}/images`。一般文件走新的 `POST /api/blocks/{id}/files`，仍写到 `backend/data/attachments/`，类型限于图片、pdf、文本、zip 和常见 Office，上限 20MB。
+  - 笔记颜色换成 `@simonwep/pickr` 1.10.2 的 classic 面板：饱和度/亮度方块、色相条、十六进制输入。面板内拖动不关闭。
+- **技术架构**：编辑器只在打开长文时加载。`DocPage` 用 `editor.getMarkdown()` 排队保存，`setContent` 时不触发保存，所以只打开旧页面不会改写原文。预览用编辑器 HTML 经 DOMPurify，不另存一份 HTML。
+- **与 M6 相比的变化**：
+  - 长文从 Markdown 文本框变成所见即所得，编辑 / 分栏 / 预览还在
+  - 笔记取色从 `vanilla-colorful` 换成 Pickr
+  - 新增 `POST /api/blocks/{id}/files`
+- **已知问题**：
+  - 第一次真正编辑旧长文时，TipTap 会把 Markdown 重排成自己的写法（列表、强调、下划线的 `++`）。只打开不编辑不会写回。
+  - Pickr 1.10.2 自己的 `default` 选项会停在黑色，打开面板时要再 `setColor` 一次。作者已冻结功能，只修安全问题。
+  - 右键「粘贴」依赖剪贴板权限，被浏览器拦住时用 Ctrl+V。Ctrl+U 在系统浏览器里可能被「查看源代码」抢走，工具栏的下划线不受影响。
+  - 这次在浏览器里确认了旧长文打开、标题/粗体/下划线/表格的保存和刷新、右键菜单、预览、笔记取色面板。没有用真实截图走一遍粘贴。
+- **文件变更**：
+  - 新增 `frontend/src/focus/docEditor.js`
+  - 修改 `frontend/src/focus/DocPage.vue`
+  - 修改 `frontend/src/focus/PlainPage.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/vite.config.js`
+  - 修改 `frontend/package.json`
+  - 修改 `frontend/package-lock.json`
+  - 修改 `backend/app/routes/blocks.py`
+  - 修改 `docs/VERSIONS.md`

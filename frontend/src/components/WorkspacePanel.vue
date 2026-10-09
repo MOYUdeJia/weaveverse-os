@@ -4,7 +4,6 @@ import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { createBlock, deleteBlock, getNavItem, updateBlock } from '../api/client'
 import { blockComponents, blockOptions, defaultBlockContent } from '../blocks/registry.js'
 import BookmarksPage from '../focus/BookmarksPage.vue'
-import DocPage from '../focus/DocPage.vue'
 import PlainPage from '../focus/PlainPage.vue'
 import { focusPageByType } from '../specialAdds/registry.js'
 import BookshelfPanel from './BookshelfPanel.vue'
@@ -12,7 +11,7 @@ import GroupOverview from './GroupOverview.vue'
 import NavIcon from './NavIcon.vue'
 
 const focusViews = {
-  doc: DocPage,
+  doc: defineAsyncComponent(() => import('../focus/DocPage.vue')),
   plain: PlainPage,
   bookmarks: BookmarksPage,
   canvas: defineAsyncComponent(() => import('../focus/CanvasPage.vue')),

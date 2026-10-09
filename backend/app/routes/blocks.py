@@ -20,6 +20,21 @@ from app.schemas import BlockUpdate
 router = APIRouter(tags=["blocks"])
 
 ALLOWED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+ALLOWED_FILE_SUFFIXES = ALLOWED_IMAGE_SUFFIXES | {
+    ".pdf",
+    ".txt",
+    ".md",
+    ".csv",
+    ".json",
+    ".zip",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+}
+MAX_FILE_BYTES = 20 * 1024 * 1024
 
 
 # 把附件文件名限制在 attachments 目录内。
@@ -82,6 +97,32 @@ async def upload_block_image(block_id: int, file: UploadFile, session: Session =
     target = ATTACHMENTS_DIR / filename
     target.write_bytes(payload)
     return {"filename": filename}
+
+
+@router.post("/blocks/{block_id}/files")
+# 把一般文件存到 attachments。截图仍走上面的图片接口。
+# Store a general file in attachments. Screenshots keep using the image route.
+async def upload_block_file(block_id: int, file: UploadFile, session: Session = Depends(get_session)):
+    block = crud.get_block(session, block_id)
+    if block is None:
+        raise_api_error(404, "id", "区块不存在")
+
+    original_name = file.filename or "file"
+    suffix = Path(original_name).suffix.lower()
+    if suffix not in ALLOWED_FILE_SUFFIXES:
+        raise_api_error(400, "file", "不支持的文件类型")
+
+    payload = await file.read()
+    if not payload:
+        raise_api_error(400, "file", "空文件")
+    if len(payload) > MAX_FILE_BYTES:
+        raise_api_error(400, "file", "文件超过 20MB")
+
+    ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}{suffix}"
+    target = ATTACHMENTS_DIR / filename
+    target.write_bytes(payload)
+    return {"filename": filename, "name": Path(original_name).name}
 
 
 @router.get("/attachments/{filename}")

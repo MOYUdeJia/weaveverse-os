@@ -53,7 +53,7 @@ button {
   color: rgba(22, 32, 29, 0.92);
 }
 
-.doc-prose {
+.doc-reading {
   max-width: 68ch;
 }
 
@@ -125,6 +125,52 @@ button {
   margin: 1.4em 0;
 }
 
+.doc-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.375rem;
+}
+
+.doc-prose table {
+  width: 100%;
+  margin: 0.85em 0;
+  border-collapse: collapse;
+}
+
+.doc-prose th,
+.doc-prose td {
+  border: 1px solid rgba(22, 32, 29, 0.15);
+  padding: 0.35em 0.6em;
+  vertical-align: top;
+}
+
+.doc-prose th {
+  background: rgba(22, 32, 29, 0.04);
+  font-weight: 650;
+}
+
+.doc-editor .ProseMirror {
+  outline: none;
+  min-height: 70vh;
+}
+
+.doc-editor .ProseMirror p.is-editor-empty:first-child::before,
+.doc-editor .ProseMirror p.is-empty:first-child::before {
+  color: rgba(22, 32, 29, 0.35);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.doc-editor .selectedCell {
+  background: rgba(92, 121, 168, 0.12);
+}
+
+.doc-editor .ProseMirror-selectednode {
+  outline: 2px solid #5c79a8;
+}
+
 .doc-empty {
   color: rgba(22, 32, 29, 0.4);
 }
@@ -137,10 +183,23 @@ button {
   border-radius: 999px;
 }
 
-.plain-palette hex-color-picker {
-  display: block;
-  width: 196px;
-  height: 180px;
+.plain-palette {
+  width: 320px;
+}
+
+.plain-palette .pcr-button {
+  display: none !important;
+}
+
+.plain-palette .pcr-app {
+  position: static !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-top: 0.25rem;
+  padding: 0.2rem 0 0 !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 @keyframes breathe {
