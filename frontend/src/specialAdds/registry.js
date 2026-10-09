@@ -32,6 +32,13 @@ export const specialAdds = {
     placement: 'focus',
     description: '无限画布，画笔、图形和文本',
   },
+  inbox: {
+    label: '收件箱',
+    icon: '📥',
+    pageType: 'inbox',
+    placement: 'hidden',
+    description: '快速记录，之后再整理',
+  },
 }
 
 export function focusAdds() {
@@ -39,5 +46,5 @@ export function focusAdds() {
 }
 
 export function focusPageByType(pageType) {
-  return focusAdds().find((item) => item.pageType === pageType) || null
+  return Object.values(specialAdds).find((item) => item.pageType === pageType) || null
 }

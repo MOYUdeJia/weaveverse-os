@@ -6,9 +6,11 @@ from fastapi import APIRouter
 
 from app.errors import raise_api_error
 from app.routes.blocks import router as blocks_router
-from app.routes.icons import router as icons_router
+from app.routes.inbox import router as inbox_router
+from app.routes.search import router as search_router
 from app.routes.books import router as books_router
 from app.routes.groups import router as groups_router
+from app.routes.icons import router as icons_router
 from app.routes.nav import router as nav_router
 from app.routes.page_types import router as page_types_router
 from app.routes.templates import router as templates_router
@@ -31,6 +33,8 @@ router.include_router(nav_router)
 router.include_router(blocks_router)
 router.include_router(books_router)
 router.include_router(icons_router)
+router.include_router(search_router)
+router.include_router(inbox_router)
 
 
 @router.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

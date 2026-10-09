@@ -468,3 +468,45 @@
   - 修改 `frontend/package-lock.json`
   - 修改 `backend/app/routes/blocks.py`
   - 修改 `docs/VERSIONS.md`
+
+## M6.2 · 2026-10-09
+- **任务**：修长文图片、链接和拖放，笔记加标准色，加上全局搜索和便携笔记。
+- **实现**：
+  - 图片用 TipTap 自带的 resize。没设尺寸时随栏宽充满；右键可选 25/50/75/充满，也可拖右下角把手。设过的宽高写进 Markdown 里的 `<img width>`，刷新还在。右键还能左/中/右对齐。
+  - 普通点击链接会交给系统浏览器。附件链接在桌面窗口里用 `os.startfile` 打开；浏览器里没有这个桥时改为新标签打开文件地址。
+  - 拖入图片按鼠标落点 `insertContentAt`，不再用会替换当前选区的 `setImage`。右键菜单去掉「粘贴截图」，Ctrl+V 仍能贴图。
+  - 笔记取色在色相面板上面加了黑白红橙黄绿青蓝紫灰。十六进制输入还在。
+  - 搜索是 `GET /api/search?q=`，SQLite `LIKE`，不建索引表。Ctrl+K 或侧栏「搜索」打开，300ms 后出导航、分组、书籍、正文。
+  - 速记是 `POST /api/inbox/notes`。第一次会在系统分组建唯一的「收件箱」页（笔记行）。Ctrl+Shift+N 或侧栏「速记」，Enter 保存，可选分类，正文里的 `#标签` 原样保留。
+- **技术架构**：搜索不迁移数据库。收件箱是 `page_type=inbox` 的单实例专用页，内容仍是 `plain_text`，不新开表。
+- **与 M6.1 相比的变化**：
+  - 长文图片可缩放，链接和附件能点开，连续拖图按落点插入
+  - 笔记多一排标准色
+  - 新增全局搜索和收件箱速记
+- **已知问题**：
+  - 附件用系统程序打开只接了 Windows 桌面桥。浏览器里是新标签打开 `/api/attachments/...`。
+  - 系统浏览器可能把 Ctrl+Shift+N 当成无痕窗口，桌面窗口里这个快捷键能到页面。
+  - 书籍结果会打开书架页，不直接翻到那一本书。
+  - 这次确认了搜索接口和浮层、收件箱接口、标准色、右键菜单不再有「粘贴截图」。没有用两张真实文件做拖放验收。
+- **文件变更**：
+  - 新增 `backend/app/search.py`
+  - 新增 `backend/app/routes/search.py`
+  - 新增 `backend/app/routes/inbox.py`
+  - 新增 `frontend/src/components/SearchDialog.vue`
+  - 新增 `frontend/src/components/QuickNoteDialog.vue`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/app/page_types.py`
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/main.py`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/openExternal.js`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/focus/docEditor.js`
+  - 修改 `frontend/src/focus/DocPage.vue`
+  - 修改 `frontend/src/focus/PlainPage.vue`
+  - 修改 `frontend/src/components/SidebarNav.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改 `frontend/src/components/NavEditDialog.vue`
+  - 修改 `frontend/src/specialAdds/registry.js`
+  - 修改 `docs/VERSIONS.md`

@@ -13,6 +13,7 @@ import NavIcon from './NavIcon.vue'
 const focusViews = {
   doc: defineAsyncComponent(() => import('../focus/DocPage.vue')),
   plain: PlainPage,
+  inbox: PlainPage,
   bookmarks: BookmarksPage,
   canvas: defineAsyncComponent(() => import('../focus/CanvasPage.vue')),
 }

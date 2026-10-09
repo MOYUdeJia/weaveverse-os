@@ -189,6 +189,17 @@ export function uploadFile(blockId, file) {
   })
 }
 
+export function searchLibrary(query) {
+  return request(`/search?q=${encodeURIComponent(query)}`)
+}
+
+export function saveQuickNote(text, category = '') {
+  return request('/inbox/notes', {
+    method: 'POST',
+    body: JSON.stringify({ text, category }),
+  })
+}
+
 export function deleteAttachment(filename) {
   return request(`/attachments/${encodeURIComponent(filename)}`, {
     method: 'DELETE',

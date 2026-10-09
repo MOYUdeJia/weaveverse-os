@@ -7,7 +7,7 @@ import { computed, ref, watch } from 'vue'
 import { attachmentUrl, uploadFile, uploadImage } from '../api/client'
 import { useQueuedSave } from '../blocks/queuedSave.js'
 import { showMenu } from '../contextMenu.js'
-import { openExternalLink } from '../openExternal.js'
+import { openDocTarget } from '../openExternal.js'
 import { docExtensions, fileFromImageBlob, imageFilesFromList, linkLabel, normalizeUrl } from './docEditor.js'
 
 function escapeHtml(value) {
@@ -106,11 +106,15 @@ const editor = useEditor({
     attributes: { class: 'doc-surface' },
     handleClick(_view, _pos, event) {
       const anchor = event.target?.closest?.('a')
-      if (!anchor || !anchor.href || !(event.metaKey || event.ctrlKey)) {
+      if (!anchor) {
+        return false
+      }
+      const href = anchor.getAttribute('href')
+      if (!href) {
         return false
       }
       event.preventDefault()
-      openExternalLink(anchor.getAttribute('href') || anchor.href)
+      openDocTarget(href)
       return true
     },
     handlePaste(_view, event) {
@@ -131,13 +135,17 @@ const editor = useEditor({
       insertImageFiles(images)
       return true
     },
-    handleDrop(_view, event) {
+    handleDrop(view, event, _slice, moved) {
+      if (moved) {
+        return false
+      }
       const images = imageFilesFromList(event.dataTransfer?.files)
       if (!images.length) {
         return false
       }
       event.preventDefault()
-      insertImageFiles(images)
+      const coords = view.posAtCoords({ left: event.clientX, top: event.clientY })
+      insertImageFiles(images, coords?.pos ?? null)
       return true
     },
   },
@@ -220,25 +228,37 @@ function chooseMode(next) {
   }
 }
 
-async function insertImageFiles(files) {
+async function insertImageFiles(files, pos = null) {
   const instance = editor.value
   if (!instance || !files.length) {
     return
   }
   notice.value = '正在上传图片…'
   try {
+    let at = pos
     for (const file of files) {
       const saved = await uploadImage(props.block.id, file)
-      instance
-        .chain()
-        .focus()
-        .setImage({ src: attachmentUrl(saved.filename), alt: file.name || 'image' })
-        .run()
+      placeImage(instance, { src: attachmentUrl(saved.filename), alt: file.name || 'image' }, at)
+      at = instance.state.selection.to
     }
     notice.value = ''
   } catch (error) {
     notice.value = error.message || '图片上传失败'
   }
+}
+
+function placeImage(instance, attrs, pos) {
+  const content = { type: 'image', attrs }
+  if (typeof pos === 'number') {
+    instance.chain().focus().insertContentAt(pos, content).run()
+    return
+  }
+  const selected = instance.state.selection
+  if (selected.node?.type?.name === 'image') {
+    instance.chain().focus().insertContentAt(selected.to, content).run()
+    return
+  }
+  instance.chain().focus().insertContent(content).run()
 }
 
 async function insertFile(file) {
@@ -398,27 +418,59 @@ async function pasteClipboard() {
   }
 }
 
-async function pasteScreenshot() {
-  try {
-    const items = await navigator.clipboard.read()
-    for (const item of items) {
-      const imageType = item.types.find((type) => type.startsWith('image/'))
-      if (!imageType) {
-        continue
-      }
-      const blob = await item.getType(imageType)
-      await insertImageFiles([fileFromImageBlob(blob, 'screenshot.png')])
-      return
-    }
-    notice.value = '剪贴板里没有图片'
-  } catch {
-    notice.value = '读不到剪贴板图片。截图后用 Ctrl+V。'
+function imageFromEvent(event) {
+  return event.target?.closest?.('img') || null
+}
+
+function imagePos(instance, img) {
+  const host = img.closest('[data-resize-container]') || img
+  return instance.view.posAtDOM(host, 0)
+}
+
+function resizeImage(img, ratio) {
+  const instance = editor.value
+  if (!instance || !img) {
+    return
   }
+  const pos = imagePos(instance, img)
+  img.style.width = ''
+  img.style.height = ''
+  if (ratio == null) {
+    instance.chain().setNodeSelection(pos).updateAttributes('image', { width: null, height: null }).run()
+    return
+  }
+  const column = instance.view.dom.clientWidth || 640
+  const width = Math.max(80, Math.round(column * ratio))
+  img.style.width = `${width}px`
+  img.style.height = 'auto'
+  instance.chain().setNodeSelection(pos).updateAttributes('image', { width, height: null }).run()
+}
+
+function alignImage(img, align) {
+  const instance = editor.value
+  if (!instance || !img) {
+    return
+  }
+  const pos = imagePos(instance, img)
+  instance.chain().setNodeSelection(pos).updateAttributes('image', { align }).run()
 }
 
 function onMenu(event) {
   const instance = editor.value
   if (!instance || mode.value === 'preview') {
+    return
+  }
+  const img = imageFromEvent(event)
+  if (img) {
+    showMenu(event, [
+      { label: '充满宽度', onClick: () => resizeImage(img, null) },
+      { label: '75%', onClick: () => resizeImage(img, 0.75) },
+      { label: '50%', onClick: () => resizeImage(img, 0.5) },
+      { label: '25%', onClick: () => resizeImage(img, 0.25) },
+      { label: '左对齐', divided: true, onClick: () => alignImage(img, 'left') },
+      { label: '居中', onClick: () => alignImage(img, 'center') },
+      { label: '右对齐', onClick: () => alignImage(img, 'right') },
+    ])
     return
   }
   rememberSelection()
@@ -432,7 +484,6 @@ function onMenu(event) {
     { label: '添加链接', divided: true, onClick: openLinkForm },
     { label: '添加图片', onClick: pickImage },
     { label: '添加文件', onClick: pickFile },
-    { label: '粘贴截图', onClick: pasteScreenshot },
     { label: '撤销', divided: true, disabled: !instance.can().undo(), onClick: () => run((chain) => chain.undo()) },
     { label: '重做', disabled: !instance.can().redo(), onClick: () => run((chain) => chain.redo()) },
   ])
@@ -444,7 +495,7 @@ function onContentClick(event) {
     return
   }
   event.preventDefault()
-  openExternalLink(anchor.getAttribute('href') || anchor.href)
+  openDocTarget(anchor.getAttribute('href') || anchor.href)
 }
 </script>
 

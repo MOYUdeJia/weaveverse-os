@@ -36,7 +36,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select', 'create', 'edit', 'delete', 'reorder', 'pin', 'lock', 'move', 'open-overview'])
+const emit = defineEmits(['select', 'create', 'edit', 'delete', 'reorder', 'pin', 'lock', 'move', 'open-overview', 'search', 'note'])
 
 const localItems = ref([])
 
@@ -141,6 +141,14 @@ function onItemMenu(event, item) {
     </draggable>
 
     <div class="mt-auto border-t border-black/10 pt-5">
+      <div class="mb-3 flex gap-2">
+        <button type="button" class="h-9 flex-1 rounded-md bg-white text-xs font-medium text-ink shadow-sm" title="搜索 Ctrl+K" @click="emit('search')">
+          搜索
+        </button>
+        <button type="button" class="h-9 flex-1 rounded-md bg-white text-xs font-medium text-ink shadow-sm" title="速记 Ctrl+Shift+N" @click="emit('note')">
+          速记
+        </button>
+      </div>
       <button
         type="button"
         class="mb-5 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-ink text-sm font-semibold text-white transition hover:bg-moss"

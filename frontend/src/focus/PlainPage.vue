@@ -6,6 +6,19 @@ import '@simonwep/pickr/dist/themes/classic.min.css'
 
 import { useQueuedSave } from '../blocks/queuedSave.js'
 
+const STANDARDS = [
+  { id: 'black', value: '#161616', label: '黑' },
+  { id: 'white', value: '#f4f1ea', label: '白' },
+  { id: 'red', value: '#d64545', label: '红' },
+  { id: 'orange', value: '#e07a2f', label: '橙' },
+  { id: 'yellow', value: '#e2b340', label: '黄' },
+  { id: 'green', value: '#3f6f57', label: '绿' },
+  { id: 'cyan', value: '#3ca1b0', label: '青' },
+  { id: 'blue', value: '#3d6fd8', label: '蓝' },
+  { id: 'purple', value: '#7a4e7a', label: '紫' },
+  { id: 'gray', value: '#8a908c', label: '灰' },
+]
+
 const PRESETS = [
   { id: 'ink', value: '', label: '默认' },
   { id: 'moss', value: '#3f6f57', label: '苔' },
@@ -70,6 +83,13 @@ function setMode(next) {
   mode.value = next
   touch()
   flush()
+}
+
+function chooseSwatch(index, color, close) {
+  setColor(index, color, close)
+  if (color) {
+    pickr?.setColor(color, true)
+  }
 }
 
 function setColor(index, color, close) {
@@ -284,6 +304,17 @@ onBeforeUnmount(() => {
           class="plain-palette absolute left-0 top-8 z-20 rounded-md border border-black/10 bg-white p-2 shadow-lg"
           @pointerdown.stop
         >
+          <div class="mb-2 flex flex-wrap gap-1">
+            <button
+              v-for="swatch in STANDARDS"
+              :key="swatch.id"
+              type="button"
+              class="h-5 w-5 rounded-full border border-black/15"
+              :style="{ background: swatch.value }"
+              :title="swatch.label"
+              @click="chooseSwatch(index, swatch.value, false)"
+            />
+          </div>
           <div class="mb-2 flex items-center gap-1">
             <button
               v-for="preset in PRESETS"

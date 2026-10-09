@@ -65,7 +65,7 @@ const canSave = computed(() => {
 const focusList = computed(() => focusAdds())
 const specialAddList = computed(() =>
   Object.entries(specialAdds)
-    .filter(([, spec]) => spec.placement !== 'focus')
+    .filter(([, spec]) => spec.placement !== 'focus' && spec.placement !== 'hidden')
     .map(([id, spec]) => ({ id, ...spec })),
 )
 const focusTypeIds = computed(() => new Set(focusList.value.map((item) => item.pageType)))

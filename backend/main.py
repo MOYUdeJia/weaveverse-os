@@ -115,6 +115,22 @@ class DesktopBridge:
         os.startfile(path)
         return True
 
+    # 用系统默认程序打开一篇长文里的附件。
+    # Open one doc attachment in the system default application.
+    def open_attachment(self, filename: str) -> bool:
+        from app.routes.blocks import _safe_attachment_path
+
+        if not isinstance(filename, str) or os.name != "nt":
+            return False
+        try:
+            path = _safe_attachment_path(filename)
+        except Exception:
+            return False
+        if not path.is_file():
+            return False
+        os.startfile(path)
+        return True
+
 
 # 探测本机端口是否可绑定。
 # Probe whether a local port can be bound.

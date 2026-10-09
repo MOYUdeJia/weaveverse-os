@@ -125,10 +125,78 @@ button {
   margin: 1.4em 0;
 }
 
-.doc-prose img {
+.doc-prose img,
+.doc-editor img {
   max-width: 100%;
   height: auto;
-  border-radius: 0.375rem;
+}
+
+.doc-prose img:not([width]),
+.doc-editor [data-resize-wrapper]:not(:has(img[style*='width'])) {
+  width: 100%;
+}
+
+.doc-editor [data-resize-wrapper]:not(:has(img[style*='width'])) img {
+  width: 100%;
+  height: auto;
+}
+
+.doc-editor [data-resize-container] {
+  max-width: 100%;
+}
+
+.doc-editor [data-resize-container]:has(img[data-align='center']) {
+  justify-content: center;
+}
+
+.doc-editor [data-resize-container]:has(img[data-align='right']) {
+  justify-content: flex-end;
+}
+
+.doc-prose img[data-align='center'] {
+  display: block;
+  margin-inline: auto;
+}
+
+.doc-prose img[data-align='right'] {
+  display: block;
+  margin-left: auto;
+}
+
+.doc-editor [data-resize-handle] {
+  z-index: 2;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #fff;
+  border-radius: 2px;
+  background: #3f6f57;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.doc-editor .ProseMirror-selectednode [data-resize-handle],
+.doc-editor [data-resize-container]:hover [data-resize-handle] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.doc-editor [data-resize-handle='bottom-right'] {
+  cursor: nwse-resize;
+  transform: translate(40%, 40%);
+}
+
+.doc-editor [data-resize-handle='right'] {
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.doc-editor [data-resize-handle='bottom'] {
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.doc-editor .ProseMirror a {
+  cursor: pointer;
 }
 
 .doc-prose table {

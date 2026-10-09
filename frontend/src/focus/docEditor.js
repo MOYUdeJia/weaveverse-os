@@ -31,16 +31,75 @@ export function docExtensions() {
       dropcursor: { color: '#3f6f57', width: 2 },
     }),
     Placeholder.configure({ placeholder: '从这里开始写。' }),
-    Image.configure({
-      allowBase64: false,
-      HTMLAttributes: { class: 'doc-image' },
-    }),
+    docImage(),
     Table.configure({ resizable: false }),
     TableRow,
     TableHeader,
     TableCell,
     Markdown,
   ]
+}
+
+function escapeAttr(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+}
+
+function docImage() {
+  return Image.extend({
+    addAttributes() {
+      return {
+        ...this.parent?.(),
+        width: {
+          default: null,
+          parseHTML: (element) => element.getAttribute('width'),
+          renderHTML: (attrs) => (attrs.width ? { width: attrs.width } : {}),
+        },
+        height: {
+          default: null,
+          parseHTML: (element) => element.getAttribute('height'),
+          renderHTML: (attrs) => (attrs.height ? { height: attrs.height } : {}),
+        },
+        align: {
+          default: null,
+          parseHTML: (element) => element.getAttribute('data-align'),
+          renderHTML: (attrs) => (attrs.align ? { 'data-align': attrs.align } : {}),
+        },
+      }
+    },
+    renderMarkdown(node) {
+      const attrs = node.attrs || {}
+      const src = attrs.src || ''
+      const alt = attrs.alt || ''
+      const title = attrs.title || ''
+      if (attrs.width || attrs.height || attrs.align) {
+        const parts = [`src="${escapeAttr(src)}"`, `alt="${escapeAttr(alt)}"`]
+        if (attrs.width) {
+          parts.push(`width="${Number(attrs.width) || attrs.width}"`)
+        }
+        if (attrs.height) {
+          parts.push(`height="${Number(attrs.height) || attrs.height}"`)
+        }
+        if (attrs.align) {
+          parts.push(`data-align="${escapeAttr(attrs.align)}"`)
+        }
+        return `<img ${parts.join(' ')} />`
+      }
+      return title ? `![${alt}](${src} "${title}")` : `![${alt}](${src})`
+    },
+  }).configure({
+    allowBase64: false,
+    HTMLAttributes: { class: 'doc-image' },
+    resize: {
+      enabled: true,
+      directions: ['bottom-right', 'right', 'bottom'],
+      minWidth: 80,
+      minHeight: 48,
+      alwaysPreserveAspectRatio: true,
+    },
+  })
 }
 
 export function normalizeUrl(value) {

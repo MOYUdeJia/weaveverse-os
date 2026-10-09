@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import {
   createGroup,
@@ -23,6 +23,8 @@ import GroupBar from './components/GroupBar.vue'
 import GroupEditDialog from './components/GroupEditDialog.vue'
 import NavEditDialog from './components/NavEditDialog.vue'
 import SidebarNav from './components/SidebarNav.vue'
+import SearchDialog from './components/SearchDialog.vue'
+import QuickNoteDialog from './components/QuickNoteDialog.vue'
 import SplashScreen from './components/SplashScreen.vue'
 import WorkspacePanel from './components/WorkspacePanel.vue'
 
@@ -45,6 +47,8 @@ const confirmOpen = ref(false)
 const confirmTitle = ref('')
 const confirmMessage = ref('')
 const confirmBusy = ref(false)
+const searchOpen = ref(false)
+const noteOpen = ref(false)
 let confirmAction = null
 let navRequest = 0
 
@@ -393,7 +397,47 @@ async function describeGroup(description, done) {
   }
 }
 
-onMounted(loadShellData)
+onMounted(() => {
+  loadShellData()
+  window.addEventListener('keydown', onGlobalKey)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGlobalKey)
+})
+
+function onGlobalKey(event) {
+  const key = event.key.toLowerCase()
+  if ((event.ctrlKey || event.metaKey) && event.shiftKey && key === 'n') {
+    event.preventDefault()
+    searchOpen.value = false
+    noteOpen.value = true
+    return
+  }
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && key === 'k') {
+    event.preventDefault()
+    noteOpen.value = false
+    searchOpen.value = !searchOpen.value
+  }
+}
+
+async function openSearchNav({ groupId, navId }) {
+  if (groupId == null || navId == null) {
+    return
+  }
+  await selectGroup(groupId, navId, false)
+}
+
+async function openSearchGroup(groupId) {
+  await selectGroup(groupId, null, true)
+}
+
+async function onNoteSaved(saved) {
+  noticeMessage.value = '已记到收件箱'
+  if (saved?.group_id != null && saved.group_id === activeGroupId.value) {
+    await selectGroup(saved.group_id, activeId.value, showingOverview.value)
+  }
+}
 </script>
 
 <template>
@@ -428,6 +472,8 @@ onMounted(loadShellData)
         @lock="toggleLock"
         @move="moveNavItem"
         @open-overview="selectGroup(activeGroupId, null, true)"
+        @search="searchOpen = true"
+        @note="noteOpen = true"
       />
       <WorkspacePanel
         :item="activeItem"
@@ -465,5 +511,7 @@ onMounted(loadShellData)
       @cancel="cancelConfirm"
       @confirm="runConfirm"
     />
+    <SearchDialog :open="searchOpen" @close="searchOpen = false" @open-nav="openSearchNav" @open-group="openSearchGroup" />
+    <QuickNoteDialog :open="noteOpen" @close="noteOpen = false" @saved="onNoteSaved" />
   </main>
 </template>

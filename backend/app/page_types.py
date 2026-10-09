@@ -82,6 +82,19 @@ PAGE_TYPES = {
             {"block_type": "canvas", "content": {"objects": []}},
         ],
     },
+    "inbox": {
+        "layer": "focus",
+        "label": "收件箱",
+        "multi_instance": False,
+        "default_icon": "📥",
+        "fixed_block": "plain_text",
+        "default_blocks": [
+            {
+                "block_type": "plain_text",
+                "content": {"mode": "numbered", "lines": [{"text": "", "color": ""}]},
+            },
+        ],
+    },
     "bookshelf": {"label": "书架", "multi_instance": False, "default_blocks": []},
     "idea_box": {"label": "IDEA 栏", "multi_instance": False, "default_blocks": []},
     "vault": {"label": "密码箱", "multi_instance": False, "default_blocks": []},

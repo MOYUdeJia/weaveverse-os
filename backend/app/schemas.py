@@ -549,3 +549,13 @@ class BookContent(BaseModel):
     text: str | None = None
     external: bool
     page_count: int
+
+
+class QuickNoteCreate(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    category: str = ""
+
+    @field_validator("text", "category")
+    @classmethod
+    def strip_note(cls, value: str) -> str:
+        return value.strip()
