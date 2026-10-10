@@ -53,7 +53,7 @@ const albumPrivate = ref(false)
 const albumPassword = ref('')
 const albumColor = ref('#3f6f57')
 const ungrouped = ref(false)
-const albumColors = ['#3f6f57', '#d77245', '#5c79a8', '#7a4e7a', '#3ca1b0', '#e2b340']
+const albumColors = ['#c45454', '#e08a7a', '#d77245', '#e2b340', '#8a8f3a', '#3f6f57', '#7aaa78', '#3ca1b0', '#2f7a78', '#5c79a8', '#3d5278', '#7a4e7a', '#c47a96', '#8a6a4a', '#6e7570', '#2c3330']
 const renameDraft = ref('')
 const moveOpen = ref(false)
 const editingId = ref(null)
@@ -559,11 +559,11 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <button type="button" class="h-10 rounded-md px-3 text-sm" :class="layout === 'grid' ? 'bg-moss text-white' : 'wv-chip'" @click="layout = 'grid'">网格</button>
-          <button type="button" class="h-10 rounded-md px-3 text-sm" :class="layout === 'flow' ? 'bg-moss text-white' : 'wv-chip'" @click="layout = 'flow'">自适应</button>
-          <button type="button" class="h-10 rounded-md px-3 text-sm" :class="layout === 'fill' ? 'bg-moss text-white' : 'wv-chip'" @click="layout = 'fill'">铺满</button>
-          <button type="button" class="h-10 rounded-md px-3 text-sm" :class="layout === 'list' ? 'bg-moss text-white' : 'wv-chip'" @click="layout = 'list'">列表</button>
-          <button type="button" class="h-10 rounded-md px-3 text-sm" :class="selecting ? 'bg-moss text-white' : 'wv-chip'" @click="toggleSelectMode">{{ selecting ? '取消' : '选择' }}</button>
+          <button type="button" class="h-10 rounded-md border px-3 text-sm" :class="layout === 'grid' ? 'border-moss bg-moss text-white' : 'border-black/15 bg-transparent text-ink/80'" @click="layout = 'grid'">网格</button>
+          <button type="button" class="h-10 rounded-md border px-3 text-sm" :class="layout === 'flow' ? 'border-moss bg-moss text-white' : 'border-black/15 bg-transparent text-ink/80'" @click="layout = 'flow'">自适应</button>
+          <button type="button" class="h-10 rounded-md border px-3 text-sm" :class="layout === 'stream' ? 'border-moss bg-moss text-white' : 'border-black/15 bg-transparent text-ink/80'" @click="layout = 'stream'">大图流</button>
+          <button type="button" class="h-10 rounded-md border px-3 text-sm" :class="layout === 'list' ? 'border-moss bg-moss text-white' : 'border-black/15 bg-transparent text-ink/80'" @click="layout = 'list'">列表</button>
+          <button type="button" class="h-10 rounded-md border px-3 text-sm" :class="selecting ? 'border-moss bg-moss text-white' : 'border-black/15 bg-transparent text-ink/80'" @click="toggleSelectMode">{{ selecting ? '取消' : '选择' }}</button>
           <button type="button" class="h-11 rounded-md bg-moss px-5 text-sm font-semibold text-white disabled:bg-ink/30" :disabled="uploading || locked" @click="fileInput.click()">
             {{ uploading ? '上传中...' : '上传' }}
           </button>
@@ -572,8 +572,8 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="mt-5 flex items-center gap-2 overflow-x-auto pb-1">
-        <button type="button" class="h-8 shrink-0 rounded-full px-3 text-xs" :class="tab === 'all' && !ungrouped ? 'bg-moss text-white' : 'wv-chip'" @click="ungrouped = false; chooseTab('all')">全部</button>
-        <button type="button" class="h-8 shrink-0 rounded-full px-3 text-xs" :class="tab === 'all' && ungrouped ? 'bg-moss text-white' : 'wv-chip'" @click="ungrouped = !ungrouped; if (ungrouped) chooseTab('all')">未分组</button>
+        <button type="button" class="h-8 shrink-0 rounded-full px-3 text-xs" :class="tab === 'all' && !ungrouped ? 'bg-moss text-white' : 'bg-transparent text-ink/60'" @click="ungrouped = false; chooseTab('all')">全部</button>
+        <button type="button" class="h-8 shrink-0 bg-transparent px-2 text-xs" :class="tab === 'all' && ungrouped ? 'font-semibold text-moss' : 'text-ink/50'" @click="ungrouped = !ungrouped; if (ungrouped) chooseTab('all')">未分组</button>
         <draggable v-model="albums" item-key="id" class="flex gap-2" :animation="200" @end="persistAlbumOrder">
           <template #item="{ element }">
             <button
@@ -587,7 +587,7 @@ onBeforeUnmount(() => {
             </button>
           </template>
         </draggable>
-        <button type="button" class="wv-chip h-8 shrink-0 rounded-full px-3 text-xs text-moss" @click="albumOpen = true">新建相册</button>
+        <button type="button" class="h-8 shrink-0 rounded-full border border-dashed border-moss px-3 text-xs text-moss" @click="albumOpen = true">+ 新建相册</button>
       </div>
 
       <div v-if="activeAlbum" class="mt-3 flex flex-wrap gap-2 text-xs">
@@ -599,8 +599,8 @@ onBeforeUnmount(() => {
 
       <div v-if="selecting" class="wv-surface mt-3 flex flex-wrap items-center gap-2 rounded-md px-3 py-2 text-sm shadow-sm">
         <span>已选 {{ selected.length }} 张</span>
-        <button type="button" class="wv-chip rounded px-3 py-1 text-xs" @click="selectAll">全选</button>
-        <button type="button" class="wv-chip rounded px-3 py-1 text-xs" @click="clearPicked">取消选择</button>
+        <button type="button" class="bg-transparent px-2 py-1 text-xs text-ink/60" @click="selectAll">全选</button>
+        <button type="button" class="bg-transparent px-2 py-1 text-xs text-ink/60" @click="clearPicked">取消选择</button>
         <button type="button" class="rounded bg-ember px-3 py-1 text-xs text-white" :disabled="!selected.length" @click="removeSelected">删除</button>
         <button type="button" class="rounded bg-moss px-3 py-1 text-xs text-white" :disabled="!selected.length" @click="moveOpen = true">移动</button>
       </div>
@@ -649,17 +649,17 @@ onBeforeUnmount(() => {
           </article>
         </div>
 
-        <div v-else-if="layout === 'fill'" class="grid grid-cols-3 gap-0 md:grid-cols-4 xl:grid-cols-6">
+        <div v-else-if="layout === 'stream'" class="flex flex-col gap-3">
           <button
             v-for="photo in visiblePhotos()"
             :key="photo.id"
             type="button"
-            class="relative aspect-square overflow-hidden"
+            class="relative w-full overflow-hidden rounded-md"
             :class="isSelected(photo) ? 'ring-2 ring-moss' : ''"
             @click="openPhoto(photo, $event)"
           >
-            <img :src="attachmentUrl(photo.filename)" alt="" class="h-full w-full object-cover" />
-            <span v-if="colorOf(photo)" class="absolute left-1.5 top-1.5 h-2.5 w-2.5 rounded-full ring-2 ring-white/70" :style="{ background: colorOf(photo) }" />
+            <img :src="attachmentUrl(photo.filename)" :alt="labelOf(photo)" class="w-full" @load="rememberAspect(photo, $event)" />
+            <span v-if="colorOf(photo)" class="absolute left-3 top-3 h-3 w-3 rounded-full ring-2 ring-white/80" :style="{ background: colorOf(photo) }" />
           </button>
         </div>
 

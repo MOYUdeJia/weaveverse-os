@@ -5,13 +5,17 @@ from __future__ import annotations
 import json
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app import ai_secrets
-from app.ai_providers import PROVIDERS, provider_spec, stream_chat
+from app.ai_providers import PROVIDERS, append_tool_result, complete_chat, provider_spec, stream_chat
+from app.ai_tools import TOOLS, is_write, run_tool, summarize_call
+from sqlmodel import Session
+
 from app.config import DATA_DIR
+from app.db import get_session
 from app.errors import raise_api_error
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -31,8 +35,16 @@ class ChatTurn(BaseModel):
     content: str = Field(max_length=8000)
 
 
+class ToolResume(BaseModel):
+    id: str = ""
+    name: str
+    arguments: dict = Field(default_factory=dict)
+    approved: bool = False
+
+
 class ChatRequest(BaseModel):
     messages: list[ChatTurn] = Field(min_length=1, max_length=30)
+    resume: ToolResume | None = None
 
 
 def _load_file() -> dict:
@@ -167,29 +179,91 @@ async def test_connection() -> dict:
     return {"ok": True}
 
 
+def _event(payload: dict) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _chunks(text: str):
+    step = 24
+    for index in range(0, len(text), step):
+        yield text[index : index + step]
+
+
 @router.post("/chat")
-async def chat(data: ChatRequest):
+async def chat(data: ChatRequest, session: Session = Depends(get_session)):
     settings = _read_settings()
     spec = provider_spec(settings["provider"])
     key = ai_secrets.get_api_key(settings["provider"])
     if spec is None or not key:
         raise_api_error(400, "api_key", "请先在设置里配置 API Key")
-    messages = _clean_messages(data.messages)
+    history = _clean_messages(data.messages)
+    kind = spec["kind"]
 
     async def events():
         try:
-            async for piece in stream_chat(
-                kind=spec["kind"],
-                base_url=settings["base_url"],
-                api_key=key,
-                model=settings["model"],
-                messages=messages,
-            ):
-                yield f"data: {json.dumps({'text': piece}, ensure_ascii=False)}\n\n"
+            if data.resume is not None:
+                result = (
+                    run_tool(session, data.resume.name, data.resume.arguments)
+                    if data.resume.approved
+                    else {"ok": False, "error": "用户取消了这次操作"}
+                )
+                if data.resume.approved:
+                    yield _event(
+                        {
+                            "tool": {
+                                "name": data.resume.name,
+                                "summary": result.get("summary") or summarize_call(data.resume.name, data.resume.arguments),
+                                "ok": bool(result.get("ok")),
+                                "group_id": result.get("group_id"),
+                                "nav_id": result.get("id") if data.resume.name == "create_page" else None,
+                            }
+                        }
+                    )
+                history_with_tool = append_tool_result(
+                    kind,
+                    history,
+                    {"id": data.resume.id or "call", "name": data.resume.name, "arguments": data.resume.arguments},
+                    json.dumps(result, ensure_ascii=False),
+                )
+            else:
+                history_with_tool = history
+            working = history_with_tool
+            for _round in range(4):
+                turn = await complete_chat(
+                    kind=kind,
+                    base_url=settings["base_url"],
+                    api_key=key,
+                    model=settings["model"],
+                    messages=working,
+                    tools=TOOLS,
+                )
+                if not turn["calls"]:
+                    for piece in _chunks(turn["text"] or ""):
+                        yield _event({"text": piece})
+                    break
+                call = turn["calls"][0]
+                if is_write(call["name"]):
+                    yield _event(
+                        {
+                            "confirm": {
+                                "id": call["id"],
+                                "name": call["name"],
+                                "arguments": call["arguments"],
+                                "summary": summarize_call(call["name"], call["arguments"]),
+                            }
+                        }
+                    )
+                    break
+                result = run_tool(session, call["name"], call["arguments"])
+                yield _event({"status": summarize_call(call["name"], call["arguments"])})
+                working = append_tool_result(kind, working, call, json.dumps(result, ensure_ascii=False)[:4000])
+                if turn["text"]:
+                    for piece in _chunks(turn["text"]):
+                        yield _event({"text": piece})
         except PermissionError as exc:
-            yield f"data: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+            yield _event({"error": str(exc)})
         except Exception:
-            yield 'data: {"error": "网络错误，请重试"}\n\n'
+            yield _event({"error": "网络错误，请重试"})
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(events(), media_type="text/event-stream")

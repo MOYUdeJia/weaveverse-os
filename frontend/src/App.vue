@@ -609,7 +609,7 @@ async function onNoteSaved(saved) {
       @change="applyAppearance"
       @open-guide="guideOpen = true"
     />
-    <ChatPanel :open="chatOpen" @close="chatOpen = false" />
+    <ChatPanel :open="chatOpen" @close="chatOpen = false" @open-nav="openSearchNav" />
     <MusicDock :place="appearance.player || 'bottom'" />
     <p v-if="toastText" class="wv-toast">{{ toastText }}</p>
     <GuideDialog v-if="guideOpen" @close="closeGuide" />

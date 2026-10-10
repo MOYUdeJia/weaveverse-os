@@ -153,3 +153,16 @@ class PhotoLibrary(SQLModel, table=True):
         index=True,
     )
     added_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)
+
+
+class Idea(SQLModel, table=True):
+    """One captured idea. Tags are a JSON list stored as text."""
+
+    __tablename__ = "ideas"
+
+    id: int | None = Field(default=None, primary_key=True)
+    title: str = Field(default="", max_length=80, nullable=False)
+    content: str = Field(sa_column=Column(Text, nullable=False, server_default=""))
+    tags: str = Field(default="[]", sa_column=Column(Text, nullable=False, server_default="[]"))
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    updated_at: datetime = Field(default_factory=utc_now, nullable=False)

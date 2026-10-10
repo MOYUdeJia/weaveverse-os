@@ -459,11 +459,35 @@ export function testAiConnection() {
   return request('/ai/test', { method: 'POST' })
 }
 
-export async function streamAiChat(messages, onText) {
+export function listIdeas() {
+  return request('/ideas')
+}
+
+export function createIdea(data) {
+  return request('/ideas', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function updateIdea(id, data) {
+  return request(`/ideas/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+export function deleteIdea(id) {
+  return request(`/ideas/${id}`, { method: 'DELETE' })
+}
+
+export function summarizeIdea(id) {
+  return request(`/ideas/${id}/summary`, { method: 'POST' })
+}
+
+export function autotagIdea(id) {
+  return request(`/ideas/${id}/tags`, { method: 'POST' })
+}
+
+export async function streamAiChat(messages, onEvent, resume = null) {
   const response = await fetch(`${API_PREFIX}/ai/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, resume }),
   })
   if (!response.ok) {
     let message = '网络错误，请重试'
@@ -502,9 +526,7 @@ export async function streamAiChat(messages, onText) {
       if (payload.error) {
         throw new Error(payload.error)
       }
-      if (payload.text) {
-        onText(payload.text)
-      }
+      onEvent(payload)
     }
   }
 }

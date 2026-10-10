@@ -813,3 +813,38 @@
   - 修改 `frontend/src/components/ChatPanel.vue`
   - 修改 `docs/VERSIONS.md`
 
+## M8 阶段 4 · 2026-10-10
+- **任务**：图片库改成大图流并扩颜色，AI 可以经确认后创建和搜索，加上 IDEA 栏。
+- **实现**：
+  - 「铺满」改成「大图流」：每张图占满相册宽度，按原图比例往下排，间距 12px。点图仍进大图。
+  - 相册颜色扩到 16 种，覆盖红到灰黑。新建按钮是虚线加号。上传是实心按钮，视图切换是描边，未分组和全选是文字按钮。
+  - AI 可以调用 6 个工具。搜索、读页面、列分组直接执行。创建页面、分组、速记必须在聊天里点确认。确认后显示结果，创建页面附「前往查看」，不会自己跳转。
+  - IDEA 栏是系统页。点子用单列卡片，可搜索、按标签筛、编辑、删除。每条可以让 AI 总结或自动贴标签。
+- **技术架构**：迁移 `20261010_0010` 建 `ideas`。工具走现有的导航、分组、搜索和速记函数。模型循环最多 4 轮，写操作停下来等确认，不在服务端记对话。
+- **与块 1 相比的变化**：
+  - 铺满网格换成大图流
+  - AI 从纯聊天变成能创建和搜索
+  - 新增 IDEA 栏
+- **已知问题**：
+  - 助手不能修改、删除或移动已有内容。
+  - 对话关掉就没了。
+  - 阶段 5 的语音、私有云、加密备份还没做。
+- **文件变更**：
+  - 新增 `backend/alembic/versions/20261010_0010_ideas.py`
+  - 新增 `backend/app/ai_tools.py`
+  - 新增 `backend/app/idea_crud.py`
+  - 新增 `backend/app/routes/ideas.py`
+  - 新增 `frontend/src/components/IdeaPanel.vue`
+  - 修改 `backend/app/models.py`
+  - 修改 `backend/app/page_types.py`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/app/photo_crud.py`
+  - 修改 `backend/app/ai_providers.py`
+  - 修改 `backend/app/routes/ai.py`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/components/PhotoLibraryPanel.vue`
+  - 修改 `frontend/src/components/ChatPanel.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改 `docs/VERSIONS.md`
+

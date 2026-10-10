@@ -7,6 +7,7 @@ import BookmarksPage from '../focus/BookmarksPage.vue'
 import PlainPage from '../focus/PlainPage.vue'
 import { focusPageByType } from '../specialAdds/registry.js'
 import BookshelfPanel from './BookshelfPanel.vue'
+import IdeaPanel from './IdeaPanel.vue'
 import PhotoLibraryPanel from './PhotoLibraryPanel.vue'
 import GroupOverview from './GroupOverview.vue'
 import NavIcon from './NavIcon.vue'
@@ -215,6 +216,12 @@ async function addBlock(blockType) {
       :title="item.title"
       :icon="item.icon"
       :notice-message="noticeMessage"
+    />
+
+    <IdeaPanel
+      v-else-if="item && item.page_type === 'idea_box' && !loading && !errorMessage && !empty"
+      :title="item.title"
+      :icon="item.icon"
     />
 
     <div

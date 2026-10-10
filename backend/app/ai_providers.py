@@ -12,12 +12,13 @@ from collections.abc import AsyncIterator
 import httpx
 
 SYSTEM_PROMPT = """你是 Weaveverse OS 的个人数字空间助手。
-你的角色：帮助用户整理思路、回答问题、查找信息。
 你的语气：友好、简洁、不啰嗦。中文优先。
-你的能力边界（M8 阶段）：你只能聊天，不能操作用户的数据。
-未来会支持：帮用户创建页面、搜索笔记、总结内容。
 不知道的就说不知道，不要编造。
-不要提及 API Key、账号或自己的配置状态。"""
+不要提及 API Key、账号或自己的配置状态。
+你可以调用工具。一次只调用一个。
+可以直接用的只读工具：search_items、get_page_content、list_groups。
+会改动数据的工具：create_page、create_quick_note、create_group。调用之后由界面请用户确认，你不要说已经创建成功。
+不能修改、删除或移动已有内容。"""
 
 PROVIDERS = {
     "deepseek": {
@@ -57,6 +58,143 @@ def _anthropic_url(base_url: str) -> str:
     if root.endswith("/v1"):
         return f"{root}/messages"
     return f"{root}/v1/messages"
+
+
+def _raise_for_status(status_code: int) -> None:
+    if status_code in {401, 403}:
+        raise PermissionError("API Key 无效，请检查")
+    if status_code >= 400:
+        raise RuntimeError("网络错误，请重试")
+
+
+def openai_tools(tools: list[dict]) -> list[dict]:
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": tool["name"],
+                "description": tool["description"],
+                "parameters": tool["parameters"],
+            },
+        }
+        for tool in tools
+    ]
+
+
+def anthropic_tools(tools: list[dict]) -> list[dict]:
+    return [
+        {"name": tool["name"], "description": tool["description"], "input_schema": tool["parameters"]}
+        for tool in tools
+    ]
+
+
+async def complete_chat(
+    *,
+    kind: str,
+    base_url: str,
+    api_key: str,
+    model: str,
+    messages: list[dict],
+    tools: list[dict] | None = None,
+) -> dict:
+    if kind == "anthropic":
+        return await _anthropic_complete(base_url, api_key, model, messages, tools or [])
+    return await _openai_complete(base_url, api_key, model, messages, tools or [])
+
+
+def append_tool_result(kind: str, messages: list[dict], call: dict, result_text: str) -> list[dict]:
+    if kind == "anthropic":
+        return [
+            *messages,
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": call["id"],
+                        "name": call["name"],
+                        "input": call["arguments"],
+                    }
+                ],
+            },
+            {
+                "role": "user",
+                "content": [{"type": "tool_result", "tool_use_id": call["id"], "content": result_text}],
+            },
+        ]
+    return [
+        *messages,
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": call["id"],
+                    "type": "function",
+                    "function": {
+                        "name": call["name"],
+                        "arguments": json.dumps(call["arguments"], ensure_ascii=False),
+                    },
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": call["id"], "content": result_text},
+    ]
+
+
+async def _openai_complete(base_url: str, api_key: str, model: str, messages: list[dict], tools: list[dict]) -> dict:
+    payload = {
+        "model": model,
+        "stream": False,
+        "messages": [{"role": "system", "content": SYSTEM_PROMPT}, *messages],
+    }
+    if tools:
+        payload["tools"] = openai_tools(tools)
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=60) as client:
+        response = await client.post(_openai_url(base_url), headers=headers, json=payload)
+    _raise_for_status(response.status_code)
+    choice = (response.json().get("choices") or [{}])[0].get("message") or {}
+    calls = []
+    for call in choice.get("tool_calls") or []:
+        function = call.get("function") or {}
+        try:
+            arguments = json.loads(function.get("arguments") or "{}")
+        except json.JSONDecodeError:
+            arguments = {}
+        if not isinstance(arguments, dict):
+            arguments = {}
+        calls.append({"id": call.get("id") or "call", "name": function.get("name") or "", "arguments": arguments})
+    return {"text": choice.get("content") or "", "calls": calls}
+
+
+async def _anthropic_complete(base_url: str, api_key: str, model: str, messages: list[dict], tools: list[dict]) -> dict:
+    payload = {
+        "model": model,
+        "max_tokens": 1024,
+        "system": SYSTEM_PROMPT,
+        "messages": messages,
+    }
+    if tools:
+        payload["tools"] = anthropic_tools(tools)
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=60) as client:
+        response = await client.post(_anthropic_url(base_url), headers=headers, json=payload)
+    _raise_for_status(response.status_code)
+    body = response.json()
+    text = []
+    calls = []
+    for block in body.get("content") or []:
+        if block.get("type") == "text" and block.get("text"):
+            text.append(block["text"])
+        if block.get("type") == "tool_use":
+            arguments = block.get("input") if isinstance(block.get("input"), dict) else {}
+            calls.append({"id": block.get("id") or "call", "name": block.get("name") or "", "arguments": arguments})
+    return {"text": "".join(text), "calls": calls}
 
 
 async def stream_chat(

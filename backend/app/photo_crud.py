@@ -10,7 +10,24 @@ from sqlmodel import Session, col, select
 from app.album_lock import check_album_password, clear_album_password, set_album_password
 from app.models import PhotoAlbum, PhotoLibrary, utc_now
 
-ALBUM_COLORS = ["#3f6f57", "#d77245", "#5c79a8", "#7a4e7a", "#3ca1b0", "#e2b340"]
+ALBUM_COLORS = [
+    "#c45454",
+    "#e08a7a",
+    "#d77245",
+    "#e2b340",
+    "#8a8f3a",
+    "#3f6f57",
+    "#7aaa78",
+    "#3ca1b0",
+    "#2f7a78",
+    "#5c79a8",
+    "#3d5278",
+    "#7a4e7a",
+    "#c47a96",
+    "#8a6a4a",
+    "#6e7570",
+    "#2c3330",
+]
 
 
 def album_to_dict(row: PhotoAlbum) -> dict:
