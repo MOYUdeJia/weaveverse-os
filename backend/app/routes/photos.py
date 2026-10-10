@@ -17,6 +17,7 @@ from app.routes.blocks import ALLOWED_IMAGE_SUFFIXES, MAX_FILE_BYTES, _safe_atta
 from app.schemas import (
     AlbumCreate,
     AlbumRead,
+    AlbumReorder,
     AlbumUnlock,
     AlbumUpdate,
     PhotoBulkDelete,
@@ -52,8 +53,13 @@ def list_albums(session: Session = Depends(get_session)) -> list[dict]:
 def create_album(data: AlbumCreate, session: Session = Depends(get_session)) -> dict:
     if data.is_private and len(data.password.strip()) < 4:
         raise_api_error(400, "password", "隐私相册密码至少 4 位")
-    row = photo_crud.create_album(session, data.name, data.is_private, data.password.strip())
+    row = photo_crud.create_album(session, data.name, data.is_private, data.password.strip(), data.color)
     return photo_crud.album_to_dict(row)
+
+
+@router.post("/albums/reorder", response_model=list[AlbumRead])
+def reorder_albums(data: AlbumReorder, session: Session = Depends(get_session)) -> list[dict]:
+    return [photo_crud.album_to_dict(row) for row in photo_crud.reorder_albums(session, data.ids)]
 
 
 @router.patch("/albums/{album_id}", response_model=AlbumRead)

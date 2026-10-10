@@ -10,6 +10,8 @@ from sqlmodel import Session, col, select
 from app.album_lock import check_album_password, clear_album_password, set_album_password
 from app.models import PhotoAlbum, PhotoLibrary, utc_now
 
+ALBUM_COLORS = ["#3f6f57", "#d77245", "#5c79a8", "#7a4e7a", "#3ca1b0", "#e2b340"]
+
 
 def album_to_dict(row: PhotoAlbum) -> dict:
     return {
@@ -17,6 +19,7 @@ def album_to_dict(row: PhotoAlbum) -> dict:
         "name": row.name,
         "cover_filename": row.cover_filename,
         "is_private": row.is_private,
+        "color": row.color or "",
         "sort_order": row.sort_order,
         "created_at": row.created_at,
     }
@@ -39,15 +42,41 @@ def get_album(session: Session, album_id: int) -> PhotoAlbum | None:
 
 def list_albums(session: Session) -> list[PhotoAlbum]:
     statement = select(PhotoAlbum).order_by(col(PhotoAlbum.sort_order), col(PhotoAlbum.id))
-    return list(session.exec(statement).all())
+    rows = list(session.exec(statement).all())
+    changed = False
+    for index, row in enumerate(rows):
+        if not row.color:
+            row.color = ALBUM_COLORS[index % len(ALBUM_COLORS)]
+            session.add(row)
+            changed = True
+    if changed:
+        session.commit()
+        for row in rows:
+            session.refresh(row)
+    return rows
 
 
-def create_album(session: Session, name: str, is_private: bool, password: str) -> PhotoAlbum:
+def reorder_albums(session: Session, ids: list[int]) -> list[PhotoAlbum]:
+    rows = {row.id: row for row in list_albums(session)}
+    for index, album_id in enumerate(ids):
+        row = rows.get(album_id)
+        if row is None:
+            continue
+        row.sort_order = index
+        session.add(row)
+    session.commit()
+    return list_albums(session)
+
+
+def create_album(session: Session, name: str, is_private: bool, password: str, color: str = "") -> PhotoAlbum:
     max_order = session.exec(select(col(PhotoAlbum.sort_order)).order_by(col(PhotoAlbum.sort_order).desc())).first()
+    next_order = 0 if max_order is None else int(max_order) + 1
+    picked = color if color in ALBUM_COLORS else ALBUM_COLORS[next_order % len(ALBUM_COLORS)]
     row = PhotoAlbum(
         name=name,
         is_private=is_private,
-        sort_order=0 if max_order is None else int(max_order) + 1,
+        color=picked,
+        sort_order=next_order,
         created_at=utc_now(),
     )
     session.add(row)

@@ -16,7 +16,8 @@ const messages = ref([])
 const draft = ref('')
 const sending = ref(false)
 const modelName = ref('')
-const hasKey = ref(true)
+const hasKey = ref(false)
+const loaded = ref(false)
 const list = ref(null)
 
 watch(
@@ -29,8 +30,10 @@ watch(
       const settings = await getAiSettings()
       modelName.value = settings.model || ''
       hasKey.value = Boolean(settings.has_key)
+      loaded.value = true
     } catch {
       hasKey.value = false
+      loaded.value = true
     }
     nextTick(() => {
       list.value?.scrollTo?.(0, list.value.scrollHeight)
@@ -44,7 +47,6 @@ async function send() {
     return
   }
   if (!hasKey.value) {
-    messages.value = [...messages.value, { role: 'assistant', content: '请先在设置里配置 API Key' }]
     return
   }
   draft.value = ''
@@ -80,8 +82,8 @@ async function send() {
       <button type="button" class="text-ink/50" @click="emit('close')">×</button>
     </header>
     <div ref="list" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
-      <p v-if="!hasKey" class="text-sm text-ink/60">请先在设置里配置 API Key</p>
-      <p v-else-if="!messages.length" class="text-sm text-ink/45">问一个问题。我只能聊天，还不能改你的页面。</p>
+      <p v-if="loaded && !hasKey" class="text-sm text-ink/60">还没有可用的 Key。打开设置里的 AI，保存后再来。</p>
+      <p v-else-if="loaded && !messages.length" class="text-sm text-ink/45">直接问我就行。我目前只能聊天。</p>
       <div v-for="(message, index) in messages" :key="index" class="flex" :class="message.role === 'user' ? 'justify-end' : 'justify-start'">
         <p class="max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm" :class="message.role === 'user' ? 'bg-moss text-white' : 'wv-chip'">
           {{ message.content }}

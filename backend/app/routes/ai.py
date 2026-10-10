@@ -35,35 +35,64 @@ class ChatRequest(BaseModel):
     messages: list[ChatTurn] = Field(min_length=1, max_length=30)
 
 
-def _read_settings() -> dict:
+def _load_file() -> dict:
     try:
         data = json.loads(_SETTINGS_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        data = {}
-    if not isinstance(data, dict):
-        data = {}
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _read_settings() -> dict:
+    data = _load_file()
+    profiles = data.get("profiles") if isinstance(data.get("profiles"), dict) else {}
+    if not profiles and data.get("provider"):
+        profiles = {
+            str(data.get("provider")): {
+                "base_url": data.get("base_url") or "",
+                "model": data.get("model") or "",
+            }
+        }
     provider = str(data.get("provider") or "deepseek")
-    spec = provider_spec(provider) or provider_spec("deepseek")
-    provider = provider if provider_spec(provider) else "deepseek"
-    base_url = str(data.get("base_url") or spec["base_url"])
-    model = str(data.get("model") or spec["models"][0])
-    return {"provider": provider, "base_url": base_url, "model": model}
+    if provider_spec(provider) is None:
+        provider = "deepseek"
+    spec = provider_spec(provider) or {}
+    slot = profiles.get(provider) if isinstance(profiles.get(provider), dict) else {}
+    base_url = str(slot.get("base_url") or spec.get("base_url") or "")
+    model = str(slot.get("model") or (spec.get("models") or [""])[0])
+    return {"provider": provider, "base_url": base_url, "model": model, "profiles": profiles}
 
 
 def _write_settings(provider: str, base_url: str, model: str) -> dict:
-    payload = {"provider": provider, "base_url": base_url, "model": model}
+    current = _read_settings()
+    profiles = dict(current["profiles"])
+    profiles[provider] = {"base_url": base_url, "model": model}
+    payload = {"provider": provider, "profiles": profiles}
     _SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
     _SETTINGS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    return payload
+    return _read_settings()
+
+
+def _profile_public(provider: str, profiles: dict) -> dict:
+    spec = provider_spec(provider) or {}
+    slot = profiles.get(provider) if isinstance(profiles.get(provider), dict) else {}
+    models = spec.get("models") or [""]
+    return {
+        "base_url": str(slot.get("base_url") or spec.get("base_url") or ""),
+        "model": str(slot.get("model") or models[0]),
+        "has_key": ai_secrets.has_api_key(provider),
+    }
 
 
 def _public(settings: dict) -> dict:
     spec = provider_spec(settings["provider"]) or {}
+    profiles = settings.get("profiles") or {}
     return {
         "provider": settings["provider"],
         "base_url": settings["base_url"],
         "model": settings["model"],
         "has_key": ai_secrets.has_api_key(settings["provider"]),
+        "profiles": {key: _profile_public(key, profiles) for key in PROVIDERS},
         "providers": [
             {
                 "id": key,

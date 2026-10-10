@@ -129,6 +129,7 @@ class PhotoAlbum(SQLModel, table=True):
     name: str = Field(min_length=1, max_length=40, nullable=False)
     cover_filename: str | None = Field(default=None, max_length=255)
     is_private: bool = Field(default=False, nullable=False)
+    color: str = Field(default="", max_length=16, nullable=False)
     sort_order: int = Field(default=0, nullable=False, index=True)
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
 

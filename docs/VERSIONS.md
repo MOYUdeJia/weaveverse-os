@@ -783,3 +783,33 @@
   - 修改 `frontend/src/components/PhotoLibraryPanel.vue`
   - 修改 `docs/VERSIONS.md`
 
+## M8 阶段 4 · 块 1 · 2026-10-10
+- **任务**：只修图片库多选、相册、大图铺满和 AI 设置。AI 操作数据和 IDEA 栏还没做。
+- **实现**：
+  - 多选时「选择」变成「取消」。点取消会清空已选并退出。工具栏另有「全选」和「取消选择」。取消选择只清空，不退出。
+  - 「全部」旁边有「未分组」，再点一次回到全部。
+  - 新建相册改成弹窗，可选颜色。相册标签可拖动排序。
+  - 相册用小色点标识。已分组的图左上角是同一个色点。未分组没有色点。一张图仍然只属于一个相册。
+  - 排版多了「铺满」：图片紧挨着，中间没有空隙。
+  - AI 设置按提供商分开记地址和模型。每个按钮上写着「已保存」或「未保存」。输入框旁边也是这两字。换提供商会换成那一家自己的状态。
+  - 没配 Key 时，聊天里只说去设置保存。配好之后只说可以提问，不再提 Key。
+- **技术架构**：迁移 `20261010_0009` 给 `photo_albums` 加 `color`。旧相册第一次打开时补上颜色。AI 的地址和模型按提供商写在 `ai_settings.json`，Key 仍只在凭据管理器。
+- **与阶段 3 相比的变化**：
+  - 图片库的多选、筛选、建相册和排列按上面的方式改了
+  - AI 设置不再把三家提供商挤在同一份表单状态里
+- **已知问题**：
+  - 块 2 的工具调用和块 3 的 IDEA 栏还没做。
+- **文件变更**：
+  - 新增 `backend/alembic/versions/20261010_0009_album_color.py`
+  - 修改 `backend/app/models.py`
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/app/photo_crud.py`
+  - 修改 `backend/app/routes/photos.py`
+  - 修改 `backend/app/routes/ai.py`
+  - 修改 `backend/app/ai_providers.py`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/components/PhotoLibraryPanel.vue`
+  - 修改 `frontend/src/components/AiSettings.vue`
+  - 修改 `frontend/src/components/ChatPanel.vue`
+  - 修改 `docs/VERSIONS.md`
+

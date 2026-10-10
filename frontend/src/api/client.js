@@ -273,10 +273,17 @@ export function listAlbums() {
   return request('/photos/albums')
 }
 
-export function createAlbum(name, isPrivate, password = '') {
+export function createAlbum(name, isPrivate, password = '', color = '') {
   return request('/photos/albums', {
     method: 'POST',
-    body: JSON.stringify({ name, is_private: isPrivate, password }),
+    body: JSON.stringify({ name, is_private: isPrivate, password, color }),
+  })
+}
+
+export function reorderAlbums(ids) {
+  return request('/photos/albums/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
   })
 }
 

@@ -7,15 +7,12 @@
 按顺序读：
 
 1. `docs/HANDOFF.md`（你正在读的）
-2. `docs/<当前版本>-TASK.md` 或 `docs/<当前版本>-TASK-N.md`
-   （多阶段版本用 `-N` 后缀，如 `M8-TASK-2.md`）（本次任务书）
+2. `docs/tasks/<当前版本>-TASK.md`（本次任务书，如 `M8-TASK-4.md`）
 
-**不要主动读 `VERSIONS.md`、`FEATURES.md`、历史任务书。**
-任务书里会写明必要的历史上下文。如果执行中确实需要查历史，
-按需查阅特定段落，不要全文读。
-
-- **读代码用 grep / 搜索定位**，不要全文读大文件。
-  VERSIONS.md 只读最近 2 个版本。
+**不要主动读其他文件**：
+- `VERSIONS.md`：只在需要查历史时按需读特定段落
+- `FEATURES.md` / `ROADMAP.md`：任务书里会写明必要上下文
+- `docs/archive/`：已完成版本的任务书，除非需要考古
 
 ---
 

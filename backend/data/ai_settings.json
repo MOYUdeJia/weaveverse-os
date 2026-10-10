@@ -1,5 +1,9 @@
 {
   "provider": "deepseek",
-  "base_url": "https://api.deepseek.com",
-  "model": "deepseek-chat"
+  "profiles": {
+    "deepseek": {
+      "base_url": "https://api.deepseek.com",
+      "model": "deepseek-chat"
+    }
+  }
 }

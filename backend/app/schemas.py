@@ -637,6 +637,7 @@ class AlbumCreate(BaseModel):
     name: str = Field(min_length=1, max_length=40)
     is_private: bool = False
     password: str = Field(default="", max_length=80)
+    color: str = Field(default="", max_length=16)
 
     @field_validator("name")
     @classmethod
@@ -647,10 +648,15 @@ class AlbumCreate(BaseModel):
         return text
 
 
+class AlbumReorder(BaseModel):
+    ids: list[int] = Field(min_length=1)
+
+
 class AlbumUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=40)
     is_private: bool | None = None
     password: str | None = Field(default=None, max_length=80)
+    color: str | None = Field(default=None, max_length=16)
 
     @field_validator("name")
     @classmethod
@@ -672,6 +678,7 @@ class AlbumRead(BaseModel):
     name: str
     cover_filename: str | None = None
     is_private: bool
+    color: str = ""
     sort_order: int
     created_at: datetime
 
