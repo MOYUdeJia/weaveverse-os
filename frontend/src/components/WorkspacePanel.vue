@@ -47,6 +47,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  noteRevision: {
+    type: Number,
+    default: 0,
+  },
 })
 
 const emit = defineEmits(['open-nav', 'rename-group', 'describe-group', 'search-tag'])
@@ -55,6 +59,8 @@ const page = ref(null)
 const pageLoading = ref(false)
 const pageError = ref('')
 const pickerOpen = ref(false)
+const syncKey = ref(0)
+let saveGeneration = 0
 
 const blocks = computed(() => page.value?.blocks ?? [])
 const focusSpec = computed(() => focusPageByType(page.value?.page_type || props.item?.page_type))
@@ -87,6 +93,27 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => props.noteRevision,
+  async (value, previous) => {
+    if (!value || value === previous || props.item?.page_type !== 'inbox' || !props.item?.id) {
+      return
+    }
+    const id = props.item.id
+    const generation = ++saveGeneration
+    try {
+      const fresh = await getNavItem(id)
+      if (generation !== saveGeneration || props.item?.id !== id) {
+        return
+      }
+      page.value = fresh
+      syncKey.value = value
+    } catch (error) {
+      console.error('Failed to refresh inbox:', error)
+    }
+  },
+)
+
 // 按区块类型从注册表取出组件。
 // Resolve a Vue component from the block type registry.
 function componentFor(block) {
@@ -98,9 +125,10 @@ async function saveBlock(block, content) {
 }
 
 async function saveBlockById(blockId, content) {
+  const generation = saveGeneration
   try {
     const updated = await updateBlock(blockId, { content })
-    if (!page.value) {
+    if (generation !== saveGeneration || !page.value) {
       return
     }
     page.value = {
@@ -200,6 +228,7 @@ async function addBlock(blockType) {
           class="h-full"
           :block="focusBlock"
           :inbox="item.page_type === 'inbox'"
+          v-bind="item.page_type === 'inbox' ? { syncKey } : {}"
           @save="saveBlockById($event.blockId, $event.content)"
         />
       </div>

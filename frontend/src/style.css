@@ -338,6 +338,112 @@ html[data-theme] .bg-dawn {
   background: color-mix(in srgb, var(--wv-work, #fcfaf5) 86%, transparent);
 }
 
+.wv-file-input {
+  position: fixed;
+  left: -100px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.wv-float-name {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  max-width: 220px;
+  padding: 0 14px 0 18px;
+  border: 1px solid rgba(22, 32, 29, 0.08);
+  border-radius: 16px 8px 8px 16px;
+  background: var(--wv-group, #efeae1);
+  color: #16201d;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 6px 18px rgba(22, 32, 29, 0.14);
+  pointer-events: none;
+}
+
+.wv-float-enter-active {
+  transition: transform 260ms ease, opacity 260ms ease;
+}
+
+.wv-float-enter-from {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+
+.wv-float-leave-active {
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.wv-float-leave-to {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+.wv-player {
+  z-index: 40;
+}
+
+.wv-player-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(560px, calc(100vw - 2rem));
+  padding: 8px 12px;
+  border: 1px solid rgba(22, 32, 29, 0.08);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wv-work, #fcfaf5) 88%, transparent);
+  box-shadow: 0 10px 30px rgba(22, 32, 29, 0.12);
+  backdrop-filter: blur(16px);
+}
+
+.wv-player-fab {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(22, 32, 29, 0.08);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wv-work, #fcfaf5) 90%, transparent);
+  box-shadow: 0 8px 24px rgba(22, 32, 29, 0.16);
+  font-size: 16px;
+}
+
+.wv-player-list {
+  width: min(560px, calc(100vw - 2rem));
+  max-height: 220px;
+  margin-top: 8px;
+  overflow: auto;
+  border: 1px solid rgba(22, 32, 29, 0.08);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--wv-work, #fcfaf5) 94%, transparent);
+  box-shadow: 0 10px 30px rgba(22, 32, 29, 0.12);
+  backdrop-filter: blur(16px);
+}
+
+.wv-player-narrow,
+.wv-player-list.wv-player-narrow {
+  width: min(320px, calc(100vw - 2rem));
+}
+
+.wv-player-up {
+  flex-direction: column-reverse;
+}
+
+.wv-player-up .wv-player-list {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.wv-player input[type='range'] {
+  height: 4px;
+  accent-color: #3f6f57;
+}
+
 @keyframes breathe {
   0%,
   100% {

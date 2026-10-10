@@ -224,12 +224,16 @@ onUnmounted(() => {
         </span>
       </button>
     </div>
-    <div
-      v-if="bar === 'overlay' && floated"
-      class="pointer-events-none fixed z-50 flex h-12 items-center rounded-r bg-white/95 px-3 text-sm font-medium text-ink shadow"
-      :style="{ top: `${floated.top}px`, left: '3rem' }"
-    >
-      {{ floated.name }}
-    </div>
   </aside>
+  <Teleport to="body">
+    <Transition name="wv-float">
+      <div
+        v-if="bar === 'overlay' && floated"
+        class="wv-float-name"
+        :style="{ top: `${floated.top + 8}px`, left: '8px' }"
+      >
+        <span class="truncate">{{ floated.name }}</span>
+      </div>
+    </Transition>
+  </Teleport>
 </template>

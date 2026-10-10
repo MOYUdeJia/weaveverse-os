@@ -26,7 +26,13 @@ export function useQueuedSave(emit, readContent, delay = 450) {
     emit('save', { blockId: id, content: readContent() })
   }
 
+  function cancel() {
+    clearTimeout(timer)
+    timer = null
+    blockId = null
+  }
+
   onBeforeUnmount(flush)
 
-  return { queue, flush }
+  return { queue, flush, cancel }
 }

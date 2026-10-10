@@ -1,7 +1,7 @@
 <script setup>
 import { nextTick, onMounted, ref, watch } from 'vue'
 
-import { getQuickTags, saveQuickNote } from '../api/client'
+import { getQuickTags, saveQuickNote, saveQuickTags } from '../api/client'
 
 const props = defineProps({
   open: {
@@ -15,6 +15,7 @@ const emit = defineEmits(['close', 'saved'])
 const text = ref('')
 const picked = ref([])
 const quickTags = ref([])
+const draft = ref('')
 const input = ref(null)
 const errorMessage = ref('')
 const saving = ref(false)
@@ -27,6 +28,7 @@ watch(
     }
     text.value = ''
     picked.value = []
+    draft.value = ''
     errorMessage.value = ''
     try {
       const payload = await getQuickTags()
@@ -43,12 +45,37 @@ onMounted(() => {})
 function toggleTag(name) {
   if (picked.value.includes(name)) {
     picked.value = picked.value.filter((tag) => tag !== name)
+    errorMessage.value = ''
     return
   }
   if (picked.value.length >= 3) {
+    errorMessage.value = '最多三个标签'
     return
   }
+  errorMessage.value = ''
   picked.value = [...picked.value, name]
+}
+
+function addDraft() {
+  const name = draft.value.trim().replace(/^#/, '')
+  draft.value = ''
+  if (!name) {
+    return
+  }
+  if (!picked.value.includes(name)) {
+    if (picked.value.length >= 3) {
+      errorMessage.value = '最多三个标签'
+      return
+    }
+    picked.value = [...picked.value, name]
+  }
+  errorMessage.value = ''
+  if (quickTags.value.includes(name) || quickTags.value.length >= 6) {
+    return
+  }
+  const next = [...quickTags.value, name]
+  quickTags.value = next
+  saveQuickTags(next).catch((error) => console.error(error))
 }
 
 async function save() {
@@ -106,6 +133,17 @@ function onKeydown(event) {
           {{ name }}
         </button>
       </div>
+      <div class="mt-2 flex gap-2">
+        <input
+          v-model="draft"
+          class="h-8 min-w-0 flex-1 rounded border border-black/10 bg-white px-2 text-xs outline-none"
+          maxlength="24"
+          placeholder="加一个标签，回车。最多三个"
+          @keydown.enter.prevent="addDraft"
+        />
+        <button type="button" class="h-8 rounded bg-black/5 px-3 text-xs text-ink/70" @click="addDraft">添加</button>
+      </div>
+      <p v-if="picked.length" class="mt-2 text-xs text-aurora">{{ picked.map((tag) => `#${tag}`).join(' ') }}</p>
       <p v-if="errorMessage" class="mt-2 text-xs text-ember">{{ errorMessage }}</p>
       <div class="mt-3 flex justify-end gap-2">
         <button type="button" class="h-8 rounded px-3 text-xs text-ink/55" @click="emit('close')">取消</button>

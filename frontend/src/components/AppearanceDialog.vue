@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { backgroundUrl, clearBackground, updateAppearance, uploadBackground } from '../api/client'
 
@@ -33,15 +33,33 @@ const props = defineProps({
 const emit = defineEmits(['close', 'change', 'open-guide'])
 
 const busy = ref('')
+const busyName = ref('')
 const errorMessage = ref('')
+const statusMessage = ref('')
 const imageInput = ref(null)
 const videoInput = ref(null)
 const groupInput = ref(null)
+
+const groupFile = computed(() => {
+  if (props.groupId == null) {
+    return ''
+  }
+  return props.appearance.groups?.[String(props.groupId)] || ''
+})
+
+const groupLabel = computed(() => {
+  if (props.groupId == null) {
+    return ''
+  }
+  return props.appearance.group_names?.[String(props.groupId)] || groupFile.value
+})
 
 watch(
   () => props.open,
   () => {
     errorMessage.value = ''
+    statusMessage.value = ''
+    busyName.value = ''
   },
 )
 
@@ -63,9 +81,12 @@ async function setLowPower(event) {
 
 async function sendFile(file, kind, groupId) {
   busy.value = kind
+  busyName.value = file.name || '文件'
   errorMessage.value = ''
+  statusMessage.value = ''
   try {
     emit('change', await uploadBackground(file, kind, groupId))
+    statusMessage.value = `已上传 ${file.name || '文件'}`
   } catch (error) {
     errorMessage.value = error.message || '上传失败'
   } finally {
@@ -73,32 +94,35 @@ async function sendFile(file, kind, groupId) {
   }
 }
 
-function onImage(event) {
+function takeFile(event, kind, groupId) {
   const file = event.target.files?.[0]
   event.target.value = ''
-  if (file) {
-    sendFile(file, 'image', null)
+  if (!file) {
+    errorMessage.value = '没有读到文件'
+    statusMessage.value = ''
+    return
   }
+  sendFile(file, kind, groupId)
+}
+
+function onImage(event) {
+  takeFile(event, 'image', null)
 }
 
 function onVideo(event) {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  if (file) {
-    sendFile(file, 'video', null)
-  }
+  takeFile(event, 'video', null)
 }
 
 function onGroupImage(event) {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  if (file && props.groupId != null) {
-    sendFile(file, 'image', props.groupId)
+  if (props.groupId == null) {
+    return
   }
+  takeFile(event, 'image', props.groupId)
 }
 
 async function clear(kind, groupId) {
   errorMessage.value = ''
+  statusMessage.value = ''
   try {
     emit('change', await clearBackground(kind, groupId))
   } catch (error) {
@@ -150,17 +174,29 @@ async function clear(kind, groupId) {
         <button type="button" class="h-8 rounded bg-white px-3 text-xs" :disabled="busy === 'video'" @click="videoInput.click()">上传 MP4 背景</button>
         <button type="button" class="h-8 rounded px-3 text-xs text-ink/50" @click="clear('video', null)">清除视频</button>
       </div>
-      <p v-if="appearance.global_image" class="mt-2 text-xs text-ink/45">当前图片 {{ appearance.global_image }}</p>
+      <p v-if="busy" class="mt-2 text-xs text-moss">正在上传 {{ busyName }}…</p>
+      <p v-else-if="statusMessage" class="mt-2 text-xs text-moss">{{ statusMessage }}</p>
+      <p v-if="appearance.global_image" class="mt-2 text-xs text-ink/70">当前图片 {{ appearance.global_image_name || appearance.global_image }}</p>
       <img v-if="appearance.global_image" :src="backgroundUrl(appearance.global_image)" alt="" class="mt-2 h-20 w-full rounded object-cover" />
+      <p v-if="appearance.global_video" class="mt-2 text-xs text-ink/70">当前视频 {{ appearance.global_video_name || appearance.global_video }}</p>
+      <video
+        v-if="appearance.global_video"
+        :src="backgroundUrl(appearance.global_video)"
+        class="mt-2 h-20 w-full rounded object-cover"
+        muted
+        playsinline
+      />
       <div v-if="groupId != null" class="mt-4">
-        <button type="button" class="h-8 rounded bg-white px-3 text-xs" @click="groupInput.click()">上传「{{ groupName || '当前分组' }}」背景</button>
+        <button type="button" class="h-8 rounded bg-white px-3 text-xs" :disabled="busy === 'image'" @click="groupInput.click()">上传「{{ groupName || '当前分组' }}」背景</button>
         <button type="button" class="ml-2 h-8 rounded px-3 text-xs text-ink/50" @click="clear('image', groupId)">清除分组背景</button>
+        <p v-if="groupFile" class="mt-2 text-xs text-ink/70">分组背景 {{ groupLabel }}</p>
+        <img v-if="groupFile" :src="backgroundUrl(groupFile)" alt="" class="mt-2 h-20 w-full rounded object-cover" />
       </div>
       <p v-if="errorMessage" class="mt-3 text-xs text-ember">{{ errorMessage }}</p>
       <button type="button" class="mt-5 text-sm text-moss" @click="emit('open-guide')">再看一次使用说明</button>
-      <input ref="imageInput" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="onImage" />
-      <input ref="videoInput" class="hidden" type="file" accept="video/mp4" @change="onVideo" />
-      <input ref="groupInput" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="onGroupImage" />
+      <input ref="imageInput" class="wv-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" @change="onImage" />
+      <input ref="videoInput" class="wv-file-input" type="file" accept="video/mp4,.mp4" @change="onVideo" />
+      <input ref="groupInput" class="wv-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" @change="onGroupImage" />
     </div>
   </div>
 </template>

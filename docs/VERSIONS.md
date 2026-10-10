@@ -632,3 +632,37 @@
   - 修改 `frontend/src/components/WorkspacePanel.vue`
   - 修改 `frontend/src/focus/PlainPage.vue`
   - 修改 `docs/VERSIONS.md`
+
+## M7.1 · 2026-10-10
+- **任务**：修 M7 遗留的背景上传、分组名浮出、速记时间戳和标签、收件箱筛选刷新，以及播放器收起和歌单。不加新功能。
+- **实现**：
+  - 背景上传成功后会记下原文件名，设置里显示文件名和预览。失败时显示原因（格式、大小、视频时长、图片无法读取）。动图不再被转成静态图。
+  - 「名字浮出」从分组图标向右滑出，约 260ms。形状是左边半圆、右边略圆的长方形，颜色跟分组栏一致。分界线仍固定。推栏和图标在上保留。
+  - 速记的 `at` 和 `tags` 会读出来并写回去。时间在条目右下角，标签蓝色发光。速记浮层可以点选已有标签，也可以输入新标签，最多 3 个。
+  - 收件箱筛选多了灰色「全部」。选中标签后删除，列表马上更新；该标签下没有内容时显示空状态。在收件箱里记一条，列表马上出现，不用切换导航。
+  - 播放器改成细条，可收起成 ♪。有歌单，可切换和移除。播放、暂停、上一首、下一首、进度、音量还在。位置仍是上、下、右下。
+- **技术架构**：主题和背景仍在 `appearance.json`，没有新迁移。播放不再用 Plyr，直接用浏览器的 `<audio>`。Plyr 已从依赖里去掉。
+- **与 M7 相比的变化**：
+  - 背景文件名会真正写入设置
+  - 速记时间和标签不再在读取时丢掉
+  - 播放器可收起，并带歌单
+- **已知问题**：
+  - M7 里如果已经编辑并保存过收件箱，当时的时间和标签已经被旧逻辑从正文里抹掉，无法恢复。新记的条目正常。
+  - M7 上传过但没写进设置的背景文件，可能还留在 `backend/data/backgrounds/`，界面不会引用它们。
+  - 没有专辑封面解析。图片库仍留到后面。
+- **文件变更**：
+  - 修改 `backend/app/appearance.py`
+  - 修改 `backend/app/routes/appearance.py`
+  - 修改 `frontend/package.json`
+  - 修改 `frontend/package-lock.json`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/blocks/queuedSave.js`
+  - 修改 `frontend/src/components/AppearanceDialog.vue`
+  - 修改 `frontend/src/components/GroupBar.vue`
+  - 修改 `frontend/src/components/QuickNoteDialog.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改 `frontend/src/components/MusicDock.vue`
+  - 修改 `frontend/src/focus/PlainPage.vue`
+  - 修改 `docs/VERSIONS.md`
+

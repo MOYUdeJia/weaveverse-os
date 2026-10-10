@@ -5,5 +5,8 @@
   "low_power": false,
   "global_image": "",
   "global_video": "",
-  "groups": {}
+  "global_image_name": "",
+  "global_video_name": "",
+  "groups": {},
+  "group_names": {}
 }

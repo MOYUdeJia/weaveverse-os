@@ -27,7 +27,6 @@
     "dompurify": "3.2.6",
     "fabric": "6.7.1",
     "marked": "15.0.12",
-    "plyr": "3.7.8",
     "vue": "3.5.43",
     "vuedraggable": "4.1.0"
   },

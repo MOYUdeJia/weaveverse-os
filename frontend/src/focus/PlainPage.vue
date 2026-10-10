@@ -38,6 +38,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  syncKey: {
+    type: Number,
+    default: 0,
+  },
 })
 
 const emit = defineEmits(['save'])
@@ -56,20 +60,43 @@ let pickr = null
 let pickerToken = 0
 
 function readContent() {
-  const source = lines.value.length ? lines.value : [{ text: '', color: '' }]
+  const source = lines.value.length ? lines.value : [{ text: '', color: '', at: '', tags: [] }]
   return {
     mode: mode.value === 'bullets' ? 'bullets' : 'numbered',
-    lines: source.map((line) => ({ text: line.text, color: line.color || '' })),
+    lines: source.map((line) => ({
+      text: line.text,
+      color: line.color || '',
+      at: line.at || '',
+      tags: Array.isArray(line.tags) ? line.tags : [],
+    })),
   }
 }
 
-const { queue, flush } = useQueuedSave(emit, readContent)
+const { queue, flush, cancel } = useQueuedSave(emit, readContent)
+
+let lineUid = 1
+
+function nextUid() {
+  lineUid += 1
+  return lineUid
+}
+
+function normalizeLine(line) {
+  const tags = Array.isArray(line?.tags) ? line.tags.map((tag) => String(tag)).filter(Boolean) : []
+  return {
+    uid: line?.uid || nextUid(),
+    text: line?.text || '',
+    color: line?.color || '',
+    at: line?.at || '',
+    tags,
+  }
+}
 
 function applyBlock(block) {
   const content = block.content || {}
   mode.value = content.mode === 'bullets' ? 'bullets' : 'numbered'
   const source = Array.isArray(content.lines) && content.lines.length ? content.lines : [{ text: '', color: '' }]
-  lines.value = source.map((line) => ({ text: line.text || '', color: line.color || '' }))
+  lines.value = source.map((line) => normalizeLine(line))
   paletteIndex.value = -1
   refreshAreas()
 }
@@ -85,13 +112,24 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => props.syncKey,
+  (value, previous) => {
+    if (!value || value === previous) {
+      return
+    }
+    cancel()
+    applyBlock(props.block)
+  },
+)
+
 function lineVisible(line) {
   const raw = tagFilter.value.trim().replace(/^#/, '')
   if (!raw) {
     return true
   }
   if (props.inbox) {
-    return (line.tags || []).some((tag) => String(tag).includes(raw))
+    return (line.tags || []).some((tag) => String(tag) === raw)
   }
   const needle = tagFilter.value.trim().startsWith('#') ? tagFilter.value.trim().toLowerCase() : `#${raw.toLowerCase()}`
   return line.text.toLowerCase().includes(needle)
@@ -230,7 +268,7 @@ function onKeydown(event, index) {
   if (event.key === 'Enter') {
     event.preventDefault()
     const color = lines.value[index].color || ''
-    lines.value.splice(index + 1, 0, { text: '', color })
+    lines.value.splice(index + 1, 0, { uid: nextUid(), text: '', color, at: '', tags: [] })
     touch()
     refreshAreas()
     focusLine(index + 1)
@@ -286,7 +324,7 @@ onBeforeUnmount(() => {
 
 function removeInboxLine(index) {
   if (lines.value.length <= 1) {
-    lines.value = [{ text: '', color: '', at: '', tags: [] }]
+    lines.value = [{ uid: nextUid(), text: '', color: '', at: '', tags: [] }]
   } else {
     lines.value.splice(index, 1)
   }
@@ -315,6 +353,9 @@ function addQuickTag() {
 }
 
 function dropQuickTag(tag) {
+  if (tagFilter.value === tag) {
+    tagFilter.value = ''
+  }
   persistQuickTags(quickTags.value.filter((item) => item !== tag))
 }
 </script>
@@ -340,34 +381,43 @@ function dropQuickTag(tag) {
           · 分条模式
         </button>
       </div>
-      <div v-if="inbox" class="mb-3 flex flex-wrap items-center gap-1">
-        <button
-          v-for="tag in quickTags"
-          :key="tag"
-          type="button"
-          class="group/tag h-7 rounded px-2 text-xs"
-          :class="tagFilter === tag ? 'bg-aurora text-white' : 'bg-white text-ink/70'"
-          @click="tagFilter = tagFilter === tag ? '' : tag"
-        >
-          {{ tag }}
-          <span class="ml-1 opacity-0 group-hover/tag:opacity-100" @click.stop="dropQuickTag(tag)">×</span>
-        </button>
-        <form v-if="addingTag" class="flex" @submit.prevent="addQuickTag">
-          <input v-model="draftTag" class="h-7 w-20 rounded border border-black/10 px-2 text-xs outline-none" maxlength="24" />
-        </form>
-        <button v-else-if="quickTags.length < 6" type="button" class="h-7 rounded bg-white px-2 text-xs" @click="addingTag = true">+</button>
-      </div>
       <input
-        v-else
+        v-if="!inbox"
         v-model="tagFilter"
         type="text"
         class="h-8 w-36 rounded border border-black/10 bg-white px-2 text-xs outline-none"
         placeholder="#标签"
       />
     </div>
+    <div v-if="inbox" class="mb-3 flex flex-wrap items-center gap-1">
+      <button
+        type="button"
+        class="h-7 rounded px-2 text-xs"
+        :class="tagFilter ? 'bg-black/5 text-ink/45' : 'bg-ink/55 text-white'"
+        @click="tagFilter = ''"
+      >
+        全部
+      </button>
+      <button
+        v-for="tag in quickTags"
+        :key="tag"
+        type="button"
+        class="group/tag h-7 rounded px-2 text-xs"
+        :class="tagFilter === tag ? 'bg-aurora text-white' : 'bg-white text-ink/70'"
+        @click="tagFilter = tagFilter === tag ? '' : tag"
+      >
+        {{ tag }}
+        <span class="ml-1 opacity-0 group-hover/tag:opacity-100" @click.stop="dropQuickTag(tag)">×</span>
+      </button>
+      <form v-if="addingTag" class="flex" @submit.prevent="addQuickTag">
+        <input v-model="draftTag" class="h-7 w-20 rounded border border-black/10 px-2 text-xs outline-none" maxlength="24" />
+      </form>
+      <button v-else-if="quickTags.length < 6" type="button" class="h-7 rounded bg-white px-2 text-xs" @click="addingTag = true">+</button>
+    </div>
 
+    <p v-if="inbox && tagFilter && !viewLines.length" class="py-8 text-center text-sm text-ink/45">这个标签下还没有速记</p>
     <div ref="list" class="flex flex-col">
-      <div v-for="{ line, index } in viewLines" :key="index" class="group/line relative flex items-start gap-2 border-b border-black/[0.04] py-1">
+      <div v-for="{ line, index } in viewLines" :key="line.uid" class="group/line relative flex items-start gap-2 border-b border-black/[0.04] py-1">
         <button
           type="button"
           class="plain-swatch mt-2 h-4 w-4 shrink-0 rounded-full border border-black/20"
@@ -383,28 +433,44 @@ function dropQuickTag(tag) {
         <span v-else class="mt-0.5 w-8 shrink-0 text-right font-mono text-sm leading-7 text-ink/40">
           {{ index + 1 }}
         </span>
-        <textarea
-          :ref="(element) => (areas[index] = element)"
-          v-model="line.text"
-          rows="1"
-          class="min-w-0 flex-1 resize-none overflow-hidden bg-transparent py-0.5 pr-24 text-[15px] leading-7 outline-none"
-          :style="{ color: line.color || '#16201d' }"
-          :placeholder="index === 0 ? '写一条' : ''"
-          @input="grow"
-          @keydown="onKeydown($event, index)"
-        />
-        <div class="mt-1 flex max-w-[40%] flex-wrap justify-end gap-1">
-          <button
-            v-for="tag in completeTags(line.text)"
-            :key="tag"
-            type="button"
-            class="wv-tag text-[11px]"
-            @click="tagFilter = `#${tag} `"
-          >
-            #{{ tag }}
-          </button>
+        <div class="min-w-0 flex-1">
+          <textarea
+            :ref="(element) => (areas[index] = element)"
+            v-model="line.text"
+            rows="1"
+            class="w-full resize-none overflow-hidden bg-transparent py-0.5 text-[15px] leading-7 outline-none"
+            :class="inbox ? 'pr-12' : 'pr-2'"
+            :style="{ color: line.color || '#16201d' }"
+            :placeholder="index === 0 ? '写一条' : ''"
+            @input="grow"
+            @keydown="onKeydown($event, index)"
+          />
+          <div v-if="!inbox" class="flex flex-wrap justify-end gap-1">
+            <button
+              v-for="tag in completeTags(line.text)"
+              :key="tag"
+              type="button"
+              class="wv-tag text-[11px]"
+              @click="tagFilter = `#${tag} `"
+            >
+              #{{ tag }}
+            </button>
+          </div>
+          <div v-else class="flex items-end justify-between gap-3 pb-0.5">
+            <div class="flex min-w-0 flex-wrap gap-1">
+              <button
+                v-for="tag in line.tags"
+                :key="tag"
+                type="button"
+                class="wv-tag text-[11px]"
+                @click="tagFilter = tag"
+              >
+                #{{ tag }}
+              </button>
+            </div>
+            <span v-if="line.at" class="shrink-0 text-[10px] leading-5 text-ink/45">{{ line.at }}</span>
+          </div>
         </div>
-        <span v-if="line.at" class="pointer-events-none absolute bottom-0.5 right-1 text-[10px] text-ink/35 group-hover/line:text-ink/70">{{ line.at }}</span>
         <button
           v-if="inbox"
           type="button"
@@ -413,9 +479,6 @@ function dropQuickTag(tag) {
         >
           删除
         </button>
-        <div v-if="inbox && line.tags?.length" class="absolute bottom-0.5 left-8 flex gap-1">
-          <span v-for="tag in line.tags" :key="tag" class="wv-tag text-[10px]">#{{ tag }}</span>
-        </div>
         <div
           v-if="paletteIndex === index"
           class="plain-palette absolute left-0 top-8 z-20 rounded-md border border-black/10 bg-white p-2 shadow-lg"

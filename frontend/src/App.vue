@@ -38,6 +38,7 @@ const searchOpen = ref(false)
 const searchQuery = ref('')
 const searchTab = ref('all')
 const noteOpen = ref(false)
+const noteRevision = ref(0)
 const appearanceOpen = ref(false)
 const guideOpen = ref(false)
 const appearance = ref({
@@ -475,11 +476,9 @@ async function openSearchGroup(groupId) {
   await selectGroup(groupId, null, true)
 }
 
-async function onNoteSaved(saved) {
+function onNoteSaved() {
   noticeMessage.value = '已记到收件箱'
-  if (saved?.group_id != null && saved.group_id === activeGroupId.value) {
-    await selectGroup(saved.group_id, activeId.value, showingOverview.value)
-  }
+  noteRevision.value += 1
 }
 </script>
 
@@ -543,6 +542,7 @@ async function onNoteSaved(saved) {
         :notice-message="noticeMessage"
         :overview-group="showingOverview ? activeGroup : null"
         :overview-items="navItems"
+        :note-revision="noteRevision"
         @open-nav="openNav"
         @rename-group="renameGroup"
         @describe-group="describeGroup"

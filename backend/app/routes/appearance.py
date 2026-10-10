@@ -37,13 +37,14 @@ async def upload_background(file: UploadFile, kind: str = "image", group_id: int
     payload = await file.read()
     suffix = Path(file.filename or "").suffix.lower()
     try:
+        label = Path(file.filename or "").name
         if kind == "video":
             if suffix != ".mp4":
                 raise ValueError("视频只支持 mp4")
             filename = store_video(payload)
         else:
             filename = store_image(payload, suffix or ".png")
-        return assign_file("video" if kind == "video" else "image", filename, group_id)
+        return assign_file("video" if kind == "video" else "image", filename, group_id, label)
     except ValueError as exc:
         raise_api_error(400, "file", str(exc))
 
