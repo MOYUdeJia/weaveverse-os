@@ -1,10 +1,12 @@
 <script setup>
 import Pickr from '@simonwep/pickr'
 import autosize from 'autosize'
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import '@simonwep/pickr/dist/themes/classic.min.css'
 
+import { getQuickTags, saveQuickTags } from '../api/client'
 import { useQueuedSave } from '../blocks/queuedSave.js'
+import { completeTags } from '../tags.js'
 
 const STANDARDS = [
   { id: 'black', value: '#161616', label: '黑' },
@@ -32,6 +34,10 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  inbox: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['save'])
@@ -39,6 +45,10 @@ const emit = defineEmits(['save'])
 const mode = ref('numbered')
 const lines = ref([{ text: '', color: '' }])
 const paletteIndex = ref(-1)
+const tagFilter = ref('')
+const quickTags = ref([])
+const draftTag = ref('')
+const addingTag = ref(false)
 const pickerHost = ref(null)
 const areas = ref([])
 const list = ref(null)
@@ -74,6 +84,26 @@ watch(
   },
   { immediate: true },
 )
+
+function lineVisible(line) {
+  const raw = tagFilter.value.trim().replace(/^#/, '')
+  if (!raw) {
+    return true
+  }
+  if (props.inbox) {
+    return (line.tags || []).some((tag) => String(tag).includes(raw))
+  }
+  const needle = tagFilter.value.trim().startsWith('#') ? tagFilter.value.trim().toLowerCase() : `#${raw.toLowerCase()}`
+  return line.text.toLowerCase().includes(needle)
+}
+
+const viewLines = computed(() => {
+  const rows = lines.value.map((line, index) => ({ line, index })).filter(({ line }) => lineVisible(line))
+  if (!props.inbox) {
+    return rows
+  }
+  return rows.sort((a, b) => String(b.line.at || '').localeCompare(String(a.line.at || '')))
+})
 
 function touch() {
   queue(props.block.id)
@@ -230,6 +260,13 @@ let observer = null
 onMounted(() => {
   document.addEventListener('pointerdown', onPointerDown)
   refreshAreas()
+  if (props.inbox) {
+    getQuickTags().then((payload) => {
+      quickTags.value = payload.tags || []
+    }).catch(() => {
+      quickTags.value = []
+    })
+  }
   if (list.value) {
     observer = new ResizeObserver(() => refreshAreas())
     observer.observe(list.value)
@@ -246,6 +283,40 @@ onBeforeUnmount(() => {
     }
   })
 })
+
+function removeInboxLine(index) {
+  if (lines.value.length <= 1) {
+    lines.value = [{ text: '', color: '', at: '', tags: [] }]
+  } else {
+    lines.value.splice(index, 1)
+  }
+  touch()
+  flush()
+}
+
+async function persistQuickTags(next) {
+  quickTags.value = next
+  try {
+    const saved = await saveQuickTags(next)
+    quickTags.value = saved.tags || next
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+function addQuickTag() {
+  const text = draftTag.value.trim().replace(/^#/, '')
+  draftTag.value = ''
+  addingTag.value = false
+  if (!text || quickTags.value.includes(text) || quickTags.value.length >= 6) {
+    return
+  }
+  persistQuickTags([...quickTags.value, text])
+}
+
+function dropQuickTag(tag) {
+  persistQuickTags(quickTags.value.filter((item) => item !== tag))
+}
 </script>
 
 <template>
@@ -269,11 +340,34 @@ onBeforeUnmount(() => {
           · 分条模式
         </button>
       </div>
-      <p class="text-xs text-ink/40">写满自动换行 · 回车新开一条</p>
+      <div v-if="inbox" class="mb-3 flex flex-wrap items-center gap-1">
+        <button
+          v-for="tag in quickTags"
+          :key="tag"
+          type="button"
+          class="group/tag h-7 rounded px-2 text-xs"
+          :class="tagFilter === tag ? 'bg-aurora text-white' : 'bg-white text-ink/70'"
+          @click="tagFilter = tagFilter === tag ? '' : tag"
+        >
+          {{ tag }}
+          <span class="ml-1 opacity-0 group-hover/tag:opacity-100" @click.stop="dropQuickTag(tag)">×</span>
+        </button>
+        <form v-if="addingTag" class="flex" @submit.prevent="addQuickTag">
+          <input v-model="draftTag" class="h-7 w-20 rounded border border-black/10 px-2 text-xs outline-none" maxlength="24" />
+        </form>
+        <button v-else-if="quickTags.length < 6" type="button" class="h-7 rounded bg-white px-2 text-xs" @click="addingTag = true">+</button>
+      </div>
+      <input
+        v-else
+        v-model="tagFilter"
+        type="text"
+        class="h-8 w-36 rounded border border-black/10 bg-white px-2 text-xs outline-none"
+        placeholder="#标签"
+      />
     </div>
 
     <div ref="list" class="flex flex-col">
-      <div v-for="(line, index) in lines" :key="index" class="relative flex items-start gap-2 border-b border-black/[0.04] py-1">
+      <div v-for="{ line, index } in viewLines" :key="index" class="group/line relative flex items-start gap-2 border-b border-black/[0.04] py-1">
         <button
           type="button"
           class="plain-swatch mt-2 h-4 w-4 shrink-0 rounded-full border border-black/20"
@@ -293,12 +387,35 @@ onBeforeUnmount(() => {
           :ref="(element) => (areas[index] = element)"
           v-model="line.text"
           rows="1"
-          class="min-w-0 flex-1 resize-none overflow-hidden bg-transparent py-0.5 text-[15px] leading-7 outline-none"
+          class="min-w-0 flex-1 resize-none overflow-hidden bg-transparent py-0.5 pr-24 text-[15px] leading-7 outline-none"
           :style="{ color: line.color || '#16201d' }"
           :placeholder="index === 0 ? '写一条' : ''"
           @input="grow"
           @keydown="onKeydown($event, index)"
         />
+        <div class="mt-1 flex max-w-[40%] flex-wrap justify-end gap-1">
+          <button
+            v-for="tag in completeTags(line.text)"
+            :key="tag"
+            type="button"
+            class="wv-tag text-[11px]"
+            @click="tagFilter = `#${tag} `"
+          >
+            #{{ tag }}
+          </button>
+        </div>
+        <span v-if="line.at" class="pointer-events-none absolute bottom-0.5 right-1 text-[10px] text-ink/35 group-hover/line:text-ink/70">{{ line.at }}</span>
+        <button
+          v-if="inbox"
+          type="button"
+          class="absolute right-1 top-1 hidden text-xs text-ember group-hover/line:block"
+          @click="removeInboxLine(index)"
+        >
+          删除
+        </button>
+        <div v-if="inbox && line.tags?.length" class="absolute bottom-0.5 left-8 flex gap-1">
+          <span v-for="tag in line.tags" :key="tag" class="wv-tag text-[10px]">#{{ tag }}</span>
+        </div>
         <div
           v-if="paletteIndex === index"
           class="plain-palette absolute left-0 top-8 z-20 rounded-md border border-black/10 bg-white p-2 shadow-lg"

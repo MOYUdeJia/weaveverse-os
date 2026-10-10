@@ -1,27 +1,14 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import {
-  createGroup,
-  createNav,
-  deleteGroup,
-  deleteNav,
-  getGroups,
-  getHealth,
-  getNav,
-  lockGroup,
-  lockNav,
-  patchNav,
-  pinNav,
-  reorderGroups,
-  reorderNav,
-  updateGroup,
-  updateNav,
-} from './api/client'
+import { backgroundUrl, createGroup, createNav, deleteGroup, deleteNav, getAppearance, getGroups, getHealth, getNav, lockGroup, lockNav, patchNav, pinNav, reorderGroups, reorderNav, updateGroup, updateNav } from './api/client'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import GroupBar from './components/GroupBar.vue'
 import GroupEditDialog from './components/GroupEditDialog.vue'
 import NavEditDialog from './components/NavEditDialog.vue'
+import AppearanceDialog from './components/AppearanceDialog.vue'
+import GuideDialog from './components/GuideDialog.vue'
+import MusicDock from './components/MusicDock.vue'
 import SidebarNav from './components/SidebarNav.vue'
 import SearchDialog from './components/SearchDialog.vue'
 import QuickNoteDialog from './components/QuickNoteDialog.vue'
@@ -48,7 +35,20 @@ const confirmTitle = ref('')
 const confirmMessage = ref('')
 const confirmBusy = ref(false)
 const searchOpen = ref(false)
+const searchQuery = ref('')
+const searchTab = ref('all')
 const noteOpen = ref(false)
+const appearanceOpen = ref(false)
+const guideOpen = ref(false)
+const appearance = ref({
+  theme: 'warm',
+  bar: 'push',
+  low_power: false,
+  global_image: '',
+  global_video: '',
+  player: 'bottom',
+  groups: {},
+})
 let confirmAction = null
 let navRequest = 0
 
@@ -122,6 +122,7 @@ async function loadShellData() {
   try {
     await getHealth()
     groups.value = await getGroups()
+    applyAppearance(await getAppearance())
     const firstId = groups.value[0]?.id ?? null
     if (firstId == null) {
       navItems.value = []
@@ -417,9 +418,51 @@ function onGlobalKey(event) {
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && key === 'k') {
     event.preventDefault()
     noteOpen.value = false
-    searchOpen.value = !searchOpen.value
+    openSearch()
   }
 }
+
+function openSearch(query = '', tab = 'all') {
+  searchQuery.value = query
+  searchTab.value = tab
+  searchOpen.value = true
+}
+
+function applyAppearance(next) {
+  appearance.value = { ...appearance.value, ...next, groups: next.groups || {} }
+  document.documentElement.dataset.theme = appearance.value.theme || 'warm'
+}
+
+const groupMedia = computed(() => {
+  if (activeGroupId.value == null) {
+    return ''
+  }
+  return appearance.value.groups?.[String(activeGroupId.value)] || ''
+})
+
+const stillMedia = computed(() => groupMedia.value || appearance.value.global_image || '')
+
+function closeGuide() {
+  try {
+    localStorage.setItem('wv.guide.seen', '1')
+  } catch {
+    // 说明看过与否写失败时，这次仍然关掉。
+  }
+  guideOpen.value = false
+}
+
+watch(splashVisible, (visible) => {
+  if (visible) {
+    return
+  }
+  try {
+    if (!localStorage.getItem('wv.guide.seen')) {
+      guideOpen.value = true
+    }
+  } catch {
+    guideOpen.value = false
+  }
+})
 
 async function openSearchNav({ groupId, navId }) {
   if (groupId == null || navId == null) {
@@ -441,13 +484,29 @@ async function onNoteSaved(saved) {
 </script>
 
 <template>
-  <main class="relative min-h-screen overflow-hidden bg-dawn text-ink">
+  <main
+    class="relative min-h-screen overflow-hidden text-ink"
+    :class="stillMedia || (appearance.global_video && !appearance.low_power) ? 'wv-has-media' : 'bg-dawn'"
+  >
     <SplashScreen v-if="splashVisible" @finished="splashVisible = false" />
 
-    <section class="flex min-h-screen">
+    <section class="relative z-10 flex min-h-screen">
+      <div v-if="stillMedia || (appearance.global_video && !appearance.low_power)" class="pointer-events-none fixed inset-0 z-0">
+        <video
+          v-if="appearance.global_video && !appearance.low_power"
+          :src="backgroundUrl(appearance.global_video)"
+          class="h-full w-full object-cover"
+          autoplay
+          muted
+          loop
+          playsinline
+        />
+        <img v-else-if="stillMedia" :src="backgroundUrl(stillMedia)" alt="" class="h-full w-full object-cover" />
+      </div>
       <GroupBar
         :groups="groups"
         :active-id="activeGroupId"
+        :bar="appearance.bar || 'push'"
         @select="selectGroup($event, null, true)"
         @create="openCreateGroup"
         @edit="openEditGroup"
@@ -472,8 +531,9 @@ async function onNoteSaved(saved) {
         @lock="toggleLock"
         @move="moveNavItem"
         @open-overview="selectGroup(activeGroupId, null, true)"
-        @search="searchOpen = true"
+        @search="openSearch()"
         @note="noteOpen = true"
+        @appearance="appearanceOpen = true"
       />
       <WorkspacePanel
         :item="activeItem"
@@ -486,6 +546,7 @@ async function onNoteSaved(saved) {
         @open-nav="openNav"
         @rename-group="renameGroup"
         @describe-group="describeGroup"
+        @search-tag="openSearch($event, 'focus')"
       />
     </section>
 
@@ -511,7 +572,18 @@ async function onNoteSaved(saved) {
       @cancel="cancelConfirm"
       @confirm="runConfirm"
     />
-    <SearchDialog :open="searchOpen" @close="searchOpen = false" @open-nav="openSearchNav" @open-group="openSearchGroup" />
+    <SearchDialog :open="searchOpen" :initial-query="searchQuery" :initial-tab="searchTab" @close="searchOpen = false" @open-nav="openSearchNav" />
     <QuickNoteDialog :open="noteOpen" @close="noteOpen = false" @saved="onNoteSaved" />
+    <AppearanceDialog
+      :open="appearanceOpen"
+      :appearance="appearance"
+      :group-id="activeGroupId"
+      :group-name="activeGroup?.name || ''"
+      @close="appearanceOpen = false"
+      @change="applyAppearance"
+      @open-guide="guideOpen = true"
+    />
+    <MusicDock :place="appearance.player || 'bottom'" />
+    <GuideDialog v-if="guideOpen" @close="closeGuide" />
   </main>
 </template>

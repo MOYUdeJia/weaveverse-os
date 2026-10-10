@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import draggable from 'vuedraggable'
 
 import { showMenu } from '../contextMenu'
@@ -14,15 +14,53 @@ const props = defineProps({
     type: Number,
     default: null,
   },
+  bar: {
+    type: String,
+    default: 'push',
+  },
 })
 
 const emit = defineEmits(['select', 'create', 'edit', 'remove', 'reorder', 'lock'])
 
 const narrow = ref(false)
 const holding = ref(false)
+const menuOpen = ref(false)
 const localGroups = ref([])
 let media = null
 let onMediaChange = null
+
+const floated = ref(null)
+const systemGroup = computed(() => localGroups.value.find((group) => group.is_system) || null)
+
+const asideClass = computed(() => {
+  if (props.bar === 'stack') {
+    return 'w-[4.75rem]'
+  }
+  if (props.bar === 'overlay' || narrow.value) {
+    return 'w-12'
+  }
+  if (holding.value || menuOpen.value) {
+    return 'w-[200px]'
+  }
+  return 'w-12 hover:w-[200px]'
+})
+
+function floatName(event, name) {
+  if (props.bar !== 'overlay') {
+    return
+  }
+  floated.value = { name, top: event.currentTarget.getBoundingClientRect().top }
+}
+
+function clearFloat() {
+  floated.value = null
+}
+const otherGroups = computed({
+  get: () => localGroups.value.filter((group) => !group.is_system),
+  set: (rows) => {
+    localGroups.value = systemGroup.value ? [systemGroup.value, ...rows] : rows
+  },
+})
 
 watch(
   () => props.groups,
@@ -55,12 +93,29 @@ function onGroupMenu(event, group) {
       },
     )
   }
+  menuOpen.value = true
   showMenu(event, items)
+  window.setTimeout(() => {
+    window.addEventListener('click', closeGroupMenu, true)
+    window.addEventListener('keydown', closeGroupMenuOnEscape, true)
+  }, 0)
+}
+
+function closeGroupMenu() {
+  menuOpen.value = false
+  window.removeEventListener('click', closeGroupMenu, true)
+  window.removeEventListener('keydown', closeGroupMenuOnEscape, true)
+}
+
+function closeGroupMenuOnEscape(event) {
+  if (event.key === 'Escape') {
+    closeGroupMenu()
+  }
 }
 
 function onDragEnd() {
   holding.value = false
-  const ids = localGroups.value.map((group) => group.id)
+  const ids = [systemGroup.value?.id, ...localGroups.value.filter((group) => !group.is_system).map((group) => group.id)].filter((id) => id != null)
   const previous = props.groups.map((group) => group.id)
   if (ids.length === previous.length && ids.every((id, index) => id === previous[index])) {
     return
@@ -78,6 +133,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  closeGroupMenu()
   if (media && onMediaChange) {
     media.removeEventListener('change', onMediaChange)
   }
@@ -87,11 +143,35 @@ onUnmounted(() => {
 <template>
   <!-- 默认 48px，悬停展开到 200px。窄于 900px 时不再展开。 -->
   <aside
-    class="group/folders flex h-screen w-12 shrink-0 flex-col overflow-hidden border-r border-black/10 bg-[#efeae1] transition-[width] duration-300 ease-out"
-    :class="narrow ? '' : holding ? 'w-[200px]' : 'hover:w-[200px]'"
+    class="wv-group group/folders flex h-screen w-12 shrink-0 flex-col overflow-hidden border-r border-black/10 transition-[width] duration-300 ease-out"
+    :class="asideClass"
   >
+    <button
+      v-if="systemGroup"
+      type="button"
+      class="flex w-full items-center text-left hover:bg-black/5"
+      :class="bar === 'stack' ? 'h-auto flex-col gap-1 py-2' : 'h-12'"
+      :title="systemGroup.name"
+      @click="emit('select', systemGroup.id)"
+      @contextmenu="onGroupMenu($event, systemGroup)"
+      @mouseenter="floatName($event, systemGroup.name)"
+      @mouseleave="clearFloat"
+    >
+      <span class="relative grid h-12 w-12 shrink-0 place-items-center">
+        <NavIcon
+          :icon="systemGroup.icon"
+          :box="systemGroup.id === activeId ? 'h-8 w-8 bg-moss text-base text-white' : 'h-8 w-8 bg-white/80 text-base text-ink'"
+        />
+      </span>
+      <span
+        class="min-w-0 flex-1 truncate whitespace-nowrap pr-3 text-sm font-medium"
+        :class="bar === 'overlay' ? 'hidden' : bar === 'stack' ? 'w-full truncate px-1 text-center text-[10px] text-ink/70' : narrow ? 'opacity-0' : menuOpen ? 'opacity-100' : 'opacity-0 group-hover/folders:opacity-100'"
+      >
+        {{ systemGroup.name }}
+      </span>
+    </button>
     <draggable
-      v-model="localGroups"
+      v-model="otherGroups"
       item-key="id"
       tag="div"
       class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-3"
@@ -101,10 +181,13 @@ onUnmounted(() => {
     >
       <template #item="{ element }">
         <div
-          class="flex h-12 w-full cursor-grab items-center text-left hover:bg-black/5 active:cursor-grabbing"
+          class="flex w-full cursor-grab items-center text-left hover:bg-black/5 active:cursor-grabbing"
+          :class="bar === 'stack' ? 'h-auto flex-col gap-1 py-2' : 'h-12'"
           :title="element.name"
           @click="emit('select', element.id)"
           @contextmenu="onGroupMenu($event, element)"
+          @mouseenter="floatName($event, element.name)"
+          @mouseleave="clearFloat"
         >
           <span class="relative grid h-12 w-12 shrink-0 place-items-center">
             <NavIcon
@@ -120,7 +203,7 @@ onUnmounted(() => {
           <span
             class="min-w-0 flex-1 truncate whitespace-nowrap pr-3 text-sm font-medium transition-opacity duration-300"
             :class="[
-              narrow ? 'opacity-0' : 'opacity-0 group-hover/folders:opacity-100',
+              bar === 'overlay' ? 'hidden' : bar === 'stack' ? 'w-full truncate px-1 text-center text-[10px]' : narrow ? 'opacity-0' : menuOpen ? 'opacity-100' : 'opacity-0 group-hover/folders:opacity-100',
               element.id === activeId ? 'text-ink' : 'text-ink/70',
             ]"
           >
@@ -135,11 +218,18 @@ onUnmounted(() => {
         <span class="grid h-12 w-12 shrink-0 place-items-center text-xl">+</span>
         <span
           class="truncate whitespace-nowrap text-sm font-medium transition-opacity duration-300"
-          :class="narrow ? 'opacity-0' : 'opacity-0 group-hover/folders:opacity-100'"
+          :class="bar === 'overlay' || bar === 'stack' ? 'hidden' : narrow ? 'opacity-0' : menuOpen ? 'opacity-100' : 'opacity-0 group-hover/folders:opacity-100'"
         >
           新建分组
         </span>
       </button>
+    </div>
+    <div
+      v-if="bar === 'overlay' && floated"
+      class="pointer-events-none fixed z-50 flex h-12 items-center rounded-r bg-white/95 px-3 text-sm font-medium text-ink shadow"
+      :style="{ top: `${floated.top}px`, left: '3rem' }"
+    >
+      {{ floated.name }}
     </div>
   </aside>
 </template>

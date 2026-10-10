@@ -2,7 +2,7 @@
 // 添加导航：先选积木页、模板或专用页，再填标题和图标。编辑只改标题和图标。
 import { computed, ref, watch } from 'vue'
 
-import { getPageTypes, getTemplates } from '../api/client'
+import { getNav, getPageTypes, getTemplates } from '../api/client'
 import { focusAdds, specialAdds } from '../specialAdds/registry'
 import IconField from './IconField.vue'
 
@@ -35,6 +35,8 @@ const pageTypes = ref([])
 const templates = ref([])
 const selectedTemplate = ref(null)
 const selectedFocus = ref(null)
+const pageTags = ref('')
+const allNav = ref([])
 const loadError = ref('')
 const iconField = ref(null)
 
@@ -42,14 +44,14 @@ const dialogTitle = computed(() => {
   if (props.mode === 'edit') {
     return '编辑导航项'
   }
-  if (step.value === 'blank') {
+  if (step.value === 'flex' || step.value === 'blank' || step.value === 'template') {
     return '新建积木页'
-  }
-  if (step.value === 'templates' || step.value === 'template') {
-    return '从模板创建'
   }
   if (step.value === 'focus' || step.value === 'focusForm') {
     return '新建专用页'
+  }
+  if (step.value === 'core' || step.value === 'coreForm') {
+    return '新建系统页'
   }
   return '添加导航项'
 })
@@ -57,7 +59,7 @@ const canSave = computed(() => {
   if (!title.value.trim()) {
     return false
   }
-  if (step.value === 'focusForm') {
+  if (step.value === 'focusForm' || step.value === 'coreForm') {
     return true
   }
   return icon.value.trim().length > 0
@@ -68,20 +70,11 @@ const specialAddList = computed(() =>
     .filter(([, spec]) => spec.placement !== 'focus' && spec.placement !== 'hidden')
     .map(([id, spec]) => ({ id, ...spec })),
 )
-const focusTypeIds = computed(() => new Set(focusList.value.map((item) => item.pageType)))
+const coreTypes = computed(() => pageTypes.value.filter((type) => type.layer === 'core' && type.type !== 'group_overview'))
+const createdSingles = computed(() => new Set(allNav.value.map((item) => item.page_type)))
+const editingFocus = computed(() => props.mode === 'edit' && ['doc', 'plain', 'bookmarks', 'canvas', 'inbox'].includes(props.item?.page_type))
 const creatableTypes = computed(() =>
-  pageTypes.value.filter((type) => {
-    if (type.layer === 'focus' || type.layer === 'core' || focusTypeIds.value.has(type.type)) {
-      return false
-    }
-    if (type.multi_instance) {
-      return true
-    }
-    if (type.type !== 'bookshelf') {
-      return false
-    }
-    return !props.navItems.some((item) => item.page_type === 'bookshelf')
-  }),
+  pageTypes.value.filter((type) => type.layer !== 'focus' && type.layer !== 'core' && type.multi_instance),
 )
 
 watch(
@@ -93,6 +86,7 @@ watch(
 
     title.value = props.item?.title ?? ''
     icon.value = props.item?.icon ?? ''
+    pageTags.value = (props.item?.tags || []).map((tag) => `#${tag}`).join(' ')
     pageType.value = props.item?.page_type ?? 'markdown'
     selectedTemplate.value = null
     selectedFocus.value = null
@@ -108,6 +102,46 @@ function chooseSpecial(add) {
     return
   }
   loadError.value = '这个添加方式还没实现'
+}
+
+async function chooseFlex() {
+  selectedTemplate.value = null
+  loadError.value = ''
+  step.value = 'flex'
+  try {
+    if (pageTypes.value.length === 0) {
+      pageTypes.value = await getPageTypes()
+    }
+    if (templates.value.length === 0) {
+      templates.value = await getTemplates()
+    }
+  } catch (error) {
+    loadError.value = error.message || '无法加载积木页'
+  }
+}
+
+async function chooseCore() {
+  loadError.value = ''
+  step.value = 'core'
+  try {
+    if (pageTypes.value.length === 0) {
+      pageTypes.value = await getPageTypes()
+    }
+    allNav.value = await getNav()
+  } catch (error) {
+    loadError.value = error.message || '无法加载系统页'
+  }
+}
+
+function pickCore(type) {
+  if (createdSingles.value.has(type.type)) {
+    return
+  }
+  selectedTemplate.value = null
+  selectedFocus.value = null
+  pageType.value = type.type
+  icon.value = type.default_icon || ''
+  step.value = 'coreForm'
 }
 
 async function chooseBlank() {
@@ -163,12 +197,16 @@ function pickFocus(add) {
 
 function goBack() {
   loadError.value = ''
-  if (step.value === 'template') {
-    step.value = 'templates'
+  if (step.value === 'blank' || step.value === 'template') {
+    step.value = 'flex'
     return
   }
   if (step.value === 'focusForm') {
     step.value = 'focus'
+    return
+  }
+  if (step.value === 'coreForm') {
+    step.value = 'core'
     return
   }
   selectedTemplate.value = null
@@ -184,6 +222,13 @@ function save() {
   const payload = {
     title: title.value.trim(),
     icon: icon.value.trim(),
+  }
+  if (editingFocus.value || step.value === 'focusForm') {
+    const tags = pageTags.value
+      .split(/\s+/)
+      .map((tag) => tag.replace(/^#/, '').trim())
+      .filter(Boolean)
+    payload.tags = [...new Set(tags)]
   }
   if (step.value === 'template' && selectedTemplate.value) {
     payload.template_id = selectedTemplate.value.id
@@ -222,26 +267,50 @@ function save() {
         <p v-if="loadError" class="mb-4 text-sm text-ember">{{ loadError }}</p>
 
         <div v-if="step === 'menu'" class="grid gap-3">
-          <button type="button" class="rounded-md bg-white px-4 py-4 text-left shadow-sm hover:bg-moss hover:text-white" @click="chooseBlank">
+          <button type="button" class="rounded-md bg-white px-4 py-4 text-left shadow-sm hover:bg-moss hover:text-white" @click="chooseFlex">
             <span class="block text-base font-semibold">新建积木页</span>
-            <span class="mt-1 block text-sm opacity-70">选一种积木页，用区块搭内容</span>
-          </button>
-          <button type="button" class="rounded-md bg-white px-4 py-4 text-left shadow-sm hover:bg-moss hover:text-white" @click="chooseTemplates">
-            <span class="block text-base font-semibold">从模板创建</span>
-            <span class="mt-1 block text-sm opacity-70">用一套搭好的区块开始</span>
+            <span class="mt-1 block text-sm opacity-70">空白页，或从一套模板开始</span>
           </button>
           <button type="button" class="rounded-md bg-white px-4 py-4 text-left shadow-sm hover:bg-moss hover:text-white" @click="chooseFocus">
             <span class="block text-base font-semibold">新建专用页</span>
-            <span class="mt-1 block text-sm opacity-70">长文、笔记、网址集或白板，内容占满这一页</span>
+            <span class="mt-1 block text-sm opacity-70">长文、笔记、网址集或白板</span>
           </button>
+          <button type="button" class="rounded-md bg-white px-4 py-4 text-left shadow-sm hover:bg-moss hover:text-white" @click="chooseCore">
+            <span class="block text-base font-semibold">新建系统页</span>
+            <span class="mt-1 block text-sm opacity-70">全局只有一个，会放进系统分组</span>
+          </button>
+        </div>
+
+        <div v-else-if="step === 'flex'" class="grid gap-3">
+          <button type="button" class="rounded-md bg-white px-4 py-3 text-left text-sm font-semibold shadow-sm hover:ring-2 hover:ring-moss" @click="chooseBlank">
+            空白页
+          </button>
+          <div class="grid grid-cols-2 gap-3">
+            <button
+              v-for="template in templates"
+              :key="template.id"
+              type="button"
+              class="rounded-md bg-white p-4 text-left shadow-sm hover:ring-2 hover:ring-moss"
+              @click="pickTemplate(template)"
+            >
+              <span class="text-2xl">{{ template.icon }}</span>
+              <span class="mt-2 block text-sm font-semibold text-ink">{{ template.label }}</span>
+              <span class="mt-1 block text-xs leading-5 text-ink/60">{{ template.description }}</span>
+            </button>
+          </div>
+        </div>
+
+        <div v-else-if="step === 'core'" class="grid gap-3">
           <button
-            v-for="add in specialAddList"
-            :key="add.id"
+            v-for="type in coreTypes"
+            :key="type.type"
             type="button"
-            class="rounded-md bg-white px-4 py-4 text-left shadow-sm hover:bg-moss hover:text-white"
-            @click="chooseSpecial(add)"
+            class="rounded-md bg-white px-4 py-4 text-left shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="createdSingles.has(type.type)"
+            :title="createdSingles.has(type.type) ? '已创建，只能有一个' : ''"
+            @click="pickCore(type)"
           >
-            <span class="block text-base font-semibold">{{ add.icon }} {{ add.label }}</span>
+            <span class="block text-sm font-semibold">{{ type.default_icon }} {{ type.label }}</span>
           </button>
         </div>
 
@@ -288,6 +357,16 @@ function save() {
           <p v-if="step === 'focusForm' && selectedFocus" class="mt-2 text-xs text-ink/50">
             不填图标时使用默认 {{ selectedFocus.icon }}
           </p>
+          <template v-if="editingFocus || step === 'focusForm'">
+            <label class="mt-5 block text-sm font-medium text-ink/75" for="nav-tags">专页标签</label>
+            <input
+              id="nav-tags"
+              v-model="pageTags"
+              class="mt-2 h-11 w-full rounded-md border border-black/15 bg-white px-3 text-base outline-none focus:border-moss"
+              placeholder="#游戏 "
+            />
+            <p class="mt-1 text-xs text-ink/45">写成 #游戏 这样，空格分开。只在「专页」搜索里跨页命中。</p>
+          </template>
 
           <template v-if="step === 'blank'">
             <label class="mt-5 block text-sm font-medium text-ink/75" for="nav-page-type">页面类型</label>

@@ -1,0 +1,9 @@
+{
+  "theme": "warm",
+  "bar": "overlay",
+  "player": "bottom",
+  "low_power": false,
+  "global_image": "",
+  "global_video": "",
+  "groups": {}
+}

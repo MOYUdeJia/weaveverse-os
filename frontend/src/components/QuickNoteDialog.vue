@@ -1,9 +1,7 @@
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { nextTick, onMounted, ref, watch } from 'vue'
 
-import { saveQuickNote } from '../api/client'
-
-const CATEGORIES = ['工作', '生活', '想法', '待办']
+import { getQuickTags, saveQuickNote } from '../api/client'
 
 const props = defineProps({
   open: {
@@ -15,26 +13,42 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved'])
 
 const text = ref('')
-const category = ref('')
+const picked = ref([])
+const quickTags = ref([])
 const input = ref(null)
 const errorMessage = ref('')
 const saving = ref(false)
 
 watch(
   () => props.open,
-  (open) => {
+  async (open) => {
     if (!open) {
       return
     }
     text.value = ''
-    category.value = ''
+    picked.value = []
     errorMessage.value = ''
+    try {
+      const payload = await getQuickTags()
+      quickTags.value = payload.tags || []
+    } catch {
+      quickTags.value = ['工作', '生活', '灵感', '待办']
+    }
     nextTick(() => input.value?.focus())
   },
 )
 
-function toggleCategory(name) {
-  category.value = category.value === name ? '' : name
+onMounted(() => {})
+
+function toggleTag(name) {
+  if (picked.value.includes(name)) {
+    picked.value = picked.value.filter((tag) => tag !== name)
+    return
+  }
+  if (picked.value.length >= 3) {
+    return
+  }
+  picked.value = [...picked.value, name]
 }
 
 async function save() {
@@ -45,7 +59,7 @@ async function save() {
   saving.value = true
   errorMessage.value = ''
   try {
-    const saved = await saveQuickNote(note, category.value)
+    const saved = await saveQuickNote(note, picked.value)
     emit('saved', saved)
     emit('close')
   } catch (error) {
@@ -77,19 +91,19 @@ function onKeydown(event) {
         v-model="text"
         rows="4"
         class="mt-2 w-full resize-none rounded border border-black/10 bg-white px-3 py-2 text-sm outline-none"
-        placeholder="写一条。Enter 保存，Shift+Enter 换行，也可以直接写 #标签"
+        placeholder="写一条。Enter 保存，最多三个标签"
         @keydown="onKeydown"
       />
       <div class="mt-2 flex flex-wrap gap-1">
         <button
-          v-for="name in CATEGORIES"
+          v-for="name in quickTags"
           :key="name"
           type="button"
           class="h-7 rounded px-2 text-xs"
-          :class="category === name ? 'bg-moss text-white' : 'bg-black/5 text-ink/70'"
-          @click="toggleCategory(name)"
+          :class="picked.includes(name) ? 'bg-aurora text-white' : 'bg-black/5 text-ink/70'"
+          @click="toggleTag(name)"
         >
-          #{{ name }}
+          {{ name }}
         </button>
       </div>
       <p v-if="errorMessage" class="mt-2 text-xs text-ember">{{ errorMessage }}</p>

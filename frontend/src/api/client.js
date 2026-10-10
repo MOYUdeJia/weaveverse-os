@@ -193,11 +193,76 @@ export function searchLibrary(query) {
   return request(`/search?q=${encodeURIComponent(query)}`)
 }
 
-export function saveQuickNote(text, category = '') {
+export function getAppearance() {
+  return request('/appearance')
+}
+
+export function updateAppearance(data) {
+  return request('/appearance', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export function uploadBackground(file, kind, groupId) {
+  const body = new FormData()
+  body.append('file', file)
+  const query = new URLSearchParams({ kind })
+  if (groupId != null) {
+    query.set('group_id', String(groupId))
+  }
+  return request(`/appearance/files?${query}`, {
+    method: 'POST',
+    body,
+  })
+}
+
+export function clearBackground(kind, groupId) {
+  const query = new URLSearchParams({ kind })
+  if (groupId != null) {
+    query.set('group_id', String(groupId))
+  }
+  return request(`/appearance/files?${query}`, { method: 'DELETE' })
+}
+
+export function backgroundUrl(filename) {
+  return `${API_PREFIX}/appearance/files/${encodeURIComponent(filename)}`
+}
+
+export function saveQuickNote(text, tags = []) {
   return request('/inbox/notes', {
     method: 'POST',
-    body: JSON.stringify({ text, category }),
+    body: JSON.stringify({ text, tags }),
   })
+}
+
+export function getQuickTags() {
+  return request('/inbox/tags')
+}
+
+export function saveQuickTags(tags) {
+  return request('/inbox/tags', {
+    method: 'PUT',
+    body: JSON.stringify({ tags }),
+  })
+}
+
+export function listTracks() {
+  return request('/music')
+}
+
+export function uploadTrack(file) {
+  const body = new FormData()
+  body.append('file', file)
+  return request('/music', { method: 'POST', body })
+}
+
+export function deleteTrack(filename) {
+  return request(`/music/${encodeURIComponent(filename)}`, { method: 'DELETE' })
+}
+
+export function trackUrl(filename) {
+  return `${API_PREFIX}/music/files/${encodeURIComponent(filename)}`
 }
 
 export function deleteAttachment(filename) {

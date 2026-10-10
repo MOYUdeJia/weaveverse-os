@@ -19,6 +19,10 @@ backend/data/books/*
 !backend/data/books/.gitkeep
 backend/data/icons/*
 !backend/data/icons/.gitkeep
+backend/data/backgrounds/*
+!backend/data/backgrounds/.gitkeep
+backend/data/music/*
+!backend/data/music/.gitkeep
 npm-debug.log*
 .idea/
 .DS_Store

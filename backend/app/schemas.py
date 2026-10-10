@@ -6,6 +6,7 @@ without changing the database: they are still JSON inside Block.content.
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from datetime import datetime
@@ -130,6 +131,8 @@ class ChartContent(BaseModel):
 class PlainLine(BaseModel):
     text: str = ""
     color: str = ""
+    at: str = ""
+    tags: list[str] = Field(default_factory=list)
 
     @field_validator("color")
     @classmethod
@@ -267,6 +270,15 @@ def check_icon_ref(value: str) -> str:
     return value
 
 
+def _clean_page_tags(value: list[str]) -> list[str]:
+    cleaned: list[str] = []
+    for raw in value:
+        text = str(raw).strip().lstrip("#").strip()
+        if text and text not in cleaned:
+            cleaned.append(text[:24])
+    return cleaned[:12]
+
+
 class NavItemBase(BaseModel):
     title: str = Field(min_length=1, max_length=50)
     icon: str = Field(min_length=1, max_length=20)
@@ -320,7 +332,12 @@ class NavItemCreate(BaseModel):
 
 
 class NavItemUpdate(NavItemBase):
-    pass
+    tags: list[str] = Field(default_factory=list)
+
+    @field_validator("tags")
+    @classmethod
+    def clean_page_tags(cls, value: list[str]) -> list[str]:
+        return _clean_page_tags(value)
 
 
 class NavItemPatch(BaseModel):
@@ -351,9 +368,24 @@ class NavItemRead(NavItemBase):
     group_id: int
     pinned: bool
     locked: bool = False
+    tags: list[str] = Field(default_factory=list)
     sort_order: int
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def parse_tags(cls, value: Any) -> list[str]:
+        if value is None or value == "":
+            return []
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                return []
+        if not isinstance(value, list):
+            return []
+        return _clean_page_tags([str(item) for item in value])
 
 
 class BlockRead(BaseModel):
@@ -553,9 +585,19 @@ class BookContent(BaseModel):
 
 class QuickNoteCreate(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
-    category: str = ""
+    tags: list[str] = Field(default_factory=list)
 
-    @field_validator("text", "category")
+    @field_validator("text")
     @classmethod
     def strip_note(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("tags")
+    @classmethod
+    def clean_note_tags(cls, value: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for raw in value:
+            text = str(raw).strip().lstrip("#").strip()
+            if text and text not in cleaned:
+                cleaned.append(text[:24])
+        return cleaned[:3]

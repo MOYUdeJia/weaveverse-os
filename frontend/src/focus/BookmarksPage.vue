@@ -16,6 +16,7 @@ const emit = defineEmits(['save'])
 
 const sections = ref([])
 const editingKey = ref('')
+const tagFilter = ref('')
 
 function readContent() {
   return {
@@ -138,6 +139,21 @@ function finishEdit() {
   commit()
 }
 
+function itemMatches(item) {
+  const needle = tagFilter.value.trim().replace(/^#/, '').toLowerCase()
+  if (!needle) {
+    return true
+  }
+  return (item.tags || []).some((tag) => String(tag).toLowerCase().includes(needle))
+}
+
+function sectionVisible(section) {
+  if (!tagFilter.value.trim()) {
+    return true
+  }
+  return section.items.some((item) => itemMatches(item))
+}
+
 function openItem(item) {
   const url = normalizeUrl(item.url)
   if (!url) {
@@ -151,14 +167,22 @@ function openItem(item) {
   <div class="mx-auto w-full max-w-3xl px-6 py-5">
     <div class="mb-3 flex items-center justify-between gap-3">
       <p class="text-xs text-ink/40">点标题打开网址 · 自动保存</p>
-      <button type="button" class="h-8 rounded-md bg-ink px-3 text-xs font-semibold text-white hover:bg-moss" @click="addSection">
-        + 分区
-      </button>
+      <div class="flex items-center gap-2">
+        <input
+          v-model="tagFilter"
+          type="text"
+          class="h-8 w-36 rounded border border-black/10 bg-white px-2 text-xs outline-none"
+          placeholder="#标签"
+        />
+        <button type="button" class="h-8 rounded-md bg-ink px-3 text-xs font-semibold text-white hover:bg-moss" @click="addSection">
+          + 分区
+        </button>
+      </div>
     </div>
 
     <draggable v-model="sections" item-key="key" handle=".section-handle" :animation="160" @end="commit">
       <template #item="{ element: section, index: sectionIndex }">
-        <section class="mb-4">
+        <section v-show="sectionVisible(section)" class="mb-4">
           <div class="mb-1 flex items-center gap-2">
             <button type="button" class="section-handle cursor-grab px-1 text-ink/35 active:cursor-grabbing" title="拖动分区">⋮⋮</button>
             <input
@@ -189,7 +213,7 @@ function openItem(item) {
             @end="commit"
           >
             <template #item="{ element: item, index: itemIndex }">
-              <div class="px-2.5 py-1.5">
+              <div v-show="itemMatches(item)" class="px-2.5 py-1.5">
                 <div v-if="editingKey !== item.key" class="flex items-center gap-2">
                   <button type="button" class="item-handle cursor-grab text-ink/30 active:cursor-grabbing" title="拖动">⋮</button>
                   <button
@@ -201,7 +225,15 @@ function openItem(item) {
                     {{ item.title || '未命名' }}
                   </button>
                   <span class="hidden max-w-[34%] truncate text-xs text-ink/40 sm:inline">{{ item.url }}</span>
-                  <span v-for="tag in item.tags" :key="tag" class="shrink-0 text-[11px] text-moss">#{{ tag }}</span>
+                  <button
+                    v-for="tag in item.tags"
+                    :key="tag"
+                    type="button"
+                    class="wv-tag shrink-0 text-[11px]"
+                    @click="tagFilter = `#${tag} `"
+                  >
+                    #{{ tag }}
+                  </button>
                   <button type="button" class="shrink-0 text-xs text-ink/45 hover:text-ink" @click="editingKey = item.key">改</button>
                   <button type="button" class="shrink-0 text-xs text-ink/45 hover:text-ember" @click="removeItem(sectionIndex, itemIndex)">
                     删

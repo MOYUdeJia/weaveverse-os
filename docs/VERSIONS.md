@@ -510,3 +510,125 @@
   - 修改 `frontend/src/components/NavEditDialog.vue`
   - 修改 `frontend/src/specialAdds/registry.js`
   - 修改 `docs/VERSIONS.md`
+
+## M7 阶段 1 · 2026-10-10
+- **任务**：修右键分隔线、链接打开方式、搜索范围和跳转、速记时间戳、页内标签、导航拖拽、分组栏右键收回。
+- **实现**：
+  - 图片右键里，分隔线改到「25%」和「左对齐」之间。
+  - 长文链接恢复为普通点击放光标，Ctrl+点击才打开。链接悬停提示「Ctrl+点击打开链接」。
+  - 搜索不再查区块正文。结果带 `分组 > 页面` 路径和积木/专页/系统标记。Tab 可筛这三层。点结果会跳到对应分组和页面。
+  - 速记正文前面写入本机时间，格式 `2026-10-09 14:32`，不另加字段。
+  - 网址集和笔记页顶部可输入 `#标签`，只筛当前页。
+  - 导航排序改为右侧抓手，点标题不再进入拖拽。
+  - 分组右键菜单打开时，分组栏保持展开，直到点选或按 Esc。
+- **技术架构**：搜索仍是 `GET /api/search` 的 SQLite `LIKE`，响应里去掉了 `blocks`。
+- **与 M6.2 相比的变化**：
+  - 搜索从「含正文」收成元数据，并带路径和分层 Tab
+  - 链接从单击打开改回 Ctrl+点击
+  - 导航拖拽从整行抓取改成抓手
+- **已知问题**：
+  - 分组和书籍不属于积木/专页/系统这三层。分组只出现在「全部」。书籍出现在「全部」和「系统页」，点它会打开书架。
+  - 阶段 2、阶段 3 还没做。
+- **文件变更**：
+  - 修改 `backend/app/search.py`
+  - 修改 `backend/app/routes/inbox.py`
+  - 修改 `frontend/src/focus/docEditor.js`
+  - 修改 `frontend/src/focus/DocPage.vue`
+  - 修改 `frontend/src/focus/PlainPage.vue`
+  - 修改 `frontend/src/focus/BookmarksPage.vue`
+  - 修改 `frontend/src/components/SearchDialog.vue`
+  - 修改 `frontend/src/components/SidebarNav.vue`
+  - 修改 `frontend/src/components/GroupBar.vue`
+  - 修改 `docs/VERSIONS.md`
+
+## M7 阶段 2 · 2026-10-10
+- **任务**：搜索和标签、创建菜单、系统分组、时间戳和链接提示，加上主题、背景、分组栏样式、首次说明。
+- **实现**：
+  - 搜索只查导航项名称。四个 Tab：全部、积木页、专页、系统页。专页 Tab 额外命中专页级标签。分组和书籍不再出现。结果仍带 `分组 > 页面` 路径。
+  - 专页级标签存在导航项 `tags`。编辑专页时填写 `#游戏 `。页内标签仍写在网址或笔记正文里，`#标签` 后面要有空格才算完整。两种都是蓝色发光。点专页标签打开「专页」搜索；点页内标签只筛当前页。
+  - 「+」变成新建积木页（空白页加模板卡片）、新建专用页、新建系统页。已有的单实例系统页置灰。新的系统页由后端放进系统分组。
+  - 系统分组固定在分组栏第一位，不参与拖动。
+  - 速记时间写在行的 `at` 字段，显示在右下角，不再塞进正文。
+  - 链接悬停用自定义浮层，不依赖 WebView 的 title。
+  - 外观：暖白、薄荷、天蓝、樱粉、灰调。全局图、分组图、MP4（50MB、30 秒）。分组栏可选推栏或覆盖。低性能模式关掉视频。首次打开显示使用说明，外观里可以再打开。
+- **技术架构**：标签迁移是 `20261010_0006`，给 `nav_items.tags` 加 JSON 文本。主题和背景不进分组表，写在 `backend/data/appearance.json` 和 `backend/data/backgrounds/`。图片超过 2560 像素宽时用 Pillow 缩小。视频时长读 MP4 的 `mvhd`，不另引播放器库。
+- **与阶段 1 相比的变化**：
+  - 搜索从「导航 + 分组 + 书籍」收成只有页面名，专页另加标签
+  - 创建菜单按积木 / 专用 / 系统三分
+  - 增加外观和首次说明
+- **已知问题**：
+  - 图片库还没做，所以「新建系统页」里现在只有书架。
+  - 有视频背景时，它盖住分组静图。关掉视频或打开低性能模式后才看到静图。
+  - 页内标签必须在 `#标签` 后面有空格才会亮、才能点。
+- **文件变更**：
+  - 新增 `backend/alembic/versions/20261010_0006_nav_tags.py`
+  - 新增 `backend/app/appearance.py`
+  - 新增 `backend/app/routes/appearance.py`
+  - 新增 `backend/data/backgrounds/.gitkeep`
+  - 新增 `frontend/src/tags.js`
+  - 新增 `frontend/src/components/AppearanceDialog.vue`
+  - 新增 `frontend/src/components/GuideDialog.vue`
+  - 修改 `backend/app/models.py`
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/app/crud.py`
+  - 修改 `backend/app/search.py`
+  - 修改 `backend/app/page_types.py`
+  - 修改 `backend/app/group_crud.py`
+  - 修改 `backend/app/routes/inbox.py`
+  - 修改 `backend/app/config.py`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/requirements.txt`
+  - 修改 `.gitignore`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/components/SearchDialog.vue`
+  - 修改 `frontend/src/components/NavEditDialog.vue`
+  - 修改 `frontend/src/components/SidebarNav.vue`
+  - 修改 `frontend/src/components/GroupBar.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改 `frontend/src/focus/DocPage.vue`
+  - 修改 `frontend/src/focus/PlainPage.vue`
+  - 修改 `frontend/src/focus/BookmarksPage.vue`
+  - 修改 `docs/VERSIONS.md`
+
+## M7 阶段 3 · 2026-10-10
+- **任务**：修背景、分组栏、专页搜索分隔和速记，并加上本地音乐播放器。图片库留到 M7.5。
+- **实现**：
+  - 背景图画在界面后面，侧栏和工作区改成半透明，否则会被不透明底色完全挡住。
+  - 覆盖式分组栏宽度不再变化，分界线不动。只有悬停的那个分组名向右浮出。另加「图标在上」：图标在上、名字在下，栏宽固定。
+  - 专页搜索里，名字结果在上，标签结果用蓝色底和一条横线隔开。
+  - 速记改成正文、最多 3 个标签、右下角时间。收件箱顶部直接列出常用标签，最多 6 个，可加可删，存在 `backend/data/quick_tags.json`。默认是工作、生活、灵感、待办。悬停可删整条。新的排在前面。
+  - 主题放进侧栏「设置」。
+  - 音乐用 Plyr 3.7.8 包一层本地 `<audio>`。上传 mp3 / ogg / wav / m4a / flac 到 `backend/data/music/`。可播放、暂停、上一首、下一首、进度和音量。位置可放上方、下方或右下角。
+- **技术架构**：播放列表是音乐目录里的 `index.json`，不建表。常用标签也是 JSON 文件。图片库的表和页面这次没做。
+- **与阶段 2 相比的变化**：
+  - 背景能从面板后面透出来
+  - 分组栏多了「名字浮出」和「图标在上」
+  - 增加本地播放器
+- **已知问题**：
+  - Plyr 官方已标记为只做安全更新，建议新项目改用 Video.js。这里只播本地音频，Plyr 的控件更小，所以仍用它。
+  - 没有专辑封面解析。
+  - 图片库留到 M7.5：元数据表、单相册、预览、保存原图、从长文加入。
+- **文件变更**：
+  - 新增 `backend/app/routes/music.py`
+  - 新增 `backend/data/music/.gitkeep`
+  - 新增 `frontend/src/components/MusicDock.vue`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/app/appearance.py`
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/app/routes/inbox.py`
+  - 修改 `.gitignore`
+  - 修改 `frontend/package.json`
+  - 修改 `frontend/package-lock.json`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/components/GroupBar.vue`
+  - 修改 `frontend/src/components/SearchDialog.vue`
+  - 修改 `frontend/src/components/AppearanceDialog.vue`
+  - 修改 `frontend/src/components/SidebarNav.vue`
+  - 修改 `frontend/src/components/QuickNoteDialog.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改 `frontend/src/focus/PlainPage.vue`
+  - 修改 `docs/VERSIONS.md`

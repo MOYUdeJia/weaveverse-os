@@ -106,7 +106,7 @@ const editor = useEditor({
     attributes: { class: 'doc-surface' },
     handleClick(_view, _pos, event) {
       const anchor = event.target?.closest?.('a')
-      if (!anchor) {
+      if (!anchor || !(event.metaKey || event.ctrlKey)) {
         return false
       }
       const href = anchor.getAttribute('href')
@@ -467,7 +467,7 @@ function onMenu(event) {
       { label: '75%', onClick: () => resizeImage(img, 0.75) },
       { label: '50%', onClick: () => resizeImage(img, 0.5) },
       { label: '25%', onClick: () => resizeImage(img, 0.25) },
-      { label: '左对齐', divided: true, onClick: () => alignImage(img, 'left') },
+      { label: '左对齐', divided: 'up', onClick: () => alignImage(img, 'left') },
       { label: '居中', onClick: () => alignImage(img, 'center') },
       { label: '右对齐', onClick: () => alignImage(img, 'right') },
     ])
@@ -489,9 +489,20 @@ function onMenu(event) {
   ])
 }
 
+const tip = ref({ on: false, x: 0, y: 0, text: '' })
+
+function onDocHover(event) {
+  const anchor = event.target?.closest?.('a')
+  if (!anchor) {
+    tip.value.on = false
+    return
+  }
+  tip.value = { on: true, x: event.clientX + 12, y: event.clientY + 16, text: 'Ctrl+点击打开链接' }
+}
+
 function onContentClick(event) {
   const anchor = event.target.closest('a')
-  if (!anchor || !anchor.href) {
+  if (!anchor || !anchor.href || !(event.metaKey || event.ctrlKey)) {
     return
   }
   event.preventDefault()
@@ -570,6 +581,8 @@ function onContentClick(event) {
         class="min-h-[70vh]"
         :class="mode === 'split' ? 'lg:border-r lg:border-black/10' : ''"
         @contextmenu="onMenu"
+        @mousemove="onDocHover"
+        @mouseleave="tip.on = false"
       >
         <editor-content :editor="editor" class="doc-editor doc-prose px-8 py-7" />
       </div>
@@ -577,8 +590,17 @@ function onContentClick(event) {
         v-show="mode !== 'edit'"
         class="doc-prose doc-reading min-h-[70vh] px-8 py-7"
         @click="onContentClick"
+        @mousemove="onDocHover"
+        @mouseleave="tip.on = false"
         v-html="previewHtml || '<p class=&quot;doc-empty&quot;>还没有文字。切到编辑或分栏开始写。</p>'"
       />
+    </div>
+    <div
+      v-if="tip.on"
+      class="pointer-events-none fixed z-[90] rounded bg-ink px-2 py-1 text-xs text-white shadow"
+      :style="{ left: `${tip.x}px`, top: `${tip.y}px` }"
+    >
+      {{ tip.text }}
     </div>
   </div>
 </template>

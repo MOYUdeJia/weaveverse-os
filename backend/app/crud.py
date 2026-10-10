@@ -180,6 +180,7 @@ def update_nav_fields(
 # 更新导航标题和图标。
 # Update a navigation item's title and icon.
 def update_nav_item(session: Session, item: NavItem, data: NavItemUpdate) -> NavItem:
+    item.tags = json.dumps(list(data.tags), ensure_ascii=False)
     return update_nav_fields(session, item, title=data.title, icon=data.icon)
 
 
@@ -323,6 +324,7 @@ def nav_item_to_detail(session: Session, item: NavItem) -> dict:
         "group_id": item.group_id,
         "pinned": item.pinned,
         "locked": item.locked,
+        "tags": json.loads(item.tags or "[]") if item.tags else [],
         "sort_order": item.sort_order,
         "created_at": item.created_at,
         "updated_at": item.updated_at,

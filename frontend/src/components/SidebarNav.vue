@@ -36,7 +36,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select', 'create', 'edit', 'delete', 'reorder', 'pin', 'lock', 'move', 'open-overview', 'search', 'note'])
+const emit = defineEmits(['select', 'create', 'edit', 'delete', 'reorder', 'pin', 'lock', 'move', 'open-overview', 'search', 'note', 'appearance'])
 
 const localItems = ref([])
 
@@ -91,7 +91,7 @@ function onItemMenu(event, item) {
 </script>
 
 <template>
-  <aside class="flex h-screen w-[240px] shrink-0 flex-col border-r border-black/10 bg-[#f8f5ee]/88 px-4 py-6">
+  <aside class="wv-nav flex h-screen w-[240px] shrink-0 flex-col border-r border-black/10 px-4 py-6">
     <div class="mb-6">
       <p class="text-xs font-semibold uppercase tracking-[0.22em] text-moss">Weaveverse</p>
       <button type="button" class="mt-2 block w-full truncate text-left text-xl font-semibold text-ink" @click="emit('open-overview')">
@@ -113,6 +113,7 @@ function onItemMenu(event, item) {
       item-key="id"
       tag="div"
       class="min-h-0 flex-1 space-y-2 overflow-y-auto"
+      handle=".nav-handle"
       filter=".nav-action"
       :prevent-on-filter="false"
       :animation="200"
@@ -120,7 +121,7 @@ function onItemMenu(event, item) {
     >
       <template #item="{ element }">
         <div
-          class="group flex h-12 w-full cursor-grab items-center gap-2 rounded-md px-2 text-sm font-medium active:cursor-grabbing"
+          class="group flex h-12 w-full items-center gap-2 rounded-md px-2 text-sm font-medium"
           :class="
             element.id === activeId
               ? 'bg-moss text-white shadow-sm'
@@ -135,18 +136,22 @@ function onItemMenu(event, item) {
           <div class="flex shrink-0 items-center gap-1 pr-1 text-sm">
             <span v-if="element.locked" title="已锁定">🔒</span>
             <span v-if="element.pinned" title="已置顶">📌</span>
+            <button type="button" class="nav-handle cursor-grab px-0.5 opacity-0 group-hover:opacity-70 active:cursor-grabbing" title="拖动排序">⋮⋮</button>
           </div>
         </div>
       </template>
     </draggable>
 
     <div class="mt-auto border-t border-black/10 pt-5">
-      <div class="mb-3 flex gap-2">
-        <button type="button" class="h-9 flex-1 rounded-md bg-white text-xs font-medium text-ink shadow-sm" title="搜索 Ctrl+K" @click="emit('search')">
+      <div class="mb-3 grid grid-cols-3 gap-2">
+        <button type="button" class="h-9 rounded-md bg-white text-xs font-medium text-ink shadow-sm" title="搜索 Ctrl+K" @click="emit('search')">
           搜索
         </button>
-        <button type="button" class="h-9 flex-1 rounded-md bg-white text-xs font-medium text-ink shadow-sm" title="速记 Ctrl+Shift+N" @click="emit('note')">
+        <button type="button" class="h-9 rounded-md bg-white text-xs font-medium text-ink shadow-sm" title="速记 Ctrl+Shift+N" @click="emit('note')">
           速记
+        </button>
+        <button type="button" class="h-9 rounded-md bg-white text-xs font-medium text-ink shadow-sm" title="设置" @click="emit('appearance')">
+          设置
         </button>
       </div>
       <button

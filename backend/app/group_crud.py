@@ -176,8 +176,12 @@ def delete_group(session: Session, group: Group) -> list[str]:
 def reorder_groups(session: Session, ids: list[int]) -> list[Group]:
     groups = list_groups(session)
     by_id = {group.id: group for group in groups}
+    system = next((group for group in groups if group.is_system), None)
+    ordered = [group_id for group_id in ids if system is None or group_id != system.id]
+    if system is not None and system.id is not None:
+        ordered.insert(0, system.id)
     now = utc_now()
-    for index, group_id in enumerate(ids):
+    for index, group_id in enumerate(ordered):
         group = by_id[group_id]
         group.sort_order = index
         group.updated_at = now

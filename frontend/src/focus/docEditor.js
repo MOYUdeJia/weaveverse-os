@@ -26,7 +26,7 @@ export function docExtensions() {
         openOnClick: false,
         autolink: true,
         linkOnPaste: true,
-        HTMLAttributes: { rel: 'noopener noreferrer' },
+        HTMLAttributes: { rel: 'noopener noreferrer', title: 'Ctrl+点击打开链接' },
       },
       dropcursor: { color: '#3f6f57', width: 2 },
     }),

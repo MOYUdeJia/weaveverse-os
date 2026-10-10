@@ -49,7 +49,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['open-nav', 'rename-group', 'describe-group'])
+const emit = defineEmits(['open-nav', 'rename-group', 'describe-group', 'search-tag'])
 
 const page = ref(null)
 const pageLoading = ref(false)
@@ -148,7 +148,7 @@ async function addBlock(blockType) {
 </script>
 
 <template>
-  <section class="relative flex h-screen min-h-0 min-w-0 flex-1 flex-col bg-[#fcfaf5]">
+  <section class="wv-work relative flex h-screen min-h-0 min-w-0 flex-1 flex-col">
     <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-moss via-ember to-aurora" />
 
     <div v-if="overviewGroup && !loading && !errorMessage" class="min-h-0 flex-1 overflow-y-auto px-10 py-12">
@@ -176,6 +176,17 @@ async function addBlock(blockType) {
         <NavIcon :icon="item.icon" box="h-9 w-9 bg-dawn text-base" />
         <div class="min-w-0">
           <h2 class="truncate text-lg font-semibold text-ink">{{ item.title }}</h2>
+          <div v-if="item.tags?.length" class="mt-1 flex flex-wrap gap-1">
+            <button
+              v-for="tag in item.tags"
+              :key="tag"
+              type="button"
+              class="wv-tag text-xs"
+              @click="emit('search-tag', `#${tag}`)"
+            >
+              #{{ tag }}
+            </button>
+          </div>
           <p v-if="noticeMessage" class="truncate text-xs text-moss">{{ noticeMessage }}</p>
         </div>
       </header>
@@ -188,6 +199,7 @@ async function addBlock(blockType) {
           v-else
           class="h-full"
           :block="focusBlock"
+          :inbox="item.page_type === 'inbox'"
           @save="saveBlockById($event.blockId, $event.content)"
         />
       </div>

@@ -54,6 +54,10 @@ class NavItem(SQLModel, table=True):
     )
     pinned: bool = Field(default=False, nullable=False)
     locked: bool = Field(default=False, nullable=False)
+    tags: str = Field(
+        default="[]",
+        sa_column=Column(Text, nullable=False, server_default="[]"),
+    )
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
     updated_at: datetime = Field(default_factory=utc_now, nullable=False)
 

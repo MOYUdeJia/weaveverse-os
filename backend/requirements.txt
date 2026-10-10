@@ -6,3 +6,4 @@ alembic==1.18.0
 python-multipart==0.0.20
 ebooklib==0.18
 pypdf==6.1.1
+pillow==11.3.0

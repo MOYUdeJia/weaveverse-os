@@ -1,13 +1,16 @@
-"""Substring search across navigation, groups, books, and block content.
+"""Search navigation titles. Focus pages also match their page tags.
 
-No full-text index. SQLite LIKE is enough while the library stays small.
+Groups, books, and block text are not included.
 """
 
 from __future__ import annotations
 
+import json
+
 from sqlmodel import Session, col, select
 
-from app.models import Block, Book, Group, NavItem
+from app.models import Group, NavItem
+from app.page_types import page_layer
 
 
 def _like(query: str) -> str:
@@ -15,86 +18,58 @@ def _like(query: str) -> str:
     return f"%{escaped}%"
 
 
-def _snippet(raw: str, query: str) -> str:
-    folded = raw.casefold()
-    at = folded.find(query.casefold())
-    if at < 0:
-        text = raw[:80]
-    else:
-        start = max(0, at - 28)
-        end = min(len(raw), at + len(query) + 28)
-        text = raw[start:end]
-        if start:
-            text = f"…{text}"
-        if end < len(raw):
-            text = f"{text}…"
-    return " ".join(text.split())
+def _tags(raw: str) -> list[str]:
+    try:
+        data = json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [str(item).strip().lstrip("#") for item in data if str(item).strip()]
 
 
-def search_library(session: Session, query: str, limit: int = 12) -> dict:
-    text = query.strip()
-    empty = {"query": text, "nav": [], "groups": [], "books": [], "blocks": []}
+def search_library(session: Session, query: str, limit: int = 30) -> dict:
+    text = query.strip().lstrip("#").strip()
     if not text:
-        return empty
+        return {"query": query.strip(), "nav": []}
 
     pattern = _like(text)
-    nav_rows = session.exec(
-        select(NavItem)
-        .where(col(NavItem.title).like(pattern, escape="\\") | col(NavItem.icon).like(pattern, escape="\\"))
+    rows = session.exec(
+        select(NavItem, Group)
+        .join(Group, Group.id == NavItem.group_id)
+        .where(col(NavItem.title).like(pattern, escape="\\"))
         .limit(limit)
     ).all()
-    group_rows = session.exec(
-        select(Group).where(col(Group.name).like(pattern, escape="\\")).limit(limit)
-    ).all()
-    book_rows = session.exec(
-        select(Book)
-        .where(col(Book.title).like(pattern, escape="\\") | col(Book.author).like(pattern, escape="\\"))
-        .limit(limit)
-    ).all()
-    shelf = session.exec(select(NavItem).where(NavItem.page_type == "bookshelf")).first()
-    block_rows = session.exec(
-        select(Block, NavItem)
-        .join(NavItem, NavItem.id == Block.nav_item_id)
-        .where(col(Block.content).like(pattern, escape="\\"))
-        .limit(limit)
+    seen = {item.id for item, _group in rows}
+    focus_rows = session.exec(
+        select(NavItem, Group)
+        .join(Group, Group.id == NavItem.group_id)
+        .where(NavItem.page_type.in_(["doc", "plain", "bookmarks", "canvas", "inbox"]))
     ).all()
 
+    hits = []
+    for item, group in rows:
+        hits.append(_hit(item, group, "title"))
+    for item, group in focus_rows:
+        if item.id in seen:
+            continue
+        tags = _tags(item.tags)
+        if any(text.casefold() in tag.casefold() for tag in tags):
+            hits.append(_hit(item, group, "tag"))
+            if len(hits) >= limit:
+                break
+    return {"query": query.strip(), "nav": hits[:limit]}
+
+
+def _hit(item: NavItem, group: Group, matched: str) -> dict:
     return {
-        "query": text,
-        "nav": [
-            {
-                "id": item.id,
-                "group_id": item.group_id,
-                "title": item.title,
-                "icon": item.icon,
-                "page_type": item.page_type,
-            }
-            for item in nav_rows
-        ],
-        "groups": [
-            {"id": group.id, "name": group.name, "icon": group.icon}
-            for group in group_rows
-        ],
-        "books": [
-            {
-                "id": book.id,
-                "title": book.title,
-                "author": book.author,
-                "nav_id": shelf.id if shelf is not None else None,
-                "group_id": shelf.group_id if shelf is not None else None,
-            }
-            for book in book_rows
-        ],
-        "blocks": [
-            {
-                "block_id": block.id,
-                "nav_id": item.id,
-                "group_id": item.group_id,
-                "title": item.title,
-                "icon": item.icon,
-                "block_type": block.block_type,
-                "snippet": _snippet(block.content, text),
-            }
-            for block, item in block_rows
-        ],
+        "id": item.id,
+        "group_id": item.group_id,
+        "title": item.title,
+        "icon": item.icon,
+        "page_type": item.page_type,
+        "layer": page_layer(item.page_type),
+        "tags": _tags(item.tags),
+        "matched": matched,
+        "path": f"{group.name} > {item.title}",
     }
