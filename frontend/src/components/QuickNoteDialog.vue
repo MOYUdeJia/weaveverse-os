@@ -2,6 +2,7 @@
 import { nextTick, onMounted, ref, watch } from 'vue'
 
 import { getQuickTags, saveQuickNote, saveQuickTags } from '../api/client'
+import { showToast } from '../toast'
 
 const props = defineProps({
   open: {
@@ -15,10 +16,23 @@ const emit = defineEmits(['close', 'saved'])
 const text = ref('')
 const picked = ref([])
 const quickTags = ref([])
+const history = ref([])
+const historyOpen = ref(false)
 const draft = ref('')
 const input = ref(null)
+const tagRow = ref(null)
 const errorMessage = ref('')
 const saving = ref(false)
+const tagOverflow = ref(false)
+
+function measureTags() {
+  const row = tagRow.value
+  tagOverflow.value = Boolean(row && row.scrollWidth > row.clientWidth + 2)
+}
+
+function slideTags(direction) {
+  tagRow.value?.scrollBy({ left: direction * 120, behavior: 'smooth' })
+}
 
 watch(
   () => props.open,
@@ -29,18 +43,24 @@ watch(
     text.value = ''
     picked.value = []
     draft.value = ''
+    historyOpen.value = false
     errorMessage.value = ''
     try {
       const payload = await getQuickTags()
-      quickTags.value = payload.tags || []
+      quickTags.value = payload.common || payload.tags || []
+      history.value = payload.history || []
     } catch {
       quickTags.value = ['工作', '生活', '灵感', '待办']
+      history.value = []
     }
-    nextTick(() => input.value?.focus())
+    nextTick(() => {
+      input.value?.focus()
+      measureTags()
+    })
   },
 )
 
-onMounted(() => {})
+watch(quickTags, () => nextTick(measureTags))
 
 function toggleTag(name) {
   if (picked.value.includes(name)) {
@@ -62,6 +82,9 @@ function addDraft() {
   if (!name) {
     return
   }
+  if (picked.value.includes(name) || quickTags.value.includes(name)) {
+    showToast('已存在')
+  }
   if (!picked.value.includes(name)) {
     if (picked.value.length >= 3) {
       errorMessage.value = '最多三个标签'
@@ -70,7 +93,25 @@ function addDraft() {
     picked.value = [...picked.value, name]
   }
   errorMessage.value = ''
-  if (quickTags.value.includes(name) || quickTags.value.length >= 6) {
+  if (quickTags.value.includes(name)) {
+    return
+  }
+  if (quickTags.value.length >= 6) {
+    showToast('最多 6 个常用标签，可先删一个')
+    return
+  }
+  const next = [...quickTags.value, name]
+  quickTags.value = next
+  saveQuickTags(next).catch((error) => console.error(error))
+}
+
+function promote(name) {
+  if (quickTags.value.includes(name)) {
+    showToast('已存在')
+    return
+  }
+  if (quickTags.value.length >= 6) {
+    showToast('最多 6 个常用标签，可先删一个')
     return
   }
   const next = [...quickTags.value, name]
@@ -121,17 +162,47 @@ function onKeydown(event) {
         placeholder="写一条。Enter 保存，最多三个标签"
         @keydown="onKeydown"
       />
-      <div class="mt-2 flex flex-wrap gap-1">
+      <div class="mt-2 flex items-center gap-1">
         <button
-          v-for="name in quickTags"
-          :key="name"
+          v-if="tagOverflow"
           type="button"
-          class="h-7 rounded px-2 text-xs"
-          :class="picked.includes(name) ? 'bg-aurora text-white' : 'bg-black/5 text-ink/70'"
-          @click="toggleTag(name)"
+          class="grid h-7 w-7 shrink-0 place-items-center rounded bg-black/5 text-sm text-ink/55"
+          title="向左"
+          @click="slideTags(-1)"
         >
-          {{ name }}
+          ‹
         </button>
+        <div ref="tagRow" class="flex min-w-0 flex-1 gap-1 overflow-x-auto" @scroll="measureTags">
+          <button
+            v-for="name in quickTags"
+            :key="name"
+            type="button"
+            class="h-7 shrink-0 rounded px-2 text-xs"
+            :class="picked.includes(name) ? 'bg-aurora text-white' : 'bg-black/5 text-ink/70'"
+            @click="toggleTag(name)"
+          >
+            {{ name }}
+          </button>
+        </div>
+        <button
+          v-if="tagOverflow"
+          type="button"
+          class="grid h-7 w-7 shrink-0 place-items-center rounded bg-black/5 text-sm text-ink/55"
+          title="向右"
+          @click="slideTags(1)"
+        >
+          ›
+        </button>
+        <button type="button" class="h-7 shrink-0 rounded bg-black/5 px-2 text-xs text-ink/70" @click="historyOpen = !historyOpen">
+          历史
+        </button>
+      </div>
+      <div v-if="historyOpen" class="mt-2 max-h-28 overflow-y-auto rounded bg-black/[0.03] p-2">
+        <p v-if="!history.length" class="text-xs text-ink/45">还没有用过的标签</p>
+        <div v-for="name in history" :key="name" class="flex items-center justify-between gap-2 py-0.5">
+          <button type="button" class="truncate text-left text-xs text-ink/80" @click="toggleTag(name)">#{{ name }}</button>
+          <button type="button" class="shrink-0 text-[11px] text-aurora" @click="promote(name)">设为常用</button>
+        </div>
       </div>
       <div class="mt-2 flex gap-2">
         <input

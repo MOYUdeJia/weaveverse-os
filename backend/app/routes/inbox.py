@@ -24,44 +24,89 @@ QUICK_TAGS_PATH = DATA_DIR / "quick_tags.json"
 DEFAULT_QUICK_TAGS = ["工作", "生活", "灵感", "待办"]
 
 
-def _quick_tags() -> list[str]:
+def _clean_tags(items: list, limit: int) -> list[str]:
+    cleaned: list[str] = []
+    for raw in items:
+        text = str(raw).strip().lstrip("#").strip()
+        if text and text not in cleaned:
+            cleaned.append(text[:24])
+        if len(cleaned) >= limit:
+            break
+    return cleaned
+
+
+def _write_store(store: dict) -> None:
+    QUICK_TAGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"common": store["common"], "history": store["history"]}
+    QUICK_TAGS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _tag_store() -> dict:
     try:
         data = json.loads(QUICK_TAGS_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        data = list(DEFAULT_QUICK_TAGS)
-    if not isinstance(data, list):
-        data = list(DEFAULT_QUICK_TAGS)
-    cleaned: list[str] = []
-    for raw in data:
-        text = str(raw).strip().lstrip("#").strip()
-        if text and text not in cleaned:
-            cleaned.append(text[:24])
-    return cleaned[:6] or list(DEFAULT_QUICK_TAGS)
+        data = {"common": list(DEFAULT_QUICK_TAGS), "history": []}
+    migrated = False
+    if isinstance(data, list):
+        store = {"common": _clean_tags(data, 6) or list(DEFAULT_QUICK_TAGS), "history": []}
+        migrated = True
+    elif isinstance(data, dict):
+        common_source = data.get("common")
+        if not isinstance(common_source, list):
+            common_source = data.get("tags") if isinstance(data.get("tags"), list) else list(DEFAULT_QUICK_TAGS)
+        history_source = data.get("history") if isinstance(data.get("history"), list) else []
+        store = {
+            "common": _clean_tags(common_source, 6) or list(DEFAULT_QUICK_TAGS),
+            "history": _clean_tags(history_source, 100),
+        }
+    else:
+        store = {"common": list(DEFAULT_QUICK_TAGS), "history": []}
+        migrated = True
+    if migrated:
+        _write_store(store)
+    return store
+
+
+def _quick_tags() -> list[str]:
+    return _tag_store()["common"]
 
 
 def _write_quick_tags(tags: list[str]) -> list[str]:
-    cleaned: list[str] = []
-    for raw in tags:
-        text = str(raw).strip().lstrip("#").strip()
-        if text and text not in cleaned:
-            cleaned.append(text[:24])
-    cleaned = cleaned[:6]
-    QUICK_TAGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    QUICK_TAGS_PATH.write_text(json.dumps(cleaned, ensure_ascii=False, indent=2), encoding="utf-8")
-    return cleaned
+    store = _tag_store()
+    store["common"] = _clean_tags(tags, 6) or list(DEFAULT_QUICK_TAGS)
+    _write_store(store)
+    return store["common"]
+
+
+def _remember_history(tags: list[str]) -> None:
+    store = _tag_store()
+    ordered: list[str] = []
+    for raw in list(tags)[::-1] + store["history"]:
+        text = str(raw).strip().lstrip("#").strip()[:24]
+        if text and text not in ordered:
+            ordered.append(text)
+        if len(ordered) >= 100:
+            break
+    store["history"] = ordered
+    _write_store(store)
 
 
 @router.get("/tags")
 def get_quick_tags() -> dict:
-    return {"tags": _quick_tags()}
+    store = _tag_store()
+    return {"tags": store["common"], "common": store["common"], "history": store["history"]}
 
 
 @router.put("/tags")
 def put_quick_tags(data: dict) -> dict:
     tags = data.get("tags") if isinstance(data, dict) else None
+    if tags is None and isinstance(data, dict):
+        tags = data.get("common")
     if not isinstance(tags, list):
         raise_api_error(400, "tags", "需要标签数组")
-    return {"tags": _write_quick_tags(tags)}
+    common = _write_quick_tags(tags)
+    history = _tag_store()["history"]
+    return {"tags": common, "common": common, "history": history}
 
 
 def _inbox_item(session: Session) -> NavItem:
@@ -114,4 +159,6 @@ def add_note(data: QuickNoteCreate, session: Session = Depends(get_session)) -> 
         block,
         BlockUpdate(content={"mode": content.get("mode") or "numbered", "lines": lines}),
     )
+    if data.tags:
+        _remember_history(data.tags)
     return {"id": item.id, "group_id": item.group_id, "title": item.title}

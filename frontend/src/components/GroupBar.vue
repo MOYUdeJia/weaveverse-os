@@ -45,11 +45,15 @@ const asideClass = computed(() => {
   return 'w-12 hover:w-[200px]'
 })
 
-function floatName(event, name) {
+function floatName(event, group) {
   if (props.bar !== 'overlay') {
     return
   }
-  floated.value = { name, top: event.currentTarget.getBoundingClientRect().top }
+  floated.value = {
+    name: group.name,
+    icon: group.icon,
+    top: event.currentTarget.getBoundingClientRect().top,
+  }
 }
 
 function clearFloat() {
@@ -143,7 +147,7 @@ onUnmounted(() => {
 <template>
   <!-- 默认 48px，悬停展开到 200px。窄于 900px 时不再展开。 -->
   <aside
-    class="wv-group group/folders flex h-screen w-12 shrink-0 flex-col overflow-hidden border-r border-black/10 transition-[width] duration-300 ease-out"
+    class="wv-group group/folders relative z-[1] flex h-screen w-12 shrink-0 flex-col overflow-hidden border-r border-black/10 transition-[width] duration-300 ease-out"
     :class="asideClass"
   >
     <button
@@ -154,13 +158,14 @@ onUnmounted(() => {
       :title="systemGroup.name"
       @click="emit('select', systemGroup.id)"
       @contextmenu="onGroupMenu($event, systemGroup)"
-      @mouseenter="floatName($event, systemGroup.name)"
+      @mouseenter="floatName($event, systemGroup)"
       @mouseleave="clearFloat"
     >
       <span class="relative grid h-12 w-12 shrink-0 place-items-center">
         <NavIcon
           :icon="systemGroup.icon"
-          :box="systemGroup.id === activeId ? 'h-8 w-8 bg-moss text-base text-white' : 'h-8 w-8 bg-white/80 text-base text-ink'"
+          rounded="rounded-full"
+          :box="systemGroup.id === activeId ? 'h-8 w-8 bg-moss text-base text-white' : 'h-8 w-8 bg-transparent text-base text-ink'"
         />
       </span>
       <span
@@ -186,16 +191,17 @@ onUnmounted(() => {
           :title="element.name"
           @click="emit('select', element.id)"
           @contextmenu="onGroupMenu($event, element)"
-          @mouseenter="floatName($event, element.name)"
+          @mouseenter="floatName($event, element)"
           @mouseleave="clearFloat"
         >
           <span class="relative grid h-12 w-12 shrink-0 place-items-center">
             <NavIcon
               :icon="element.icon"
+              rounded="rounded-full"
               :box="
                 element.id === activeId
                   ? 'h-8 w-8 bg-moss text-base text-white'
-                  : 'h-8 w-8 bg-white/80 text-base text-ink'
+                  : 'h-8 w-8 bg-transparent text-base text-ink'
               "
             />
             <span v-if="element.locked" class="absolute bottom-0.5 right-0.5 text-[11px] leading-none" title="已锁定">🔒</span>
@@ -232,7 +238,8 @@ onUnmounted(() => {
         class="wv-float-name"
         :style="{ top: `${floated.top + 8}px`, left: '8px' }"
       >
-        <span class="truncate">{{ floated.name }}</span>
+        <NavIcon :icon="floated.icon" rounded="rounded-full" box="h-6 w-6 bg-transparent text-sm" />
+        <span class="wv-float-label truncate">{{ floated.name }}</span>
       </div>
     </Transition>
   </Teleport>

@@ -10,6 +10,7 @@ import json
 import math
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError, field_validator
@@ -581,6 +582,98 @@ class BookContent(BaseModel):
     text: str | None = None
     external: bool
     page_count: int
+
+
+class PhotoLink(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    note: str = Field(default="", max_length=500)
+    album_id: int | None = None
+
+    @field_validator("filename")
+    @classmethod
+    def check_photo_filename(cls, value: str) -> str:
+        name = value.strip()
+        if not name or name != Path(name).name or name in {".", ".."}:
+            raise ValueError("非法文件名")
+        return name
+
+    @field_validator("note")
+    @classmethod
+    def strip_note_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class PhotoRead(BaseModel):
+    id: int
+    filename: str
+    note: str
+    display_name: str = ""
+    album_id: int | None = None
+    added_at: datetime
+
+
+class PhotoRename(BaseModel):
+    display_name: str = Field(min_length=1, max_length=255)
+
+    @field_validator("display_name")
+    @classmethod
+    def strip_display_name(cls, value: str) -> str:
+        text = value.strip()
+        if not text:
+            raise ValueError("不能为空")
+        return text
+
+
+class PhotoMove(BaseModel):
+    ids: list[int] = Field(min_length=1)
+    album_id: int | None = None
+
+
+class PhotoBulkDelete(BaseModel):
+    ids: list[int] = Field(min_length=1)
+
+
+class AlbumCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    is_private: bool = False
+    password: str = Field(default="", max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def strip_album_name(cls, value: str) -> str:
+        text = value.strip()
+        if not text:
+            raise ValueError("不能为空")
+        return text
+
+
+class AlbumUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=40)
+    is_private: bool | None = None
+    password: str | None = Field(default=None, max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def strip_album_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        text = value.strip()
+        if not text:
+            raise ValueError("不能为空")
+        return text
+
+
+class AlbumUnlock(BaseModel):
+    password: str = Field(min_length=1, max_length=80)
+
+
+class AlbumRead(BaseModel):
+    id: int
+    name: str
+    cover_filename: str | None = None
+    is_private: bool
+    sort_order: int
+    created_at: datetime
 
 
 class QuickNoteCreate(BaseModel):

@@ -131,6 +131,46 @@ class DesktopBridge:
         os.startfile(path)
         return True
 
+    # 把附件原图另存到用户选的路径，不改库里的文件。
+    # Copy an attachment original to a path the user picks. The library file stays.
+    def save_attachment(self, filename: str, suggested_name: str = "") -> dict:
+        import shutil
+
+        from app.routes.blocks import _safe_attachment_path
+
+        if not isinstance(filename, str):
+            return {"error": "非法文件名"}
+        try:
+            source = _safe_attachment_path(filename)
+        except Exception:
+            return {"error": "非法文件名"}
+        if not source.is_file():
+            return {"error": "附件不存在"}
+
+        window = webview.windows[0] if webview.windows else None
+        if window is None:
+            return {"error": "窗口还没准备好"}
+
+        name = Path(suggested_name or filename).name
+        if not name or name in {".", ".."}:
+            name = source.name
+        try:
+            selected = window.create_file_dialog(
+                webview.FileDialog.SAVE,
+                save_filename=name,
+            )
+        except Exception:
+            return {"error": "无法打开保存对话框"}
+        if not selected:
+            return None
+
+        target = Path(selected[0] if isinstance(selected, (list, tuple)) else selected)
+        try:
+            shutil.copy2(source, target)
+        except OSError:
+            return {"error": "无法保存这个文件"}
+        return {"path": str(target)}
+
 
 # 探测本机端口是否可绑定。
 # Probe whether a local port can be bound.

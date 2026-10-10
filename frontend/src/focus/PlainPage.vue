@@ -5,6 +5,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import '@simonwep/pickr/dist/themes/classic.min.css'
 
 import { getQuickTags, saveQuickTags } from '../api/client'
+import { showToast } from '../toast'
 import { useQueuedSave } from '../blocks/queuedSave.js'
 import { completeTags } from '../tags.js'
 
@@ -42,6 +43,10 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  inboxPause: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['save'])
@@ -56,8 +61,35 @@ const addingTag = ref(false)
 const pickerHost = ref(null)
 const areas = ref([])
 const list = ref(null)
+const tagRow = ref(null)
+const tagOverflow = ref(false)
 let pickr = null
 let pickerToken = 0
+
+function measureTags() {
+  const row = tagRow.value
+  tagOverflow.value = Boolean(row && row.scrollWidth > row.clientWidth + 2)
+}
+
+function slideTags(direction) {
+  tagRow.value?.scrollBy({ left: direction * 120, behavior: 'smooth' })
+}
+
+function loadQuickTags() {
+  if (!props.inbox) {
+    return
+  }
+  getQuickTags()
+    .then((payload) => {
+      quickTags.value = payload.tags || []
+      nextTick(measureTags)
+    })
+    .catch(() => {
+      quickTags.value = []
+    })
+}
+
+watch(quickTags, () => nextTick(measureTags))
 
 function readContent() {
   const source = lines.value.length ? lines.value : [{ text: '', color: '', at: '', tags: [] }]
@@ -113,6 +145,15 @@ watch(
 )
 
 watch(
+  () => props.inboxPause,
+  (paused) => {
+    if (paused) {
+      cancel()
+    }
+  },
+)
+
+watch(
   () => props.syncKey,
   (value, previous) => {
     if (!value || value === previous) {
@@ -120,6 +161,7 @@ watch(
     }
     cancel()
     applyBlock(props.block)
+    loadQuickTags()
   },
 )
 
@@ -298,13 +340,7 @@ let observer = null
 onMounted(() => {
   document.addEventListener('pointerdown', onPointerDown)
   refreshAreas()
-  if (props.inbox) {
-    getQuickTags().then((payload) => {
-      quickTags.value = payload.tags || []
-    }).catch(() => {
-      quickTags.value = []
-    })
-  }
+  loadQuickTags()
   if (list.value) {
     observer = new ResizeObserver(() => refreshAreas())
     observer.observe(list.value)
@@ -346,7 +382,15 @@ function addQuickTag() {
   const text = draftTag.value.trim().replace(/^#/, '')
   draftTag.value = ''
   addingTag.value = false
-  if (!text || quickTags.value.includes(text) || quickTags.value.length >= 6) {
+  if (!text) {
+    return
+  }
+  if (quickTags.value.includes(text)) {
+    showToast('已存在')
+    return
+  }
+  if (quickTags.value.length >= 6) {
+    showToast('最多 6 个常用标签，可先删一个')
     return
   }
   persistQuickTags([...quickTags.value, text])
@@ -389,30 +433,50 @@ function dropQuickTag(tag) {
         placeholder="#标签"
       />
     </div>
-    <div v-if="inbox" class="mb-3 flex flex-wrap items-center gap-1">
+    <div v-if="inbox" class="mb-3 flex items-center gap-1">
       <button
+        v-if="tagOverflow"
         type="button"
-        class="h-7 rounded px-2 text-xs"
-        :class="tagFilter ? 'bg-black/5 text-ink/45' : 'bg-ink/55 text-white'"
-        @click="tagFilter = ''"
+        class="grid h-7 w-7 shrink-0 place-items-center rounded bg-white text-sm text-ink/55"
+        title="向左"
+        @click="slideTags(-1)"
       >
-        全部
+        ‹
       </button>
+      <div ref="tagRow" class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" @scroll="measureTags">
+        <button
+          type="button"
+          class="h-7 shrink-0 rounded px-2 text-xs"
+          :class="tagFilter ? 'bg-black/5 text-ink/45' : 'bg-ink/55 text-white'"
+          @click="tagFilter = ''"
+        >
+          全部
+        </button>
+        <button
+          v-for="tag in quickTags"
+          :key="tag"
+          type="button"
+          class="group/tag h-7 shrink-0 rounded px-2 text-xs"
+          :class="tagFilter === tag ? 'bg-aurora text-white' : 'bg-white text-ink/70'"
+          @click="tagFilter = tagFilter === tag ? '' : tag"
+        >
+          {{ tag }}
+          <span class="ml-1 opacity-0 group-hover/tag:opacity-100" @click.stop="dropQuickTag(tag)">×</span>
+        </button>
+        <form v-if="addingTag" class="flex shrink-0" @submit.prevent="addQuickTag">
+          <input v-model="draftTag" class="h-7 w-20 rounded border border-black/10 px-2 text-xs outline-none" maxlength="24" />
+        </form>
+        <button v-else-if="quickTags.length < 6" type="button" class="h-7 shrink-0 rounded bg-white px-2 text-xs" @click="addingTag = true">+</button>
+      </div>
       <button
-        v-for="tag in quickTags"
-        :key="tag"
+        v-if="tagOverflow"
         type="button"
-        class="group/tag h-7 rounded px-2 text-xs"
-        :class="tagFilter === tag ? 'bg-aurora text-white' : 'bg-white text-ink/70'"
-        @click="tagFilter = tagFilter === tag ? '' : tag"
+        class="grid h-7 w-7 shrink-0 place-items-center rounded bg-white text-sm text-ink/55"
+        title="向右"
+        @click="slideTags(1)"
       >
-        {{ tag }}
-        <span class="ml-1 opacity-0 group-hover/tag:opacity-100" @click.stop="dropQuickTag(tag)">×</span>
+        ›
       </button>
-      <form v-if="addingTag" class="flex" @submit.prevent="addQuickTag">
-        <input v-model="draftTag" class="h-7 w-20 rounded border border-black/10 px-2 text-xs outline-none" maxlength="24" />
-      </form>
-      <button v-else-if="quickTags.length < 6" type="button" class="h-7 rounded bg-white px-2 text-xs" @click="addingTag = true">+</button>
     </div>
 
     <p v-if="inbox && tagFilter && !viewLines.length" class="py-8 text-center text-sm text-ink/45">这个标签下还没有速记</p>

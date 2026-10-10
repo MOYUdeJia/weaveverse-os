@@ -7,6 +7,7 @@ import BookmarksPage from '../focus/BookmarksPage.vue'
 import PlainPage from '../focus/PlainPage.vue'
 import { focusPageByType } from '../specialAdds/registry.js'
 import BookshelfPanel from './BookshelfPanel.vue'
+import PhotoLibraryPanel from './PhotoLibraryPanel.vue'
 import GroupOverview from './GroupOverview.vue'
 import NavIcon from './NavIcon.vue'
 
@@ -51,6 +52,10 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  inboxPause: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['open-nav', 'rename-group', 'describe-group', 'search-tag'])
@@ -91,6 +96,15 @@ watch(
     }
   },
   { immediate: true },
+)
+
+watch(
+  () => props.inboxPause,
+  (paused) => {
+    if (paused && props.item?.page_type === 'inbox') {
+      saveGeneration += 1
+    }
+  },
 )
 
 watch(
@@ -196,6 +210,13 @@ async function addBlock(blockType) {
       :notice-message="noticeMessage"
     />
 
+    <PhotoLibraryPanel
+      v-else-if="item && item.page_type === 'photo_library' && !loading && !errorMessage && !empty"
+      :title="item.title"
+      :icon="item.icon"
+      :notice-message="noticeMessage"
+    />
+
     <div
       v-else-if="item && focusView && !loading && !errorMessage && !empty"
       class="flex min-h-0 flex-1 flex-col"
@@ -228,7 +249,7 @@ async function addBlock(blockType) {
           class="h-full"
           :block="focusBlock"
           :inbox="item.page_type === 'inbox'"
-          v-bind="item.page_type === 'inbox' ? { syncKey } : {}"
+          v-bind="item.page_type === 'inbox' ? { syncKey, inboxPause } : {}"
           @save="saveBlockById($event.blockId, $event.content)"
         />
       </div>

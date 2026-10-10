@@ -15,6 +15,7 @@ from app.routes.icons import router as icons_router
 from app.routes.music import router as music_router
 from app.routes.nav import router as nav_router
 from app.routes.page_types import router as page_types_router
+from app.routes.photos import router as photos_router
 from app.routes.templates import router as templates_router
 
 
@@ -39,6 +40,7 @@ router.include_router(books_router)
 router.include_router(icons_router)
 router.include_router(search_router)
 router.include_router(inbox_router)
+router.include_router(photos_router)
 
 
 @router.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

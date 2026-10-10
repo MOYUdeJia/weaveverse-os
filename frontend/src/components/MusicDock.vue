@@ -176,8 +176,14 @@ async function removeAt(target) {
       <div class="wv-player-bar" :class="place === 'corner' ? 'wv-player-narrow' : ''">
         <button type="button" class="h-7 w-7 shrink-0 rounded-full text-sm text-ink/55" title="收起" @click="folded = true">–</button>
         <button type="button" class="h-7 w-7 shrink-0 rounded-full bg-white/80 text-sm" title="上一首" @click="step(-1)">‹</button>
-        <button type="button" class="h-7 shrink-0 rounded-full bg-ink px-3 text-xs text-white" :title="playing ? '暂停' : '播放'" @click="togglePlay">
-          {{ playing ? '暂停' : '播放' }}
+        <button type="button" class="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-ink text-white" :title="playing ? '暂停' : '播放'" @click="togglePlay">
+          <svg v-if="playing" viewBox="0 0 24 24" class="h-3.5 w-3.5 fill-current" aria-hidden="true">
+            <rect x="6" y="5" width="4" height="14" rx="1" />
+            <rect x="14" y="5" width="4" height="14" rx="1" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" class="h-3.5 w-3.5 fill-current" aria-hidden="true">
+            <path d="M8 5.2v13.6c0 .7.8 1.1 1.4.7l10.2-6.8c.6-.4.6-1.3 0-1.7L9.4 4.5C8.8 4.1 8 4.5 8 5.2z" />
+          </svg>
         </button>
         <button type="button" class="h-7 w-7 shrink-0 rounded-full bg-white/80 text-sm" title="下一首" @click="step(1)">›</button>
         <div class="min-w-0 flex-1">

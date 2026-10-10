@@ -91,7 +91,7 @@ function onItemMenu(event, item) {
 </script>
 
 <template>
-  <aside class="wv-nav flex h-screen w-[240px] shrink-0 flex-col border-r border-black/10 px-4 py-6">
+  <aside class="wv-nav relative z-[1] flex h-screen w-[240px] shrink-0 flex-col border-r border-black/10 px-4 py-6">
     <div class="mb-6">
       <p class="text-xs font-semibold uppercase tracking-[0.22em] text-moss">Weaveverse</p>
       <button type="button" class="mt-2 block w-full truncate text-left text-xl font-semibold text-ink" @click="emit('open-overview')">

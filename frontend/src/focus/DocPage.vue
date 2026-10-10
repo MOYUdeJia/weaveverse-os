@@ -4,7 +4,8 @@ import { EditorContent, useEditor } from '@tiptap/vue-3'
 import DOMPurify from 'dompurify'
 import { computed, ref, watch } from 'vue'
 
-import { attachmentUrl, uploadFile, uploadImage } from '../api/client'
+import { addPhoto, attachmentUrl, listAlbums, uploadFile, uploadImage } from '../api/client'
+import { showToast } from '../toast'
 import { useQueuedSave } from '../blocks/queuedSave.js'
 import { showMenu } from '../contextMenu.js'
 import { openDocTarget } from '../openExternal.js'
@@ -422,6 +423,48 @@ function imageFromEvent(event) {
   return event.target?.closest?.('img') || null
 }
 
+const libraryOpen = ref(false)
+const libraryFile = ref('')
+const libraryAlbums = ref([])
+const libraryTarget = ref(null)
+const libraryPassword = ref('')
+
+async function openLibraryPicker(img) {
+  const src = img?.getAttribute?.('src') || ''
+  const match = String(src).match(/\/api\/attachments\/([^/?#]+)/)
+  if (!match) {
+    showToast('只有本机附件能加入图片库')
+    return
+  }
+  libraryFile.value = decodeURIComponent(match[1])
+  libraryPassword.value = ''
+  libraryTarget.value = { id: null, name: '未分类', is_private: false }
+  try {
+    libraryAlbums.value = await listAlbums()
+  } catch {
+    libraryAlbums.value = []
+  }
+  libraryOpen.value = true
+}
+
+async function confirmLibrary() {
+  const album = libraryTarget.value
+  if (!album || !libraryFile.value) {
+    return
+  }
+  if (album.is_private && libraryPassword.value.trim().length < 4) {
+    showToast('这个相册需要密码')
+    return
+  }
+  try {
+    await addPhoto(libraryFile.value, '', album.id, album.is_private ? libraryPassword.value : '')
+    showToast(album.id == null ? '已加入未分类' : `已加入 ${album.name} 相册`)
+    libraryOpen.value = false
+  } catch (error) {
+    showToast(error.message || '加入图片库失败')
+  }
+}
+
 function imagePos(instance, img) {
   const host = img.closest('[data-resize-container]') || img
   return instance.view.posAtDOM(host, 0)
@@ -470,6 +513,7 @@ function onMenu(event) {
       { label: '左对齐', divided: 'up', onClick: () => alignImage(img, 'left') },
       { label: '居中', onClick: () => alignImage(img, 'center') },
       { label: '右对齐', onClick: () => alignImage(img, 'right') },
+      { label: '加入图片库', divided: 'up', onClick: () => openLibraryPicker(img) },
     ])
     return
   }
@@ -601,6 +645,42 @@ function onContentClick(event) {
       :style="{ left: `${tip.x}px`, top: `${tip.y}px` }"
     >
       {{ tip.text }}
+    </div>
+    <div v-if="libraryOpen" class="fixed inset-0 z-[80] grid place-items-center bg-black/45 px-4" @click.self="libraryOpen = false">
+      <div class="w-full max-w-sm rounded-md bg-[#fcfaf5] p-4 shadow-2xl">
+        <p class="text-sm font-medium text-ink">加入哪个相册</p>
+        <div class="mt-3 grid max-h-60 gap-1 overflow-y-auto">
+          <button
+            type="button"
+            class="rounded px-3 py-2 text-left text-sm"
+            :class="libraryTarget?.id == null ? 'bg-moss text-white' : 'bg-white'"
+            @click="libraryTarget = { id: null, name: '未分类', is_private: false }"
+          >
+            未分类
+          </button>
+          <button
+            v-for="album in libraryAlbums"
+            :key="album.id"
+            type="button"
+            class="rounded px-3 py-2 text-left text-sm"
+            :class="libraryTarget?.id === album.id ? 'bg-moss text-white' : 'bg-white'"
+            @click="libraryTarget = album"
+          >
+            {{ album.is_private ? '🔒 ' : '' }}{{ album.name }}
+          </button>
+        </div>
+        <input
+          v-if="libraryTarget?.is_private"
+          v-model="libraryPassword"
+          type="password"
+          class="mt-3 h-9 w-full rounded border border-black/10 px-2 text-sm outline-none"
+          placeholder="隐私相册密码"
+        />
+        <div class="mt-3 flex justify-end gap-2">
+          <button type="button" class="h-8 rounded px-3 text-xs text-ink/55" @click="libraryOpen = false">取消</button>
+          <button type="button" class="h-8 rounded bg-ink px-3 text-xs text-white" @click="confirmLibrary">加入</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>

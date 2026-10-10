@@ -102,6 +102,13 @@ PAGE_TYPES = {
         "default_icon": "📚",
         "default_blocks": [],
     },
+    "photo_library": {
+        "layer": "core",
+        "label": "图片库",
+        "multi_instance": False,
+        "default_icon": "🖼",
+        "default_blocks": [],
+    },
     "idea_box": {"label": "IDEA 栏", "multi_instance": False, "default_blocks": []},
     "vault": {"label": "密码箱", "multi_instance": False, "default_blocks": []},
     "future_plan": {"label": "未来规划", "multi_instance": False, "default_blocks": []},

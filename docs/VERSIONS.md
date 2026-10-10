@@ -666,3 +666,85 @@
   - 修改 `frontend/src/focus/PlainPage.vue`
   - 修改 `docs/VERSIONS.md`
 
+## M8 阶段 1 · 2026-10-10
+- **任务**：修 M7.1 遗留的背景视频遮挡导航、分组名浮出、速记标签同步和溢出、播放按钮图标，并加上单相册图片库。
+- **实现**：
+  - 背景视频改到界面层后面（`isolate` + `-z-10`），导航栏和工作区叠在上面，半透明底仍能透出视频。
+  - 「名字浮出」改成左圆右圆的胶囊，里面带分组图标和名字，约 260ms 向右展开，颜色跟分组栏一致，盖在导航上不推栏。
+  - 速记保存后立刻重载当前分组导航和收件箱正文、常用标签。打开速记时暂停收件箱的延迟保存，避免把新记的条目盖掉。标签行超出宽度时用左右按钮横滑。
+  - 播放/暂停改成 SVG 图形。
+  - 图片库是 `photo_library` 元数据表，文件仍在 `attachments/`。页面上传、长文右键「加入图片库」会进库；拖进长文的图不会自动进库。同一文件名只留一条。网格/列表、大图预览、保存原图、从库删除（不删文件）。空库显示「暂无图片」。
+- **技术架构**：迁移 `20261010_0007` 建 `photo_library(id, filename unique, note, added_at)`。接口在 `/api/photos`。保存原图走 pywebview 的系统另存对话框，没有桌面桥时退回浏览器下载。没有新 UI 组件库。
+- **与 M7.1 相比的变化**：
+  - 视频背景不再挡住导航
+  - 分组名浮出改成胶囊
+  - 速记标签会同步到收件箱，并能横滑
+  - 播放器按钮是图形
+  - 新增图片库系统页
+- **已知问题**：
+  - 还没有多相册、备注编辑、内容去重（只按文件名去重）。
+  - 阶段 2 的语音、云端 API、钥匙串都还没做。
+  - M7 里被抹掉的旧速记时间和标签仍然无法恢复。
+- **文件变更**：
+  - 新增 `backend/alembic/versions/20261010_0007_photo_library.py`
+  - 新增 `backend/app/photo_crud.py`
+  - 新增 `backend/app/routes/photos.py`
+  - 新增 `frontend/src/components/PhotoLibraryPanel.vue`
+  - 修改 `backend/app/models.py`
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/app/page_types.py`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/main.py`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/components/GroupBar.vue`
+  - 修改 `frontend/src/components/SidebarNav.vue`
+  - 修改 `frontend/src/components/QuickNoteDialog.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改 `frontend/src/components/MusicDock.vue`
+  - 修改 `frontend/src/focus/PlainPage.vue`
+  - 修改 `frontend/src/focus/DocPage.vue`
+  - 修改 `docs/VERSIONS.md`
+
+## M8 阶段 2 · 2026-10-10
+- **任务**：修阶段 1 的分组栏方底、标签提示、长文右键菜单和加入相册，并加上标签历史池和图片库相册。
+- **实现**：
+  - 分组图标去掉方形底，改成圆形或透明。浮出胶囊不再露出方块。
+  - 常用标签超过 6 个、或添加已有标签时，顶部提示 2 秒后消失。
+  - 速记保存的标签写入 `quick_tags.json` 的 `history`，最多 100 个，最近的在前。浮层有「历史」，可点选，也可设为常用。旧的纯数组文件会自动改成 `{common, history}`。
+  - 长文图片菜单：缩放、对齐、加入图片库之间用分隔线隔开。加入时先选相册，成功后提示「已加入某某相册」。
+  - 相册可新建、改名、删除。删相册只把图片退回未分类。图片可改显示名，保存到本地用这个名字。
+  - 隐私相册的密码写在 Windows 凭据管理器。打开要密码，换相册就重新锁。图片文件仍然是明文。
+  - 网格可多选（选择模式、Ctrl+点击、长按），能批量删除和移动。
+  - 自适应按原图比例排成撑满的横行。大图全屏铺满窗口，左右键切换，Esc 关闭。
+- **技术架构**：迁移 `20261010_0008` 建 `photo_albums`，并给 `photo_library` 加 `album_id`、`display_name`。密码不进数据库。凭据 API 失败时才把 PBKDF2 哈希写到 `backend/data/album_secrets.json`，不写进 `appearance.json`。自适应布局没有引 Masonry。
+- **与阶段 1 相比的变化**：
+  - 图片库从单相册变成多相册，并有隐私访问控制
+  - 速记标签有历史池
+  - 分组浮出不再带方形底
+- **已知问题**：
+  - 隐私只挡住界面和接口，附件文件本身没有加密。
+  - 「全部」不列出隐私相册里的图，避免没输密码也能看见。
+  - 阶段 3 的 AI、语音、私有云还没做。
+- **文件变更**：
+  - 新增 `backend/alembic/versions/20261010_0008_photo_albums.py`
+  - 新增 `backend/app/album_lock.py`
+  - 新增 `frontend/src/toast.js`
+  - 修改 `backend/app/models.py`
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/app/photo_crud.py`
+  - 修改 `backend/app/routes/photos.py`
+  - 修改 `backend/app/routes/inbox.py`
+  - 修改 `.gitignore`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/components/NavIcon.vue`
+  - 修改 `frontend/src/components/GroupBar.vue`
+  - 修改 `frontend/src/components/QuickNoteDialog.vue`
+  - 修改 `frontend/src/components/PhotoLibraryPanel.vue`
+  - 修改 `frontend/src/focus/PlainPage.vue`
+  - 修改 `frontend/src/focus/DocPage.vue`
+  - 修改 `docs/VERSIONS.md`
+

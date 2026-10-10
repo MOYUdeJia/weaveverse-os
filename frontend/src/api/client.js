@@ -265,6 +265,110 @@ export function trackUrl(filename) {
   return `${API_PREFIX}/music/files/${encodeURIComponent(filename)}`
 }
 
+function photoHeaders(password) {
+  return password ? { 'Album-Password': password } : {}
+}
+
+export function listAlbums() {
+  return request('/photos/albums')
+}
+
+export function createAlbum(name, isPrivate, password = '') {
+  return request('/photos/albums', {
+    method: 'POST',
+    body: JSON.stringify({ name, is_private: isPrivate, password }),
+  })
+}
+
+export function updateAlbum(id, data) {
+  return request(`/photos/albums/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+export function deleteAlbum(id) {
+  return request(`/photos/albums/${id}`, { method: 'DELETE' })
+}
+
+export function unlockAlbum(id, password) {
+  return request(`/photos/albums/${id}/unlock`, {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  })
+}
+
+export function listPhotos(albumId = null, password = '') {
+  const query = albumId == null ? '' : `?album_id=${albumId}`
+  return request(`/photos${query}`, { headers: photoHeaders(password) })
+}
+
+export function addPhoto(filename, note = '', albumId = null, password = '') {
+  return request('/photos', {
+    method: 'POST',
+    headers: photoHeaders(password),
+    body: JSON.stringify({ filename, note, album_id: albumId }),
+  })
+}
+
+export function uploadPhoto(file, albumId = null, password = '') {
+  const body = new FormData()
+  body.append('file', file)
+  const query = albumId == null ? '' : `?album_id=${albumId}`
+  return request(`/photos/upload${query}`, {
+    method: 'POST',
+    headers: photoHeaders(password),
+    body,
+  })
+}
+
+export function renamePhoto(id, displayName) {
+  return request(`/photos/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ display_name: displayName }),
+  })
+}
+
+export function movePhotos(ids, albumId, password = '') {
+  return request('/photos/move', {
+    method: 'POST',
+    headers: photoHeaders(password),
+    body: JSON.stringify({ ids, album_id: albumId }),
+  })
+}
+
+export function deletePhotos(ids) {
+  return request('/photos/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  })
+}
+
+export function deletePhoto(id) {
+  return request(`/photos/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function saveAttachmentLocal(filename, suggestedName = '') {
+  const api = window.pywebview?.api
+  if (api && typeof api.save_attachment === 'function') {
+    const result = await api.save_attachment(filename, suggestedName || filename)
+    if (result?.error) {
+      throw new Error(result.error)
+    }
+    return result
+  }
+  const link = document.createElement('a')
+  link.href = attachmentUrl(filename)
+  link.download = suggestedName || filename
+  link.rel = 'noopener'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  return { path: '' }
+}
+
 export function deleteAttachment(filename) {
   return request(`/attachments/${encodeURIComponent(filename)}`, {
     method: 'DELETE',

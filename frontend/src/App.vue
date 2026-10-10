@@ -14,6 +14,7 @@ import SearchDialog from './components/SearchDialog.vue'
 import QuickNoteDialog from './components/QuickNoteDialog.vue'
 import SplashScreen from './components/SplashScreen.vue'
 import WorkspacePanel from './components/WorkspacePanel.vue'
+import { toastText } from './toast'
 
 const splashVisible = ref(true)
 const groups = ref([])
@@ -476,9 +477,22 @@ async function openSearchGroup(groupId) {
   await selectGroup(groupId, null, true)
 }
 
-function onNoteSaved() {
+async function onNoteSaved(saved) {
   noticeMessage.value = '已记到收件箱'
   noteRevision.value += 1
+  if (saved?.group_id == null || saved.group_id !== activeGroupId.value) {
+    return
+  }
+  try {
+    const items = await getNav(activeGroupId.value)
+    if (showingOverview.value) {
+      navItems.value = items
+      return
+    }
+    applyNavItems(items, activeId.value)
+  } catch (error) {
+    console.error('Failed to refresh inbox nav:', error)
+  }
 }
 </script>
 
@@ -489,8 +503,8 @@ function onNoteSaved() {
   >
     <SplashScreen v-if="splashVisible" @finished="splashVisible = false" />
 
-    <section class="relative z-10 flex min-h-screen">
-      <div v-if="stillMedia || (appearance.global_video && !appearance.low_power)" class="pointer-events-none fixed inset-0 z-0">
+    <section class="relative z-10 isolate flex min-h-screen">
+      <div v-if="stillMedia || (appearance.global_video && !appearance.low_power)" class="pointer-events-none fixed inset-0 -z-10">
         <video
           v-if="appearance.global_video && !appearance.low_power"
           :src="backgroundUrl(appearance.global_video)"
@@ -543,6 +557,7 @@ function onNoteSaved() {
         :overview-group="showingOverview ? activeGroup : null"
         :overview-items="navItems"
         :note-revision="noteRevision"
+        :inbox-pause="noteOpen"
         @open-nav="openNav"
         @rename-group="renameGroup"
         @describe-group="describeGroup"
@@ -584,6 +599,7 @@ function onNoteSaved() {
       @open-guide="guideOpen = true"
     />
     <MusicDock :place="appearance.player || 'bottom'" />
+    <p v-if="toastText" class="wv-toast">{{ toastText }}</p>
     <GuideDialog v-if="guideOpen" @close="closeGuide" />
   </main>
 </template>

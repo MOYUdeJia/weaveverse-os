@@ -118,3 +118,37 @@ class Book(SQLModel, table=True):
     last_read_at: datetime | None = Field(default=None, nullable=True, index=True)
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
     updated_at: datetime = Field(default_factory=utc_now, nullable=False)
+
+
+class PhotoAlbum(SQLModel, table=True):
+    """One photo album. Private albums only gate access; files stay unencrypted."""
+
+    __tablename__ = "photo_albums"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(min_length=1, max_length=40, nullable=False)
+    cover_filename: str | None = Field(default=None, max_length=255)
+    is_private: bool = Field(default=False, nullable=False)
+    sort_order: int = Field(default=0, nullable=False, index=True)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+
+
+class PhotoLibrary(SQLModel, table=True):
+    """Metadata for one image. The file stays in attachments."""
+
+    __tablename__ = "photo_library"
+
+    id: int | None = Field(default=None, primary_key=True)
+    filename: str = Field(max_length=255, nullable=False, unique=True, index=True)
+    note: str = Field(
+        default="",
+        sa_column=Column(Text, nullable=False, server_default=""),
+    )
+    display_name: str = Field(default="", max_length=255, nullable=False)
+    album_id: int | None = Field(
+        default=None,
+        foreign_key="photo_albums.id",
+        nullable=True,
+        index=True,
+    )
+    added_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)

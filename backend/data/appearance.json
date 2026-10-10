@@ -3,10 +3,14 @@
   "bar": "overlay",
   "player": "bottom",
   "low_power": false,
-  "global_image": "",
-  "global_video": "",
-  "global_image_name": "",
-  "global_video_name": "",
-  "groups": {},
-  "group_names": {}
+  "global_image": "35612905ecfc4302b003d2d70c92b40f.png",
+  "global_video": "1d720dd08a26469eb651e739607142ca.mp4",
+  "global_image_name": "26_04_27_17_33_52.png",
+  "global_video_name": "【哲风壁纸】水墨武士-水墨风格.mp4",
+  "groups": {
+    "1": "3742a63181e4461fad67f9cd0640ea03.png"
+  },
+  "group_names": {
+    "1": "26_04_27_19_37_29.png"
+  }
 }
