@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.errors import raise_api_error
+from app.routes.ai import router as ai_router
 from app.routes.appearance import router as appearance_router
 from app.routes.blocks import router as blocks_router
 from app.routes.inbox import router as inbox_router
@@ -41,6 +42,7 @@ router.include_router(icons_router)
 router.include_router(search_router)
 router.include_router(inbox_router)
 router.include_router(photos_router)
+router.include_router(ai_router)
 
 
 @router.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

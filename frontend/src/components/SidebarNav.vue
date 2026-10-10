@@ -36,7 +36,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select', 'create', 'edit', 'delete', 'reorder', 'pin', 'lock', 'move', 'open-overview', 'search', 'note', 'appearance'])
+const emit = defineEmits(['select', 'create', 'edit', 'delete', 'reorder', 'pin', 'lock', 'move', 'open-overview', 'search', 'note', 'appearance', 'ai'])
 
 const localItems = ref([])
 
@@ -154,6 +154,10 @@ function onItemMenu(event, item) {
           设置
         </button>
       </div>
+      <button type="button" class="mb-3 flex h-9 w-full items-center justify-center gap-2 rounded-md bg-white text-sm font-medium text-ink shadow-sm" title="AI Ctrl+J" @click="emit('ai')">
+        <span>🤖</span>
+        <span>AI</span>
+      </button>
       <button
         type="button"
         class="mb-5 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-ink text-sm font-semibold text-white transition hover:bg-moss"

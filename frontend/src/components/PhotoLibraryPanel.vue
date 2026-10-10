@@ -50,7 +50,14 @@ const albumName = ref('')
 const albumPrivate = ref(false)
 const albumPassword = ref('')
 const renameDraft = ref('')
-const moveTarget = ref('none')
+const moveOpen = ref(false)
+const editingId = ref(null)
+const nameEditing = ref(false)
+const scale = ref(1)
+const panX = ref(0)
+const panY = ref(0)
+const dragging = ref(false)
+let dragStart = null
 const aspects = ref({})
 const frame = ref(null)
 const frameWidth = ref(720)
@@ -160,8 +167,22 @@ function chooseTab(next) {
   }
   password.value = ''
   selected.value = []
+  selecting.value = false
+  moveOpen.value = false
   previewIndex.value = -1
   tab.value = next
+}
+
+function resetView() {
+  scale.value = 1
+  panX.value = 0
+  panY.value = 0
+}
+
+function leaveSelect() {
+  selecting.value = false
+  selected.value = []
+  moveOpen.value = false
 }
 
 watch(tab, () => {
@@ -170,6 +191,8 @@ watch(tab, () => {
 
 watch(preview, (photo) => {
   renameDraft.value = photo ? labelOf(photo) : ''
+  nameEditing.value = false
+  resetView()
 })
 
 function rememberAspect(photo, event) {
@@ -340,7 +363,25 @@ async function applyRename() {
   }
   const updated = await renamePhoto(photo.id, name)
   photos.value = photos.value.map((item) => (item.id === updated.id ? updated : item))
-  showToast('已改名')
+  nameEditing.value = false
+  editingId.value = null
+  showToast('已重命名')
+}
+
+function startRename(photo) {
+  editingId.value = photo.id
+  renameDraft.value = labelOf(photo)
+}
+
+async function commitListRename(photo) {
+  const name = renameDraft.value.trim()
+  editingId.value = null
+  if (!name || name === labelOf(photo)) {
+    return
+  }
+  const updated = await renamePhoto(photo.id, name)
+  photos.value = photos.value.map((item) => (item.id === updated.id ? updated : item))
+  showToast('已重命名')
 }
 
 async function removeSelected() {
@@ -350,18 +391,21 @@ async function removeSelected() {
   if (!window.confirm(`从图片库移除 ${selected.value.length} 张？原文件会留着。`)) {
     return
   }
+  const count = selected.value.length
   await deletePhotos(selected.value)
-  selected.value = []
+  leaveSelect()
   previewIndex.value = -1
   await loadPhotos()
+  showToast(`已删除 ${count} 张图片`)
 }
 
-async function moveSelected() {
-  if (!selected.value.length || moveTarget.value === 'none') {
+async function moveSelected(albumId) {
+  if (!selected.value.length) {
     return
   }
-  const albumId = moveTarget.value === 'loose' ? null : Number(moveTarget.value)
   const album = albums.value.find((item) => item.id === albumId)
+  const count = selected.value.length
+  const albumName = album?.name || '未分类'
   let secret = ''
   if (album?.is_private) {
     secret = window.prompt(`「${album.name}」的密码`) || ''
@@ -372,16 +416,55 @@ async function moveSelected() {
   }
   try {
     await movePhotos(selected.value, albumId, secret)
-    selected.value = []
-    moveTarget.value = 'none'
+    leaveSelect()
     await loadPhotos()
+    showToast(`已移动 ${count} 张到「${albumName}」相册`)
   } catch (error) {
     showToast(error.message || '移动失败')
   }
 }
 
+function onWheel(event) {
+  const next = event.deltaY < 0 ? scale.value * 1.12 : scale.value / 1.12
+  scale.value = Math.min(4, Math.max(1, next))
+  if (scale.value === 1) {
+    panX.value = 0
+    panY.value = 0
+  }
+}
+
+function onDragStart(event) {
+  if (scale.value <= 1) {
+    return
+  }
+  dragging.value = true
+  dragStart = { x: event.clientX - panX.value, y: event.clientY - panY.value }
+}
+
+function onDragMove(event) {
+  if (!dragging.value || !dragStart) {
+    return
+  }
+  panX.value = event.clientX - dragStart.x
+  panY.value = event.clientY - dragStart.y
+}
+
+function onDragEnd() {
+  dragging.value = false
+  dragStart = null
+}
+
 function onKey(event) {
+  if (moveOpen.value && event.key === 'Escape') {
+    moveOpen.value = false
+    return
+  }
   if (previewIndex.value < 0) {
+    return
+  }
+  if (nameEditing.value && event.key === 'Escape') {
+    nameEditing.value = false
+    renameDraft.value = labelOf(preview.value)
     return
   }
   if (event.key === 'Escape') {
@@ -429,10 +512,10 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <button type="button" class="h-10 rounded-md px-3 text-sm" :class="layout === 'grid' ? 'bg-moss text-white' : 'bg-white text-ink/70'" @click="layout = 'grid'">网格</button>
-          <button type="button" class="h-10 rounded-md px-3 text-sm" :class="layout === 'flow' ? 'bg-moss text-white' : 'bg-white text-ink/70'" @click="layout = 'flow'">自适应</button>
-          <button type="button" class="h-10 rounded-md px-3 text-sm" :class="layout === 'list' ? 'bg-moss text-white' : 'bg-white text-ink/70'" @click="layout = 'list'">列表</button>
-          <button type="button" class="h-10 rounded-md px-3 text-sm" :class="selecting ? 'bg-ink text-white' : 'bg-white text-ink/70'" @click="selecting = !selecting">{{ selecting ? '完成' : '选择' }}</button>
+          <button type="button" class="h-10 rounded-md px-3 text-sm" :class="layout === 'grid' ? 'bg-moss text-white' : 'wv-chip'" @click="layout = 'grid'">网格</button>
+          <button type="button" class="h-10 rounded-md px-3 text-sm" :class="layout === 'flow' ? 'bg-moss text-white' : 'wv-chip'" @click="layout = 'flow'">自适应</button>
+          <button type="button" class="h-10 rounded-md px-3 text-sm" :class="layout === 'list' ? 'bg-moss text-white' : 'wv-chip'" @click="layout = 'list'">列表</button>
+          <button type="button" class="h-10 rounded-md px-3 text-sm" :class="selecting ? 'bg-moss text-white' : 'wv-chip'" @click="selecting = !selecting">{{ selecting ? '完成' : '选择' }}</button>
           <button type="button" class="h-11 rounded-md bg-moss px-5 text-sm font-semibold text-white disabled:bg-ink/30" :disabled="uploading || locked" @click="fileInput.click()">
             {{ uploading ? '上传中...' : '上传' }}
           </button>
@@ -441,46 +524,41 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="mt-5 flex gap-2 overflow-x-auto pb-1">
-        <button type="button" class="h-8 shrink-0 rounded-full px-3 text-xs" :class="tab === 'all' ? 'bg-ink text-white' : 'bg-white text-ink/70'" @click="chooseTab('all')">全部</button>
+        <button type="button" class="h-8 shrink-0 rounded-full px-3 text-xs" :class="tab === 'all' ? 'bg-moss text-white' : 'wv-chip'" @click="chooseTab('all')">全部</button>
         <button
           v-for="album in albums"
           :key="album.id"
           type="button"
           class="h-8 shrink-0 rounded-full px-3 text-xs"
-          :class="tab === album.id ? 'bg-ink text-white' : 'bg-white text-ink/70'"
+          :class="tab === album.id ? 'bg-moss text-white' : 'wv-chip'"
           @click="chooseTab(album.id)"
         >
           {{ album.is_private ? '🔒 ' : '' }}{{ album.name }}
         </button>
-        <button type="button" class="h-8 shrink-0 rounded-full bg-white px-3 text-xs text-moss" @click="albumForm = !albumForm">新建相册</button>
+        <button type="button" class="wv-chip h-8 shrink-0 rounded-full px-3 text-xs text-moss" @click="albumForm = !albumForm">新建相册</button>
       </div>
 
       <form v-if="albumForm" class="mt-3 flex flex-wrap items-center gap-2" @submit.prevent="makeAlbum">
-        <input v-model="albumName" class="h-9 rounded border border-black/10 px-2 text-sm outline-none" maxlength="40" placeholder="相册名称" />
+        <input v-model="albumName" class="wv-surface h-9 rounded border border-black/10 px-2 text-sm outline-none" maxlength="40" placeholder="相册名称" />
         <label class="flex items-center gap-1 text-xs text-ink/70">
           <input v-model="albumPrivate" type="checkbox" />
           隐私
         </label>
-        <input v-if="albumPrivate" v-model="albumPassword" type="password" class="h-9 rounded border border-black/10 px-2 text-sm outline-none" placeholder="密码至少 4 位" />
+        <input v-if="albumPrivate" v-model="albumPassword" type="password" class="wv-surface h-9 rounded border border-black/10 px-2 text-sm outline-none" placeholder="密码至少 4 位" />
         <button type="submit" class="h-9 rounded bg-ink px-3 text-xs text-white">创建</button>
       </form>
 
       <div v-if="activeAlbum" class="mt-3 flex flex-wrap gap-2 text-xs">
-        <button type="button" class="rounded bg-white px-2 py-1" @click="renameAlbum">改相册名</button>
-        <button type="button" class="rounded bg-white px-2 py-1" @click="markPrivate">{{ activeAlbum.is_private ? '重设密码' : '设为隐私' }}</button>
-        <button v-if="activeAlbum.is_private" type="button" class="rounded bg-white px-2 py-1" @click="clearPrivate">取消隐私</button>
+        <button type="button" class="wv-chip rounded px-2 py-1" @click="renameAlbum">改相册名</button>
+        <button type="button" class="wv-chip rounded px-2 py-1" @click="markPrivate">{{ activeAlbum.is_private ? '重设密码' : '设为隐私' }}</button>
+        <button v-if="activeAlbum.is_private" type="button" class="wv-chip rounded px-2 py-1" @click="clearPrivate">取消隐私</button>
         <button type="button" class="rounded px-2 py-1 text-ember" @click="removeAlbum">删除相册</button>
       </div>
 
-      <div v-if="selected.length" class="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-white px-3 py-2 text-sm">
+      <div v-if="selected.length" class="wv-surface mt-3 flex flex-wrap items-center gap-2 rounded-md px-3 py-2 text-sm shadow-sm">
         <span>已选 {{ selected.length }} 张</span>
         <button type="button" class="rounded bg-ember px-3 py-1 text-xs text-white" @click="removeSelected">删除</button>
-        <select v-model="moveTarget" class="h-8 rounded border border-black/10 bg-white px-2 text-xs">
-          <option value="none">移动到…</option>
-          <option value="loose">未分类</option>
-          <option v-for="album in albums" :key="album.id" :value="String(album.id)">{{ album.name }}</option>
-        </select>
-        <button type="button" class="rounded bg-ink px-3 py-1 text-xs text-white" @click="moveSelected">移动</button>
+        <button type="button" class="rounded bg-moss px-3 py-1 text-xs text-white" @click="moveOpen = true">移动</button>
       </div>
 
       <p v-if="noticeMessage" class="mt-4 rounded-md border border-moss/25 bg-moss/10 px-4 py-3 text-sm text-moss">{{ noticeMessage }}</p>
@@ -488,7 +566,7 @@ onBeforeUnmount(() => {
 
       <form v-if="locked" class="mt-8 flex max-w-sm flex-col gap-2" @submit.prevent="submitPassword">
         <p class="text-sm text-ink/70">这个相册已锁定</p>
-        <input v-model="password" type="password" class="h-10 rounded border border-black/10 px-3 text-sm outline-none" placeholder="输入密码" />
+        <input v-model="password" type="password" class="wv-surface h-10 rounded border border-black/10 px-3 text-sm outline-none" placeholder="输入密码" />
         <button type="submit" class="h-10 rounded bg-ink text-sm text-white">打开</button>
       </form>
 
@@ -497,21 +575,33 @@ onBeforeUnmount(() => {
 
       <div v-else ref="frame" class="mt-6">
         <div v-if="layout === 'grid'" class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
-          <button
+          <article
             v-for="photo in photos"
             :key="photo.id"
-            type="button"
-            class="relative overflow-hidden rounded-md bg-white text-left shadow-sm"
+            class="wv-surface relative overflow-hidden rounded-md text-left shadow-sm"
             :class="isSelected(photo) ? 'ring-2 ring-moss' : ''"
-            @pointerdown="pressStart(photo)"
-            @pointerup="pressEnd"
-            @pointerleave="pressEnd"
-            @click="openPhoto(photo, $event)"
           >
-            <img :src="attachmentUrl(photo.filename)" :alt="labelOf(photo)" class="h-40 w-full object-cover" @load="rememberAspect(photo, $event)" />
-            <span v-if="selecting" class="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-white text-[11px]">{{ isSelected(photo) ? '✓' : '' }}</span>
-            <p class="truncate px-3 py-2 text-xs text-ink/55">{{ labelOf(photo) }}</p>
-          </button>
+            <button
+              type="button"
+              class="block w-full"
+              @pointerdown="pressStart(photo)"
+              @pointerup="pressEnd"
+              @pointerleave="pressEnd"
+              @click="openPhoto(photo, $event)"
+            >
+              <img :src="attachmentUrl(photo.filename)" :alt="labelOf(photo)" class="h-40 w-full object-cover" @load="rememberAspect(photo, $event)" />
+            </button>
+            <span v-if="selecting" class="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full wv-chip text-[11px]">{{ isSelected(photo) ? '✓' : '' }}</span>
+            <input
+              v-if="editingId === photo.id"
+              v-model="renameDraft"
+              class="wv-surface w-full px-3 py-2 text-xs outline-none"
+              @click.stop
+              @keydown.enter.prevent="commitListRename(photo)"
+              @keydown.esc.prevent="editingId = null"
+            />
+            <p v-else class="truncate px-3 py-2 text-xs text-ink/55" title="双击重命名" @dblclick.stop="startRename(photo)">{{ labelOf(photo) }}</p>
+          </article>
         </div>
 
         <div v-else-if="layout === 'flow'" class="flex flex-col gap-2">
@@ -533,31 +623,77 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-else class="divide-y divide-black/5 overflow-hidden rounded-md bg-white shadow-sm">
-          <button
+        <div v-else class="wv-surface divide-y divide-black/5 overflow-hidden rounded-md shadow-sm">
+          <div
             v-for="photo in photos"
             :key="photo.id"
-            type="button"
-            class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-black/5"
+            class="flex w-full items-center gap-3 px-3 py-2 text-left"
             :class="isSelected(photo) ? 'bg-moss/10' : ''"
-            @click="openPhoto(photo, $event)"
           >
-            <img :src="attachmentUrl(photo.filename)" alt="" class="h-12 w-12 shrink-0 rounded object-cover" @load="rememberAspect(photo, $event)" />
-            <span class="min-w-0 flex-1 truncate text-sm">{{ labelOf(photo) }}</span>
-          </button>
+            <button type="button" class="flex min-w-0 flex-1 items-center gap-3" @click="openPhoto(photo, $event)">
+              <img :src="attachmentUrl(photo.filename)" alt="" class="h-12 w-12 shrink-0 rounded object-cover" @load="rememberAspect(photo, $event)" />
+            </button>
+            <input
+              v-if="editingId === photo.id"
+              v-model="renameDraft"
+              class="wv-surface h-8 min-w-0 flex-1 rounded px-2 text-sm outline-none"
+              @keydown.enter.prevent="commitListRename(photo)"
+              @keydown.esc.prevent="editingId = null"
+            />
+            <span v-else class="min-w-0 flex-1 truncate text-sm" title="双击重命名" @dblclick.stop="startRename(photo)">{{ labelOf(photo) }}</span>
+          </div>
         </div>
       </div>
     </div>
 
-    <div v-if="preview" class="fixed inset-0 z-50 flex flex-col bg-black/90" @click.self="previewIndex = -1">
-      <img :src="attachmentUrl(preview.filename)" :alt="labelOf(preview)" class="min-h-0 w-full flex-1 object-contain" />
-      <div class="flex flex-wrap items-center gap-2 bg-black/70 px-4 py-3 text-white">
-        <input v-model="renameDraft" class="h-9 min-w-0 flex-1 rounded bg-white/10 px-2 text-sm outline-none" @keydown.enter.prevent="applyRename" />
-        <button type="button" class="h-9 rounded bg-white/15 px-3 text-xs" @click="applyRename">改名</button>
-        <button type="button" class="h-9 rounded bg-white px-3 text-xs text-ink" @click="saveCurrent">保存到本地</button>
-        <button type="button" class="h-9 rounded px-3 text-xs" @click="previewIndex = Math.max(0, previewIndex - 1)">上一张</button>
-        <button type="button" class="h-9 rounded px-3 text-xs" @click="previewIndex = Math.min(photos.length - 1, previewIndex + 1)">下一张</button>
+    <div
+      v-if="preview"
+      class="fixed inset-0 z-50 flex flex-col bg-black/80"
+      @wheel.prevent="onWheel"
+      @pointermove="onDragMove"
+      @pointerup="onDragEnd"
+      @pointerleave="onDragEnd"
+    >
+      <button type="button" class="absolute left-4 top-1/2 z-10 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full wv-chip text-2xl" @click="previewIndex = Math.max(0, previewIndex - 1)">‹</button>
+      <button type="button" class="absolute right-4 top-1/2 z-10 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full wv-chip text-2xl" @click="previewIndex = Math.min(photos.length - 1, previewIndex + 1)">›</button>
+      <div class="flex min-h-0 flex-1 items-center justify-center overflow-hidden" @dblclick="resetView">
+        <img
+          :src="attachmentUrl(preview.filename)"
+          :alt="labelOf(preview)"
+          class="max-h-full max-w-full object-contain"
+          :class="scale > 1 ? 'cursor-grab' : ''"
+          :style="{ transform: `translate(${panX}px, ${panY}px) scale(${scale})` }"
+          @pointerdown="onDragStart"
+          draggable="false"
+        />
+      </div>
+      <div class="wv-surface flex flex-wrap items-center gap-2 px-4 py-3">
+        <input
+          v-if="nameEditing"
+          v-model="renameDraft"
+          class="wv-chip h-9 min-w-0 flex-1 rounded px-2 text-sm outline-none"
+          @keydown.enter.prevent="applyRename"
+          @keydown.esc.prevent.stop="nameEditing = false"
+        />
+        <button v-else type="button" class="min-w-0 flex-1 truncate text-left text-sm" @click="nameEditing = true">{{ labelOf(preview) }}</button>
+        <button v-if="nameEditing" type="button" class="h-9 rounded bg-moss px-3 text-xs text-white" @click="applyRename">确定</button>
+        <button v-if="nameEditing" type="button" class="h-9 rounded px-3 text-xs" @click="nameEditing = false">取消</button>
+        <button type="button" class="wv-chip h-9 rounded px-3 text-xs" @click="saveCurrent">保存到本地</button>
         <button type="button" class="h-9 rounded px-3 text-xs" @click="previewIndex = -1">关闭</button>
+      </div>
+    </div>
+    <div v-if="moveOpen" class="fixed inset-0 z-[60] grid place-items-center bg-black/40 px-4" @click.self="moveOpen = false">
+      <div class="wv-surface w-full max-w-sm rounded-md p-4 shadow-2xl">
+        <p class="text-sm font-medium">移动到相册</p>
+        <div class="mt-3 grid max-h-60 gap-1 overflow-y-auto">
+          <button type="button" class="wv-chip rounded px-3 py-2 text-left text-sm" @click="moveSelected(null)">未分类</button>
+          <button v-for="album in albums" :key="album.id" type="button" class="wv-chip rounded px-3 py-2 text-left text-sm" @click="moveSelected(album.id)">
+            {{ album.is_private ? '🔒 ' : '' }}{{ album.name }}
+          </button>
+        </div>
+        <div class="mt-3 flex justify-end">
+          <button type="button" class="h-8 rounded px-3 text-xs" @click="moveOpen = false">取消</button>
+        </div>
       </div>
     </div>
   </div>

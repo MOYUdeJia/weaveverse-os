@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import { backgroundUrl, clearBackground, updateAppearance, uploadBackground } from '../api/client'
+import AiSettings from './AiSettings.vue'
 
 const THEMES = [
   { id: 'warm', label: '暖白', swatch: '#f4efe7' },
@@ -32,6 +33,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'change', 'open-guide'])
 
+const page = ref('look')
 const busy = ref('')
 const busyName = ref('')
 const errorMessage = ref('')
@@ -133,11 +135,17 @@ async function clear(kind, groupId) {
 
 <template>
   <div v-if="open" class="fixed inset-0 z-[70] grid place-items-center bg-black/40 px-4" @click.self="emit('close')">
-    <div class="max-h-[86vh] w-full max-w-lg overflow-y-auto rounded-md bg-[#fcfaf5] p-5 shadow-2xl">
+    <div class="wv-surface max-h-[86vh] w-full max-w-lg overflow-y-auto rounded-md p-5 shadow-2xl">
       <div class="mb-4 flex items-center justify-between">
         <h2 class="text-lg font-semibold text-ink">设置</h2>
         <button type="button" class="text-ink/50" @click="emit('close')">×</button>
       </div>
+      <div class="mb-4 flex gap-2">
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'look' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'look'">外观</button>
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'ai' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'ai'">AI</button>
+      </div>
+      <AiSettings v-if="page === 'ai'" />
+      <template v-else>
       <p class="text-xs text-ink/45">主题</p>
       <div class="mt-2 flex flex-wrap gap-2">
         <button
@@ -194,6 +202,7 @@ async function clear(kind, groupId) {
       </div>
       <p v-if="errorMessage" class="mt-3 text-xs text-ember">{{ errorMessage }}</p>
       <button type="button" class="mt-5 text-sm text-moss" @click="emit('open-guide')">再看一次使用说明</button>
+      </template>
       <input ref="imageInput" class="wv-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" @change="onImage" />
       <input ref="videoInput" class="wv-file-input" type="file" accept="video/mp4,.mp4" @change="onVideo" />
       <input ref="groupInput" class="wv-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" @change="onGroupImage" />

@@ -11,6 +11,7 @@ __pycache__/
 .env
 backend/.weaveverse-port
 backend/data/album_secrets.json
+backend/data/ai_secrets.json
 backend/data/*.db
 backend/data/*.db-*
 backend/data/attachments/*

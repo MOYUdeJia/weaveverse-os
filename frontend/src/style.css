@@ -391,12 +391,37 @@ html[data-theme] .bg-dawn {
   z-index: 90;
   max-width: min(420px, calc(100vw - 32px));
   transform: translateX(-50%);
+  border: 1px solid rgba(22, 32, 29, 0.08);
   border-radius: 999px;
-  background: rgba(22, 32, 29, 0.88);
-  color: #fff;
+  background: var(--wv-work, #fcfaf5);
+  color: #16201d;
   padding: 8px 16px;
   font-size: 13px;
+  box-shadow: 0 8px 24px rgba(22, 32, 29, 0.12);
   pointer-events: none;
+}
+
+.wv-surface {
+  background: var(--wv-work, #fcfaf5);
+  color: #16201d;
+}
+
+.wv-chip {
+  background: var(--wv-nav, #f8f5ee);
+  color: #16201d;
+}
+
+.wv-chat {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  width: min(380px, 100vw);
+  height: 100vh;
+  flex-direction: column;
+  border-left: 1px solid rgba(22, 32, 29, 0.08);
+  box-shadow: -12px 0 32px rgba(22, 32, 29, 0.12);
 }
 
 .wv-player {

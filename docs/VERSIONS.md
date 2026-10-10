@@ -748,3 +748,38 @@
   - 修改 `frontend/src/focus/DocPage.vue`
   - 修改 `docs/VERSIONS.md`
 
+## M8 阶段 3 · 2026-10-10
+- **任务**：修图片库多选、大图、重命名和主题色，并加上 AI 聊天（多模型，先接 DeepSeek）。
+- **实现**：
+  - 图片库卡片、相册标签、工具条、大图底栏和提示都改用主题背景变量，切换主题会跟着变。
+  - 多选后的「移动」改成弹层，有取消，点外面或按 Esc 会关掉。移动或删除完成后退出多选，并提示移到了哪个相册、删了几张。
+  - 大图左右有箭头。滚轮缩放，放大后可以拖，双击还原。
+  - 网格和列表里双击名字改名。大图里点名字再改。回车确认后提示「已重命名」。
+  - 设置里增加 AI 页：提供商、Base URL、模型、Key、测试连接。Key 只进 Windows 凭据管理器，目标名 `weaveverse-os/ai/{provider}`，接口不把 Key 返回来。
+  - 左侧栏底部有 AI。点开从右侧滑出聊天。`Ctrl+J` 开关，Esc 关闭。回复按流式逐段显示。
+- **技术架构**：DeepSeek 和 OpenAI 共用 OpenAI 兼容的流式接口，Anthropic 单独一个适配器。上游用 httpx，不用官方 SDK。前端用 `fetch` 读 `ReadableStream`。对话不落库。
+- **与阶段 2 相比的变化**：
+  - 图片库的多选、大图和改名按文件管理的方式来
+  - 增加只能聊天的 AI 助手，还不能改页面数据
+- **已知问题**：
+  - 没有对话历史，关掉浮层就没了。
+  - 凭据管理器失败时，Key 会写进 `backend/data/ai_secrets.json`（已忽略）。正常情况不会写这个文件。
+  - 阶段 4 的语音、私有云、让 AI 改数据都还没做。
+- **文件变更**：
+  - 新增 `backend/app/ai_providers.py`
+  - 新增 `backend/app/ai_secrets.py`
+  - 新增 `backend/app/routes/ai.py`
+  - 新增 `frontend/src/components/AiSettings.vue`
+  - 新增 `frontend/src/components/ChatPanel.vue`
+  - 修改 `backend/app/album_lock.py`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/requirements.txt`
+  - 修改 `.gitignore`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/components/AppearanceDialog.vue`
+  - 修改 `frontend/src/components/SidebarNav.vue`
+  - 修改 `frontend/src/components/PhotoLibraryPanel.vue`
+  - 修改 `docs/VERSIONS.md`
+

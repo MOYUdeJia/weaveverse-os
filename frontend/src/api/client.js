@@ -436,3 +436,68 @@ export function deleteIcon(icon) {
     method: 'DELETE',
   })
 }
+
+export function getAiSettings() {
+  return request('/ai/settings')
+}
+
+export function saveAiSettings(data) {
+  return request('/ai/settings', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export function testAiConnection() {
+  return request('/ai/test', { method: 'POST' })
+}
+
+export async function streamAiChat(messages, onText) {
+  const response = await fetch(`${API_PREFIX}/ai/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages }),
+  })
+  if (!response.ok) {
+    let message = '网络错误，请重试'
+    try {
+      const payload = await response.json()
+      message = formatDetail(payload.detail) || message
+    } catch {
+      message = '网络错误，请重试'
+    }
+    throw new Error(message)
+  }
+  const reader = response.body?.getReader()
+  if (!reader) {
+    throw new Error('网络错误，请重试')
+  }
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) {
+      break
+    }
+    buffer += decoder.decode(value, { stream: true })
+    const chunks = buffer.split('\n\n')
+    buffer = chunks.pop() || ''
+    for (const chunk of chunks) {
+      const line = chunk.split('\n').find((item) => item.startsWith('data:'))
+      if (!line) {
+        continue
+      }
+      const data = line.slice(5).trim()
+      if (data === '[DONE]') {
+        return
+      }
+      const payload = JSON.parse(data)
+      if (payload.error) {
+        throw new Error(payload.error)
+      }
+      if (payload.text) {
+        onText(payload.text)
+      }
+    }
+  }
+}

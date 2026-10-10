@@ -13,6 +13,7 @@ import SidebarNav from './components/SidebarNav.vue'
 import SearchDialog from './components/SearchDialog.vue'
 import QuickNoteDialog from './components/QuickNoteDialog.vue'
 import SplashScreen from './components/SplashScreen.vue'
+import ChatPanel from './components/ChatPanel.vue'
 import WorkspacePanel from './components/WorkspacePanel.vue'
 import { toastText } from './toast'
 
@@ -41,6 +42,7 @@ const searchTab = ref('all')
 const noteOpen = ref(false)
 const noteRevision = ref(0)
 const appearanceOpen = ref(false)
+const chatOpen = ref(false)
 const guideOpen = ref(false)
 const appearance = ref({
   theme: 'warm',
@@ -421,6 +423,14 @@ function onGlobalKey(event) {
     event.preventDefault()
     noteOpen.value = false
     openSearch()
+    return
+  }
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && key === 'j') {
+    event.preventDefault()
+    chatOpen.value = !chatOpen.value
+  }
+  if (event.key === 'Escape' && chatOpen.value) {
+    chatOpen.value = false
   }
 }
 
@@ -547,6 +557,7 @@ async function onNoteSaved(saved) {
         @search="openSearch()"
         @note="noteOpen = true"
         @appearance="appearanceOpen = true"
+        @ai="chatOpen = !chatOpen"
       />
       <WorkspacePanel
         :item="activeItem"
@@ -598,6 +609,7 @@ async function onNoteSaved(saved) {
       @change="applyAppearance"
       @open-guide="guideOpen = true"
     />
+    <ChatPanel :open="chatOpen" @close="chatOpen = false" />
     <MusicDock :place="appearance.player || 'bottom'" />
     <p v-if="toastText" class="wv-toast">{{ toastText }}</p>
     <GuideDialog v-if="guideOpen" @close="closeGuide" />

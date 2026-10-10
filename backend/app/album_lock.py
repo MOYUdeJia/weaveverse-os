@@ -49,16 +49,16 @@ class _Credential(ctypes.Structure):
     ]
 
 
-def _vault_write(album_id: int, password: str) -> None:
-    blob = _credential_blob(password)
+def vault_write(target: str, secret: str, username: str) -> None:
+    blob = _credential_blob(secret)
     buffer = ctypes.create_string_buffer(blob)
     cred = _Credential()
     cred.Type = 1
-    cred.TargetName = _target(album_id)
+    cred.TargetName = target
     cred.CredentialBlobSize = len(blob)
     cred.CredentialBlob = ctypes.cast(buffer, ctypes.POINTER(ctypes.c_char))
     cred.Persist = 2
-    cred.UserName = "album"
+    cred.UserName = username
     advapi = ctypes.WinDLL("advapi32", use_last_error=True)
     advapi.CredWriteW.argtypes = [ctypes.POINTER(_Credential), wintypes.DWORD]
     advapi.CredWriteW.restype = wintypes.BOOL
@@ -66,7 +66,7 @@ def _vault_write(album_id: int, password: str) -> None:
         raise ctypes.WinError(ctypes.get_last_error())
 
 
-def _vault_read(album_id: int) -> str | None:
+def vault_read(target: str) -> str | None:
     advapi = ctypes.WinDLL("advapi32", use_last_error=True)
     advapi.CredReadW.argtypes = [
         wintypes.LPCWSTR,
@@ -77,7 +77,7 @@ def _vault_read(album_id: int) -> str | None:
     advapi.CredReadW.restype = wintypes.BOOL
     advapi.CredFree.argtypes = [ctypes.c_void_p]
     pointer = ctypes.POINTER(_Credential)()
-    if not advapi.CredReadW(_target(album_id), 1, 0, ctypes.byref(pointer)):
+    if not advapi.CredReadW(target, 1, 0, ctypes.byref(pointer)):
         error = ctypes.get_last_error()
         if error == 1168:
             return None
@@ -89,11 +89,23 @@ def _vault_read(album_id: int) -> str | None:
         advapi.CredFree(pointer)
 
 
-def _vault_delete(album_id: int) -> None:
+def vault_delete(target: str) -> None:
     advapi = ctypes.WinDLL("advapi32", use_last_error=True)
     advapi.CredDeleteW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD]
     advapi.CredDeleteW.restype = wintypes.BOOL
-    advapi.CredDeleteW(_target(album_id), 1, 0)
+    advapi.CredDeleteW(target, 1, 0)
+
+
+def _vault_write(album_id: int, password: str) -> None:
+    vault_write(_target(album_id), password, "album")
+
+
+def _vault_read(album_id: int) -> str | None:
+    return vault_read(_target(album_id))
+
+
+def _vault_delete(album_id: int) -> None:
+    vault_delete(_target(album_id))
 
 
 def _load_hashes() -> dict:
