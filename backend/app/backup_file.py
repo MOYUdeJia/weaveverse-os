@@ -7,16 +7,18 @@ File layout: magic WVBK, version 1, 16-byte salt, 12-byte nonce, AES-GCM ciphert
 from __future__ import annotations
 
 import io
+import json
 import os
+import re
 import sqlite3
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from argon2.low_level import Type, hash_secret_raw
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from app.config import DATA_DIR, DATABASE_PATH
+from app.config import BACKUPS_DIR, DATA_DIR, DATABASE_PATH
+from app.crypto import derive_key
 
 MAGIC = b"WVBK"
 VERSION = 1
@@ -24,22 +26,18 @@ BACKUP_NAMES = (
     "appearance.json",
     "quick_tags.json",
     "ai_settings.json",
+    "privacy.json",
 )
 BACKUP_DIRS = ("attachments", "books", "music", "icons", "backgrounds")
 SAFETY_DIR = DATA_DIR / "safety"
 META_PATH = DATA_DIR / "backup_meta.json"
+NAME_PATTERN = re.compile(r"^weaveverse-(\d{4}-\d{2}-\d{2})-(\d{4})(?:-(.+))?\.wvbak$")
+KEEP = 5
 
 
-def _derive(password: str, salt: bytes) -> bytes:
-    return hash_secret_raw(
-        password.encode("utf-8"),
-        salt,
-        time_cost=3,
-        memory_cost=65536,
-        parallelism=4,
-        hash_len=32,
-        type=Type.ID,
-    )
+def local_stamp(value: datetime | None = None) -> str:
+    when = value or datetime.now()
+    return when.strftime("%Y-%m-%d %H:%M")
 
 
 def _add_tree(archive: zipfile.ZipFile, folder: Path, prefix: str) -> None:
@@ -77,7 +75,7 @@ def encrypt_backup(password: str) -> bytes:
     payload = build_zip()
     salt = os.urandom(16)
     nonce = os.urandom(12)
-    key = _derive(password, salt)
+    key = derive_key(password, salt)
     try:
         ciphertext = AESGCM(key).encrypt(nonce, payload, MAGIC)
     finally:
@@ -91,7 +89,7 @@ def decrypt_backup(blob: bytes, password: str) -> bytes:
     salt = blob[5:21]
     nonce = blob[21:33]
     ciphertext = blob[33:]
-    key = _derive(password, salt)
+    key = derive_key(password, salt)
     try:
         return AESGCM(key).decrypt(nonce, ciphertext, MAGIC)
     except Exception as exc:
@@ -134,19 +132,90 @@ def restore_zip(payload: bytes) -> None:
 
 
 def remember_backup() -> None:
-    import json
-
     META_PATH.write_text(
-        json.dumps({"last_backup_at": datetime.now(timezone.utc).isoformat()}),
+        json.dumps({"last_backup_at": datetime.now().strftime("%Y-%m-%d %H:%M")}),
         encoding="utf-8",
     )
 
 
 def last_backup_at() -> str:
-    import json
-
     try:
         data = json.loads(META_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return ""
-    return str(data.get("last_backup_at") or "") if isinstance(data, dict) else ""
+    raw = str(data.get("last_backup_at") or "") if isinstance(data, dict) else ""
+    if "T" in raw:
+        raw = raw.replace("T", " ")[:16]
+    return raw[:16]
+
+
+def sanitize_label(label: str) -> str:
+    text = re.sub(r'[<>:"/\\|?*]+', "", label).strip().replace(" ", "-")
+    return text[:40]
+
+
+def backup_path(name: str) -> Path:
+    filename = Path(name).name
+    if filename != name or not NAME_PATTERN.fullmatch(filename):
+        raise ValueError("备份文件名不合法")
+    return BACKUPS_DIR / filename
+
+
+def list_backups() -> list[dict]:
+    BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
+    items = []
+    for path in BACKUPS_DIR.iterdir():
+        if not path.is_file():
+            continue
+        match = NAME_PATTERN.fullmatch(path.name)
+        if match is None:
+            continue
+        hour = match.group(2)
+        label = match.group(3) or ""
+        items.append(
+            {
+                "filename": path.name,
+                "label": label,
+                "time": f"{match.group(1)} {hour[:2]}:{hour[2:]}",
+                "size": path.stat().st_size,
+                "mtime": path.stat().st_mtime,
+            }
+        )
+    items.sort(key=lambda item: item["mtime"], reverse=True)
+    for item in items:
+        item.pop("mtime", None)
+    return items
+
+
+def extras_after(items: list[dict]) -> list[dict]:
+    return items[KEEP:]
+
+
+def write_backup(password: str, label: str = "") -> dict:
+    BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
+    blob = encrypt_backup(password)
+    stamp = datetime.now().strftime("%Y-%m-%d-%H%M")
+    safe = sanitize_label(label)
+    filename = f"weaveverse-{stamp}-{safe}.wvbak" if safe else f"weaveverse-{stamp}.wvbak"
+    path = BACKUPS_DIR / filename
+    if path.exists():
+        filename = f"weaveverse-{stamp}-{safe + '-' if safe else ''}{os.urandom(2).hex()}.wvbak"
+        path = BACKUPS_DIR / filename
+    path.write_bytes(blob)
+    remember_backup()
+    items = list_backups()
+    return {
+        "filename": filename,
+        "path": str(path),
+        "label": safe,
+        "time": local_stamp(),
+        "size": path.stat().st_size,
+        "extras": extras_after(items),
+    }
+
+
+def delete_backup(name: str) -> None:
+    path = backup_path(name)
+    if not path.is_file():
+        raise FileNotFoundError("找不到这个备份")
+    path.unlink()

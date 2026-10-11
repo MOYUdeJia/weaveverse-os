@@ -344,10 +344,10 @@ export function movePhotos(ids, albumId, password = '') {
   })
 }
 
-export function deletePhotos(ids) {
+export function deletePhotos(ids, purge = false) {
   return request('/photos/bulk-delete', {
     method: 'POST',
-    body: JSON.stringify({ ids }),
+    body: JSON.stringify({ ids, purge }),
   })
 }
 
@@ -565,16 +565,11 @@ export function getBackupInfo() {
   return request('/backup')
 }
 
-export async function exportBackup(password) {
-  const response = await fetch(`${API_PREFIX}/backup/export`, {
+export function exportBackup(label = '') {
+  return request('/backup/export', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ label }),
   })
-  if (!response.ok) {
-    throw new Error('备份没有做成')
-  }
-  return response.blob()
 }
 
 export function restoreBackup(file, password) {
@@ -582,4 +577,112 @@ export function restoreBackup(file, password) {
   body.append('file', file)
   body.append('password', password)
   return request('/backup/restore', { method: 'POST', body })
+}
+
+export function restoreNamedBackup(filename, password) {
+  return request('/backup/restore-named', {
+    method: 'POST',
+    body: JSON.stringify({ filename, password }),
+  })
+}
+
+export function deleteBackupFile(filename) {
+  return request('/backup/delete', {
+    method: 'POST',
+    body: JSON.stringify({ filename }),
+  })
+}
+
+export function getPrivacy() {
+  return request('/privacy')
+}
+
+export function setVaultPassword(password, current = '') {
+  return request('/privacy/vault', {
+    method: 'POST',
+    body: JSON.stringify({ password, current }),
+  })
+}
+
+export function unlockVault(password) {
+  return request('/privacy/vault/unlock', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  })
+}
+
+export function lockVault() {
+  return request('/privacy/vault/lock', { method: 'POST' })
+}
+
+export function setBackupPassword(password, current = '') {
+  return request('/privacy/backup', {
+    method: 'POST',
+    body: JSON.stringify({ password, current }),
+  })
+}
+
+export function unlockBackup(password) {
+  return request('/privacy/backup/unlock', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  })
+}
+
+export function listVaultSections() {
+  return request('/vault/sections')
+}
+
+export function createVaultSection(name) {
+  return request('/vault/sections', { method: 'POST', body: JSON.stringify({ name }) })
+}
+
+export function renameVaultSection(id, name) {
+  return request(`/vault/sections/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) })
+}
+
+export function deleteVaultSection(id) {
+  return request(`/vault/sections/${id}`, { method: 'DELETE' })
+}
+
+export function reorderVaultSections(ids) {
+  return request('/vault/sections/reorder', { method: 'POST', body: JSON.stringify({ ids }) })
+}
+
+export function listVaultEntries() {
+  return request('/vault/entries')
+}
+
+export function createVaultEntry(data) {
+  return request('/vault/entries', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function updateVaultEntry(id, data) {
+  return request(`/vault/entries/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+export function pinVaultEntryTop(id) {
+  return request(`/vault/entries/${id}/top`, { method: 'POST' })
+}
+
+export function reorderVaultEntries(sectionId, ids) {
+  return request('/vault/entries/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ section_id: sectionId, ids }),
+  })
+}
+
+export function deleteVaultEntry(id) {
+  return request(`/vault/entries/${id}`, { method: 'DELETE' })
+}
+
+export function listUnusedAttachments() {
+  return request('/cleanup/attachments')
+}
+
+export function purgeUnusedAttachments(filenames) {
+  return request('/cleanup/attachments', {
+    method: 'POST',
+    body: JSON.stringify({ filenames }),
+  })
 }

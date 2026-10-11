@@ -9,6 +9,7 @@ import { focusPageByType } from '../specialAdds/registry.js'
 import BookshelfPanel from './BookshelfPanel.vue'
 import IdeaPanel from './IdeaPanel.vue'
 import PhotoLibraryPanel from './PhotoLibraryPanel.vue'
+import VaultPanel from './VaultPanel.vue'
 import GroupOverview from './GroupOverview.vue'
 import NavIcon from './NavIcon.vue'
 
@@ -220,6 +221,12 @@ async function addBlock(blockType) {
 
     <IdeaPanel
       v-else-if="item && item.page_type === 'idea_box' && !loading && !errorMessage && !empty"
+      :title="item.title"
+      :icon="item.icon"
+    />
+
+    <VaultPanel
+      v-else-if="item && item.page_type === 'password_vault' && !loading && !errorMessage && !empty"
       :title="item.title"
       :icon="item.icon"
     />

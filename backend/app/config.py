@@ -22,6 +22,7 @@ ATTACHMENTS_DIR = DATA_DIR / "attachments"
 BOOKS_DIR = DATA_DIR / "books"
 ICONS_DIR = DATA_DIR / "icons"
 BACKGROUNDS_DIR = DATA_DIR / "backgrounds"
+BACKUPS_DIR = DATA_DIR / "backups"
 
 DEV_SERVER_URL = os.getenv("WEAVEVERSE_DEV_SERVER_URL", "http://127.0.0.1:5173")
 

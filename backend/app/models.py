@@ -155,6 +155,47 @@ class PhotoLibrary(SQLModel, table=True):
     added_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)
 
 
+class VaultSection(SQLModel, table=True):
+    """One named group inside the password vault."""
+
+    __tablename__ = "vault_sections"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(min_length=1, max_length=40, nullable=False)
+    sort_order: int = Field(default=0, nullable=False, index=True)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+
+
+class VaultEntry(SQLModel, table=True):
+    """One vault row. The password field is ciphertext, never plaintext."""
+
+    __tablename__ = "vault_entries"
+
+    id: int | None = Field(default=None, primary_key=True)
+    section_id: int = Field(
+        foreign_key="vault_sections.id",
+        nullable=False,
+        index=True,
+        ondelete="CASCADE",
+    )
+    name: str = Field(min_length=1, max_length=80, nullable=False)
+    url: str = Field(default="", max_length=500, nullable=False)
+    username: str = Field(default="", max_length=200, nullable=False)
+    password_encrypted: str = Field(
+        default="",
+        sa_column=Column(Text, nullable=False, server_default=""),
+    )
+    note: str = Field(
+        default="",
+        sa_column=Column(Text, nullable=False, server_default=""),
+    )
+    sort_order: int = Field(default=0, nullable=False, index=True)
+    pinned: bool = Field(default=False, nullable=False, index=True)
+    locked: bool = Field(default=False, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    updated_at: datetime = Field(default_factory=utc_now, nullable=False)
+
+
 class Idea(SQLModel, table=True):
     """One captured idea. Tags are a JSON list stored as text."""
 

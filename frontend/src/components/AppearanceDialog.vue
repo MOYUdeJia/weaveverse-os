@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { backgroundUrl, clearBackground, updateAppearance, uploadBackground } from '../api/client'
 import AiSettings from './AiSettings.vue'
 import BackupPanel from './BackupPanel.vue'
+import PrivacyPanel from './PrivacyPanel.vue'
 import RemotePanel from './RemotePanel.vue'
 
 const THEMES = [
@@ -147,10 +148,12 @@ async function clear(kind, groupId) {
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'ai' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'ai'">AI</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'remote' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'remote'">远程</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'backup' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'backup'">备份</button>
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'privacy' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'privacy'">隐私</button>
       </div>
       <AiSettings v-if="page === 'ai'" />
       <RemotePanel v-else-if="page === 'remote'" />
-      <BackupPanel v-else-if="page === 'backup'" />
+      <BackupPanel v-else-if="page === 'backup'" @need-privacy="page = 'privacy'" />
+      <PrivacyPanel v-else-if="page === 'privacy'" />
       <template v-else>
       <p class="text-xs text-ink/45">主题</p>
       <div class="mt-2 flex flex-wrap gap-2">

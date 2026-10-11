@@ -631,6 +631,7 @@ class PhotoMove(BaseModel):
 
 class PhotoBulkDelete(BaseModel):
     ids: list[int] = Field(min_length=1)
+    purge: bool = False
 
 
 class AlbumCreate(BaseModel):

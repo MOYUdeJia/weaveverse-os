@@ -11,6 +11,9 @@ from app.routes.blocks import router as blocks_router
 from app.routes.inbox import router as inbox_router
 from app.routes.search import router as search_router
 from app.routes.backup import router as backup_router
+from app.routes.cleanup import router as cleanup_router
+from app.routes.privacy import router as privacy_router
+from app.routes.vault import router as vault_router
 from app.routes.books import router as books_router
 from app.routes.groups import router as groups_router
 from app.routes.icons import router as icons_router
@@ -51,6 +54,9 @@ router.include_router(ideas_router)
 router.include_router(speech_router)
 router.include_router(remote_router)
 router.include_router(backup_router)
+router.include_router(privacy_router)
+router.include_router(vault_router)
+router.include_router(cleanup_router)
 
 
 @router.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

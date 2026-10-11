@@ -10,6 +10,7 @@ from sqlmodel import Session
 
 from app import photo_crud
 from app.album_lock import check_album_password
+from app.attachment_gc import count_other_refs
 from app.config import ATTACHMENTS_DIR
 from app.db import get_session
 from app.errors import raise_api_error
@@ -193,15 +194,48 @@ def move_photos(
     return {"moved": count}
 
 
+def _purge_photo_file(session: Session, filename: str, photo_id: int | None) -> None:
+    refs = count_other_refs(session, filename, photo_id)
+    if refs:
+        raise_api_error(409, "filename", f"有 {refs} 处引用，不能删")
+    path = _safe_attachment_path(filename)
+    if path.is_file():
+        path.unlink()
+
+
 @router.post("/bulk-delete")
 def bulk_delete_photos(data: PhotoBulkDelete, session: Session = Depends(get_session)) -> dict[str, int]:
+    if data.purge:
+        rows = [photo_crud.get_photo(session, photo_id) for photo_id in data.ids]
+        missing = [photo_id for photo_id, row in zip(data.ids, rows) if row is None]
+        if missing:
+            raise_api_error(404, "id", "有图片不在库里")
+        blocked = []
+        for row in rows:
+            if row is None:
+                continue
+            refs = count_other_refs(session, row.filename, row.id)
+            if refs:
+                blocked.append(refs)
+        if blocked:
+            raise_api_error(409, "filename", f"有 {sum(blocked)} 处引用，不能删")
+        for row in rows:
+            if row is None:
+                continue
+            _purge_photo_file(session, row.filename, row.id)
     return {"deleted": photo_crud.delete_photos(session, data.ids)}
 
 
 @router.delete("/{photo_id}")
-def delete_photo(photo_id: int, session: Session = Depends(get_session)) -> dict[str, str]:
+def delete_photo(
+    photo_id: int,
+    purge: bool = False,
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
     row = photo_crud.get_photo(session, photo_id)
     if row is None:
         raise_api_error(404, "id", "图片不在库里")
+    if purge:
+        _purge_photo_file(session, row.filename, row.id)
     photo_crud.delete_photo(session, row)
     return {"status": "ok"}

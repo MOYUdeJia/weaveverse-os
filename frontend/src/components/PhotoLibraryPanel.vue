@@ -40,7 +40,6 @@ const photos = ref([])
 const tab = ref('all')
 const layout = ref('grid')
 const loading = ref(true)
-const uploading = ref(false)
 const errorMessage = ref('')
 const selected = ref([])
 const selecting = ref(false)
@@ -57,6 +56,7 @@ const ungrouped = ref(false)
 const albumColors = ['#c45454', '#e08a7a', '#d77245', '#e2b340', '#8a8f3a', '#3f6f57', '#7aaa78', '#3ca1b0', '#2f7a78', '#5c79a8', '#3d5278', '#7a4e7a', '#c47a96', '#8a6a4a', '#6e7570', '#2c3330']
 const renameDraft = ref('')
 const moveOpen = ref(false)
+const deleteAsk = ref(false)
 const editingId = ref(null)
 const nameEditing = ref(false)
 const scale = ref(1)
@@ -441,15 +441,22 @@ async function removeSelected() {
   if (!selected.value.length) {
     return
   }
-  if (!window.confirm(`从图片库移除 ${selected.value.length} 张？原文件会留着。`)) {
-    return
+  deleteAsk.value = true
+}
+
+async function finishDelete(purge) {
+  const ids = selected.value.slice()
+  const count = ids.length
+  deleteAsk.value = false
+  try {
+    await deletePhotos(ids, purge)
+    leaveSelect()
+    previewIndex.value = -1
+    await loadPhotos()
+    showToast(purge ? `已彻底删除 ${count} 张` : `已从图库移除 ${count} 张，文件还在`)
+  } catch (error) {
+    showToast(error.message || '删不掉')
   }
-  const count = selected.value.length
-  await deletePhotos(selected.value)
-  leaveSelect()
-  previewIndex.value = -1
-  await loadPhotos()
-  showToast(`已删除 ${count} 张图片`)
 }
 
 async function moveSelected(albumId) {
@@ -613,6 +620,12 @@ onBeforeUnmount(() => {
         <button type="button" class="bg-transparent px-2 py-1 text-xs text-ink/60" @click="selectAll">全选</button>
         <button type="button" class="bg-transparent px-2 py-1 text-xs text-ink/60" @click="clearPicked">取消选择</button>
         <button type="button" class="rounded bg-ember px-3 py-1 text-xs text-white" :disabled="!selected.length" @click="removeSelected">删除</button>
+        <div v-if="deleteAsk" class="flex flex-wrap items-center gap-2 text-xs">
+          <span>怎么处理这 {{ selected.length }} 张？</span>
+          <button type="button" class="rounded border border-black/15 px-2 py-1" @click="finishDelete(false)">仅从图库移除</button>
+          <button type="button" class="rounded bg-ember px-2 py-1 text-white" @click="finishDelete(true)">彻底删除文件</button>
+          <button type="button" class="text-ink/45" @click="deleteAsk = false">取消</button>
+        </div>
         <button type="button" class="rounded bg-moss px-3 py-1 text-xs text-white" :disabled="!selected.length" @click="moveOpen = true">移动</button>
       </div>
 

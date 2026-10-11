@@ -889,3 +889,47 @@
   - 修改 `frontend/src/components/PhotoLibraryPanel.vue`
   - 修改 `docs/VERSIONS.md`
 
+## M9 阶段 1 · 2026-10-11
+- **任务**：密码管理器、备份改成设一次密码、附件垃圾回收。音乐悬浮球还没做。
+- **实现**：
+  - 「新建系统页」可以建密码管理器，进系统分组，默认图标 🔒。分区和条目可拖动。密码用主密码派生的 AES-GCM 密文存库，库里看不到明文。
+  - 进入页面要输主密码，离开页面会锁定。设置 → 隐私里可以改主密码和备份密码。都至少 12 位，忘记不能恢复。
+  - 备份密码和主密码分开。设好之后点「立即备份」不再另选路径，文件落到 `backend/data/backups/`，文件名带本地时间和可选命名。超过 5 个会提示删旧的。恢复从列表选，要输密码，先拷到 `data/safety/`。
+  - 图库删除可以只移除记录，也可以彻底删文件。文档等地方还引用着就拒绝，并说出引用次数。设置 → 隐私可以扫描并清理未被引用的附件。
+- **技术架构**：Argon2id 哈希只写在 `privacy.json`，明文密码只留在进程内存。派生密钥仍是 Argon2id + AES-GCM，备份文件头和 M8 兼容。附件是否被引用：拿 `attachments/` 里每个文件名，去区块 JSON、图库、相册封面、IDEA、导航/分组图标、外观设置、书架封面名里做子串匹配。
+- **与 M8 阶段 5 相比的变化**：
+  - 有了密码管理器
+  - 备份不再每次输密码、不再另存为
+  - 图库可以彻底删文件，也能扫垃圾附件
+- **已知问题**：
+  - 应用重启后，备份前要再输一次备份密码（会话里记住，不落盘）。
+  - 改备份密码不影响已经做好的 `.wvbak`，那些文件仍用当时的密码恢复。
+  - 恢复后还是要手动重启。
+  - 阶段 2 的音乐悬浮球还没做。
+- **文件变更**：
+  - 新增 `backend/app/crypto.py`
+  - 新增 `backend/app/privacy.py`
+  - 新增 `backend/app/vault_crud.py`
+  - 新增 `backend/app/attachment_gc.py`
+  - 新增 `backend/app/routes/privacy.py`
+  - 新增 `backend/app/routes/vault.py`
+  - 新增 `backend/app/routes/cleanup.py`
+  - 新增 `backend/alembic/versions/20261011_0011_vault.py`
+  - 新增 `frontend/src/components/VaultPanel.vue`
+  - 新增 `frontend/src/components/PrivacyPanel.vue`
+  - 修改 `backend/app/backup_file.py`
+  - 修改 `backend/app/routes/backup.py`
+  - 修改 `backend/app/models.py`
+  - 修改 `backend/app/page_types.py`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/app/config.py`
+  - 修改 `backend/app/schemas.py`
+  - 修改 `backend/app/routes/photos.py`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/components/AppearanceDialog.vue`
+  - 修改 `frontend/src/components/BackupPanel.vue`
+  - 修改 `frontend/src/components/WorkspacePanel.vue`
+  - 修改 `frontend/src/components/PhotoLibraryPanel.vue`
+  - 修改 `.gitignore`
+  - 修改 `docs/VERSIONS.md`
+

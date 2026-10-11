@@ -116,7 +116,13 @@ PAGE_TYPES = {
         "default_icon": "💡",
         "default_blocks": [],
     },
-    "vault": {"label": "密码箱", "multi_instance": False, "default_blocks": []},
+    "password_vault": {
+        "layer": "core",
+        "label": "密码管理器",
+        "multi_instance": False,
+        "default_icon": "🔒",
+        "default_blocks": [],
+    },
     "future_plan": {"label": "未来规划", "multi_instance": False, "default_blocks": []},
     "habit_tracker": {"label": "习惯追踪", "multi_instance": False, "default_blocks": []},
     # multi_instance 为 False 只表示新建菜单不能选它。
