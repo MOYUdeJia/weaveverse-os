@@ -23,6 +23,7 @@ import { showMenu } from '../contextMenu'
 import { openExternalLink } from '../openExternal'
 import { showToast } from '../toast'
 import NavIcon from './NavIcon.vue'
+import PasswordField from './PasswordField.vue'
 
 defineProps({
   title: { type: String, default: '密码管理器' },
@@ -37,6 +38,7 @@ const tab = ref('all')
 const shown = ref({})
 const form = ref(null)
 const passwordDraft = ref('')
+const confirmDraft = ref('')
 const busy = ref(false)
 
 const filtered = computed(() => {
@@ -85,6 +87,16 @@ async function enterPage() {
 }
 
 async function submitPassword() {
+  if (!privacy.value.vault_set) {
+    if (passwordDraft.value.length < 12) {
+      showToast('主密码至少 12 位')
+      return
+    }
+    if (passwordDraft.value !== confirmDraft.value) {
+      showToast('两次输入不一致')
+      return
+    }
+  }
   busy.value = true
   try {
     if (!privacy.value.vault_set) {
@@ -93,6 +105,7 @@ async function submitPassword() {
       await unlockVault(passwordDraft.value)
     }
     passwordDraft.value = ''
+    confirmDraft.value = ''
     await refreshPrivacy()
     await loadVault()
   } catch (error) {
@@ -243,8 +256,8 @@ async function moveEntry(entry) {
 
 function onMenu(event, entry) {
   showMenu(event, [
-    { label: '一键置顶', onClick: async () => { await pinVaultEntryTop(entry.id); await loadVault() } },
-    { label: entry.pinned ? '取消真置顶' : '真置顶', onClick: async () => { await updateVaultEntry(entry.id, { pinned: !entry.pinned }); await loadVault() } },
+    { label: '移到最前', onClick: async () => { await pinVaultEntryTop(entry.id); await loadVault() } },
+    { label: entry.pinned ? '取消置顶' : '置顶', onClick: async () => { await updateVaultEntry(entry.id, { pinned: !entry.pinned }); await loadVault() } },
     { label: entry.locked ? '解锁' : '锁定', onClick: async () => { await updateVaultEntry(entry.id, { locked: !entry.locked }); shown.value = { ...shown.value, [entry.id]: false }; await loadVault() } },
     { label: shown.value[entry.id] ? '隐藏密码' : '显示密码', disabled: entry.locked, onClick: () => toggleShow(entry) },
     { label: '移动', onClick: () => moveEntry(entry) },
@@ -260,6 +273,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   lockVault().catch(() => {})
   passwordDraft.value = ''
+  confirmDraft.value = ''
 })
 </script>
 
@@ -277,7 +291,8 @@ onBeforeUnmount(() => {
       <form v-if="!privacy.vault_unlocked" class="mt-8 flex max-w-sm flex-col gap-2" @submit.prevent="submitPassword">
         <p class="text-sm text-ink/70">{{ privacy.vault_set ? '输入主密码解锁' : '第一次使用，设置主密码（至少 12 位）' }}</p>
         <p class="text-xs text-ink/45">忘记无法恢复。主密码只在本会话有效，关掉应用要重输。</p>
-        <input v-model="passwordDraft" type="password" autocomplete="current-password" class="wv-surface h-10 rounded border border-black/10 px-3 text-sm outline-none" :placeholder="privacy.vault_set ? '主密码' : '至少 12 位'" />
+        <PasswordField v-model="passwordDraft" :autocomplete="privacy.vault_set ? 'current-password' : 'new-password'" :placeholder="privacy.vault_set ? '主密码' : '至少 12 位'" />
+        <PasswordField v-if="!privacy.vault_set" v-model="confirmDraft" autocomplete="new-password" placeholder="再输入一次" />
         <button type="submit" class="h-10 rounded bg-ink text-sm text-white" :disabled="busy">{{ privacy.vault_set ? '解锁' : '设置并进入' }}</button>
       </form>
 
@@ -300,7 +315,7 @@ onBeforeUnmount(() => {
           <input v-model="form.name" class="h-9 rounded border border-black/10 px-2 outline-none" placeholder="命名" />
           <input v-model="form.url" class="h-9 rounded border border-black/10 px-2 outline-none" placeholder="网址（可选）" />
           <input v-model="form.username" class="h-9 rounded border border-black/10 px-2 outline-none" placeholder="账号" />
-          <input v-model="form.password" type="password" autocomplete="new-password" class="h-9 rounded border border-black/10 px-2 outline-none" placeholder="密码" />
+          <PasswordField v-model="form.password" autocomplete="new-password" placeholder="密码" />
           <textarea v-model="form.note" class="min-h-[4rem] rounded border border-black/10 px-2 py-1 outline-none" placeholder="备注 / 简介" />
           <select v-model.number="form.section_id" class="h-9 rounded border border-black/10 px-2 outline-none">
             <option v-for="section in sections" :key="section.id" :value="section.id">{{ section.name }}</option>
@@ -329,29 +344,36 @@ onBeforeUnmount(() => {
                 @update:model-value="(items) => { entries = entries.filter((entry) => entry.section_id !== section.id).concat(items); persistEntries(section) }"
               >
                 <template #item="{ element: entry }">
-                  <div class="py-2" @contextmenu="onMenu($event, entry)">
-                    <div class="flex flex-wrap items-center gap-2 text-sm">
-                      <button type="button" class="item-handle cursor-grab text-ink/30">⋮</button>
-                      <span v-if="entry.pinned" class="text-[10px] text-moss">置顶</span>
-                      <span v-if="entry.locked" class="text-[10px] text-ink/40">锁</span>
+                  <div class="wv-vault-item group" @contextmenu="onMenu($event, entry)">
+                    <div class="wv-vault-line">
+                      <button type="button" class="item-handle cursor-grab text-ink/30" title="拖动">⋮</button>
+                      <span class="wv-vault-marks" aria-hidden="true">
+                        <span v-if="entry.pinned" title="置顶">📌</span>
+                        <span v-if="entry.locked" title="锁定">🔒</span>
+                      </span>
                       <button
                         v-if="entry.url"
                         type="button"
-                        class="min-w-0 truncate font-medium text-aurora underline"
+                        class="wv-vault-name is-link"
+                        :title="entry.name"
                         @click="openUrl(entry)"
                       >
                         {{ entry.name }}
                       </button>
-                      <span v-else class="min-w-0 truncate font-medium text-ink">{{ entry.name }}</span>
-                      <span class="truncate text-xs text-ink/50">{{ entry.username }}</span>
-                      <button type="button" class="text-xs text-ink/45" @click="copyText(entry.username, '账号')">复制账号</button>
-                      <span class="font-mono text-xs">{{ entry.locked || !shown[entry.id] ? '••••••' : entry.password || '（空）' }}</span>
-                      <button type="button" class="text-xs text-ink/45" :disabled="entry.locked" @click="toggleShow(entry)">{{ shown[entry.id] ? '隐藏' : '显示' }}</button>
-                      <button type="button" class="text-xs text-ink/45" :disabled="entry.locked" @click="copyText(entry.password, '密码')">复制密码</button>
-                      <button type="button" class="text-xs text-ink/45" @click="startEdit(entry)">编辑</button>
-                      <button type="button" class="text-xs text-ember" @click="removeEntry(entry)">删除</button>
+                      <span v-else class="wv-vault-name" :title="entry.name">{{ entry.name }}</span>
+                      <span class="wv-vault-user" :title="entry.username || '没有账号'">{{ entry.username || '—' }}</span>
+                      <span class="wv-vault-secret" :title="shown[entry.id] && !entry.locked ? entry.password : '密码'">{{ entry.locked || !shown[entry.id] ? '••••••' : entry.password || '（空）' }}</span>
+                      <button type="button" class="wv-vault-copy" title="复制账号" @click="copyText(entry.username, '账号')">
+                        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M5 15V5h10" /></svg>
+                      </button>
+                      <button type="button" class="wv-vault-copy" title="复制密码" @click="copyText(entry.password, '密码')">
+                        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="10" width="10" height="8" rx="1.5" /><path d="M9 10V8a3 3 0 016 0v2" /></svg>
+                      </button>
+                      <button type="button" class="wv-vault-eye" title="显示密码" :disabled="entry.locked" @click="toggleShow(entry)">{{ shown[entry.id] && !entry.locked ? '隐' : '眼' }}</button>
+                      <button type="button" class="wv-vault-edit" title="编辑" @click="startEdit(entry)">改</button>
+                      <button type="button" class="wv-vault-edit is-danger" title="删除" @click="removeEntry(entry)">删</button>
                     </div>
-                    <p v-if="entry.note" class="ml-6 mt-0.5 text-xs text-ink/45">{{ entry.note }}</p>
+                    <p v-if="entry.note" class="wv-vault-note" :title="entry.note">{{ entry.note }}</p>
                   </div>
                 </template>
               </draggable>

@@ -22,7 +22,7 @@ BARS = {"push", "overlay", "stack"}
 DEFAULT = {
     "theme": "warm",
     "bar": "push",
-    "player": "bottom",
+    "player": "corner",
     "low_power": False,
     "global_image": "",
     "global_video": "",
@@ -43,8 +43,12 @@ def load_settings() -> dict:
         merged["theme"] = "warm"
     if merged["bar"] not in BARS:
         merged["bar"] = "push"
-    if merged.get("player") not in {"top", "bottom", "corner"}:
-        merged["player"] = "bottom"
+    player = merged.get("player")
+    if player == "top":
+        player = "side"
+    if player not in {"bottom", "corner", "side"}:
+        player = "corner"
+    merged["player"] = player
     merged["low_power"] = bool(merged.get("low_power"))
     groups = merged.get("groups") if isinstance(merged.get("groups"), dict) else {}
     merged["groups"] = {str(key): str(value) for key, value in groups.items() if value}
@@ -67,7 +71,7 @@ def save_settings(data: dict) -> dict:
         current["theme"] = data["theme"]
     if "bar" in data and data["bar"] in BARS:
         current["bar"] = data["bar"]
-    if data.get("player") in {"top", "bottom", "corner"}:
+    if data.get("player") in {"bottom", "corner", "side"}:
         current["player"] = data["player"]
     if "low_power" in data:
         current["low_power"] = bool(data["low_power"])

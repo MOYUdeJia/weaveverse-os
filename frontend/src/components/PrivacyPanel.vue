@@ -7,45 +7,83 @@ import {
   purgeUnusedAttachments,
   setBackupPassword,
   setVaultPassword,
+  unlockBackup,
+  unlockVault,
 } from '../api/client'
+import PasswordField from './PasswordField.vue'
 import { showToast } from '../toast'
 
 const emit = defineEmits(['change'])
 
 const status = ref({ vault_set: false, backup_set: false })
-const vaultPassword = ref('')
-const vaultCurrent = ref('')
-const backupPassword = ref('')
-const backupCurrent = ref('')
 const unused = ref([])
 const scanned = ref(false)
+const vault = ref(blankForm())
+const backup = ref(blankForm())
+
+function blankForm() {
+  return { open: false, current: '', verified: false, next: '', again: '' }
+}
 
 async function load() {
   status.value = await getPrivacy()
   emit('change', status.value)
 }
 
-async function saveVault() {
+function mismatch(form) {
+  if (form.next.length < 12) {
+    showToast('密码至少 12 位')
+    return true
+  }
+  if (form.next !== form.again) {
+    showToast('两次输入不一致')
+    return true
+  }
+  if (form.verified && form.next === form.current) {
+    showToast('新密码不能与当前密码相同')
+    return true
+  }
+  return false
+}
+
+async function verify(kind) {
+  const form = kind === 'vault' ? vault.value : backup.value
   try {
-    status.value = await setVaultPassword(vaultPassword.value, vaultCurrent.value)
-    vaultPassword.value = ''
-    vaultCurrent.value = ''
-    showToast(status.value.vault_set ? '主密码已保存' : '主密码已设置')
-    emit('change', status.value)
+    if (kind === 'vault') {
+      await unlockVault(form.current)
+    } else {
+      await unlockBackup(form.current)
+    }
+    form.verified = true
   } catch (error) {
-    showToast(error.message || '主密码没有保存')
+    showToast(error.message || '密码不对')
   }
 }
 
-async function saveBackup() {
+async function save(kind) {
+  const form = kind === 'vault' ? vault.value : backup.value
+  const already = kind === 'vault' ? status.value.vault_set : status.value.backup_set
+  if (already && !form.verified) {
+    showToast('先验证原密码')
+    return
+  }
+  if (mismatch(form)) {
+    return
+  }
   try {
-    status.value = await setBackupPassword(backupPassword.value, backupCurrent.value)
-    backupPassword.value = ''
-    backupCurrent.value = ''
-    showToast('备份密码已保存')
+    const next = kind === 'vault'
+      ? await setVaultPassword(form.next, already ? form.current : '')
+      : await setBackupPassword(form.next, already ? form.current : '')
+    status.value = next
+    if (kind === 'vault') {
+      vault.value = blankForm()
+    } else {
+      backup.value = blankForm()
+    }
+    showToast(already ? '修改成功' : '已设置')
     emit('change', status.value)
   } catch (error) {
-    showToast(error.message || '备份密码没有保存')
+    showToast(error.message || '没有保存')
   }
 }
 
@@ -88,17 +126,45 @@ onMounted(() => {
       <h3 class="text-sm font-semibold text-ink">密码管理器主密码</h3>
       <p class="mt-1 text-xs text-ink/50">至少 12 位。忘记无法恢复。只在本次运行里记住，关掉应用要重输。</p>
       <p class="mt-1 text-xs text-moss">{{ status.vault_set ? '已设置' : '还没设置' }}</p>
-      <input v-if="status.vault_set" v-model="vaultCurrent" type="password" autocomplete="current-password" class="mt-2 h-9 w-full rounded border border-black/10 px-2 outline-none" placeholder="当前主密码" />
-      <input v-model="vaultPassword" type="password" autocomplete="new-password" class="mt-2 h-9 w-full rounded border border-black/10 px-2 outline-none" placeholder="新主密码，至少 12 位" />
-      <button type="button" class="mt-2 h-8 rounded bg-moss px-3 text-xs text-white" @click="saveVault">{{ status.vault_set ? '修改主密码' : '设置主密码' }}</button>
+      <div v-if="!status.vault_set" class="mt-2 grid gap-2">
+        <PasswordField v-model="vault.next" autocomplete="new-password" placeholder="新主密码，至少 12 位" />
+        <PasswordField v-model="vault.again" autocomplete="new-password" placeholder="再输入一次" />
+        <button type="button" class="h-8 w-fit rounded bg-moss px-3 text-xs text-white" @click="save('vault')">设置主密码</button>
+      </div>
+      <div v-else class="mt-2">
+        <button type="button" class="h-8 rounded border border-black/15 px-3 text-xs" @click="vault.open = !vault.open">修改密码</button>
+        <div v-if="vault.open" class="mt-2 grid gap-2">
+          <PasswordField v-model="vault.current" placeholder="原密码" />
+          <button type="button" class="h-8 w-fit rounded border border-black/15 px-3 text-xs" :disabled="vault.verified" @click="verify('vault')">验证</button>
+          <template v-if="vault.verified">
+            <PasswordField v-model="vault.next" autocomplete="new-password" placeholder="新密码" />
+            <PasswordField v-model="vault.again" autocomplete="new-password" placeholder="确认新密码" />
+            <button type="button" class="h-8 w-fit rounded bg-moss px-3 text-xs text-white" @click="save('vault')">提交</button>
+          </template>
+        </div>
+      </div>
     </section>
     <section>
       <h3 class="text-sm font-semibold text-ink">备份密码</h3>
       <p class="mt-1 text-xs text-ink/50">和主密码分开。备份时不用再输，恢复时要输。改密码不影响已经做好的备份文件。</p>
       <p class="mt-1 text-xs text-moss">{{ status.backup_set ? '已设置' : '还没设置' }}</p>
-      <input v-if="status.backup_set" v-model="backupCurrent" type="password" autocomplete="current-password" class="mt-2 h-9 w-full rounded border border-black/10 px-2 outline-none" placeholder="当前备份密码" />
-      <input v-model="backupPassword" type="password" autocomplete="new-password" class="mt-2 h-9 w-full rounded border border-black/10 px-2 outline-none" placeholder="新备份密码，至少 12 位" />
-      <button type="button" class="mt-2 h-8 rounded bg-moss px-3 text-xs text-white" @click="saveBackup">{{ status.backup_set ? '修改备份密码' : '设置备份密码' }}</button>
+      <div v-if="!status.backup_set" class="mt-2 grid gap-2">
+        <PasswordField v-model="backup.next" autocomplete="new-password" placeholder="新备份密码，至少 12 位" />
+        <PasswordField v-model="backup.again" autocomplete="new-password" placeholder="再输入一次" />
+        <button type="button" class="h-8 w-fit rounded bg-moss px-3 text-xs text-white" @click="save('backup')">设置备份密码</button>
+      </div>
+      <div v-else class="mt-2">
+        <button type="button" class="h-8 rounded border border-black/15 px-3 text-xs" @click="backup.open = !backup.open">修改密码</button>
+        <div v-if="backup.open" class="mt-2 grid gap-2">
+          <PasswordField v-model="backup.current" placeholder="原密码" />
+          <button type="button" class="h-8 w-fit rounded border border-black/15 px-3 text-xs" :disabled="backup.verified" @click="verify('backup')">验证</button>
+          <template v-if="backup.verified">
+            <PasswordField v-model="backup.next" autocomplete="new-password" placeholder="新密码" />
+            <PasswordField v-model="backup.again" autocomplete="new-password" placeholder="确认新密码" />
+            <button type="button" class="h-8 w-fit rounded bg-moss px-3 text-xs text-white" @click="save('backup')">提交</button>
+          </template>
+        </div>
+      </div>
     </section>
     <section>
       <h3 class="text-sm font-semibold text-ink">清理未使用附件</h3>

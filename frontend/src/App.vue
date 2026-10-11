@@ -50,7 +50,7 @@ const appearance = ref({
   low_power: false,
   global_image: '',
   global_video: '',
-  player: 'bottom',
+  player: 'corner',
   groups: {},
 })
 let confirmAction = null

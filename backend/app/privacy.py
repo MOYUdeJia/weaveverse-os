@@ -111,11 +111,14 @@ def set_password(kind: Kind, password: str, current: str = "") -> None:
     text = check_length(password)
     data = _load()
     stored = str(data.get(f"{kind}_hash") or "")
+    current_text = current.strip()
     if stored:
-        if not current:
+        if not current_text:
             raise PermissionError("请输入当前密码")
-        if not verify_password(stored, current):
+        if not verify_password(stored, current_text):
             raise PermissionError("当前密码不对")
+        if text == current_text:
+            raise ValueError("新密码不能与当前密码相同")
     data[f"{kind}_hash"] = hash_password(text)
     if kind == "vault":
         data["vault_kek_salt"] = os.urandom(16).hex()

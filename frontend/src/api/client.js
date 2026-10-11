@@ -251,10 +251,18 @@ export function listTracks() {
   return request('/music')
 }
 
-export function uploadTrack(file) {
+export function uploadTrack(file, listName = 'playlist') {
   const body = new FormData()
   body.append('file', file)
+  body.append('list', listName)
   return request('/music', { method: 'POST', body })
+}
+
+export function assignTrackList(filename, listName) {
+  return request('/music/list', {
+    method: 'POST',
+    body: JSON.stringify({ filename, list: listName }),
+  })
 }
 
 export function deleteTrack(filename) {

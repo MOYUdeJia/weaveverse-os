@@ -484,6 +484,254 @@ html[data-theme] .bg-dawn {
   accent-color: #3f6f57;
 }
 
+.wv-vault-line {
+  display: grid;
+  grid-template-columns: 14px 40px minmax(8rem, 1fr) 128px 84px 36px 36px 32px 28px 28px;
+  align-items: center;
+  column-gap: 6px;
+  min-height: 48px;
+}
+
+.wv-vault-marks {
+  display: flex;
+  min-height: 1em;
+  gap: 1px;
+  font-size: 12px;
+}
+
+.wv-vault-name {
+  overflow: hidden;
+  color: var(--wv-ink, #16201d);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wv-vault-name.is-link {
+  color: var(--wv-link, #2f6f9f);
+  text-decoration: underline;
+}
+
+.wv-vault-user,
+.wv-vault-secret {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--wv-ink, #16201d) 62%, transparent);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wv-vault-secret {
+  font-family: ui-monospace, monospace;
+}
+
+.wv-vault-copy,
+.wv-vault-eye {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--wv-dawn, #f4efe7) 55%, #3f6f57);
+  color: #fff;
+}
+
+.wv-vault-eye {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  color: color-mix(in srgb, var(--wv-ink, #16201d) 55%, transparent);
+  font-size: 11px;
+}
+
+.wv-vault-copy:hover,
+.wv-vault-eye:hover {
+  background: #3f6f57;
+  color: #fff;
+}
+
+.wv-vault-edit {
+  color: color-mix(in srgb, var(--wv-ink, #16201d) 45%, transparent);
+  font-size: 12px;
+  opacity: 0;
+}
+
+.wv-vault-item:hover .wv-vault-edit,
+.wv-vault-item:focus-within .wv-vault-edit {
+  opacity: 1;
+}
+
+.wv-vault-edit.is-danger:hover {
+  color: #b42318;
+}
+
+.wv-vault-note {
+  margin: 0 0 2px 60px;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--wv-ink, #16201d) 45%, transparent);
+  font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wv-orb-dock {
+  position: fixed;
+  z-index: 40;
+}
+
+.wv-orb-corner {
+  right: 16px;
+  bottom: 16px;
+}
+
+.wv-orb-bottom {
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.wv-orb-side {
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+}
+
+.wv-orb-stage {
+  position: relative;
+  width: 72px;
+  height: 72px;
+}
+
+.wv-orb-pad {
+  position: absolute;
+  inset: -50px;
+}
+
+.wv-orb-ball {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  width: 72px;
+  height: 72px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid rgba(22, 32, 29, 0.1);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wv-work, #fcfaf5) 90%, #3f6f57);
+  box-shadow: 0 10px 28px rgba(22, 32, 29, 0.18);
+}
+
+.wv-orb-title {
+  width: 52px;
+  overflow: hidden;
+  color: var(--wv-ink, #16201d);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.wv-orb-title span {
+  display: inline-block;
+  padding-left: 100%;
+  animation: wv-marquee 7s linear infinite;
+}
+
+.wv-orb-state {
+  color: color-mix(in srgb, var(--wv-ink, #16201d) 45%, transparent);
+  font-size: 9px;
+}
+
+.wv-orb-btn {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 2;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wv-work, #fcfaf5) 92%, transparent);
+  box-shadow: 0 6px 16px rgba(22, 32, 29, 0.16);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.wv-orb-stage.is-open .wv-orb-btn {
+  pointer-events: auto;
+}
+
+.wv-orb-vol {
+  display: block;
+}
+
+.wv-orb-vol > button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 999px;
+}
+
+.wv-orb-slider {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  width: 84px;
+  transform: translateX(-50%);
+  accent-color: #3f6f57;
+}
+
+.wv-orb-note {
+  position: absolute;
+  top: 4px;
+  left: 28px;
+  z-index: 4;
+  color: #3f6f57;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.wv-orb-panel {
+  position: absolute;
+  z-index: 1;
+  width: 280px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid rgba(22, 32, 29, 0.08);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--wv-work, #fcfaf5) 94%, transparent);
+  box-shadow: 0 12px 32px rgba(22, 32, 29, 0.16);
+}
+
+.wv-orb-corner .wv-orb-panel,
+.wv-orb-side .wv-orb-panel {
+  right: 84px;
+  bottom: 0;
+}
+
+.wv-orb-bottom .wv-orb-panel {
+  bottom: 84px;
+  left: 50%;
+  margin-left: -140px;
+}
+
+@keyframes wv-marquee {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
 @keyframes breathe {
   0%,
   100% {

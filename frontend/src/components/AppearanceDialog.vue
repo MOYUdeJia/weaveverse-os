@@ -175,11 +175,11 @@ async function clear(kind, groupId) {
         <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.bar === 'overlay' ? 'bg-ink text-white' : 'bg-white'" @click="setBar('overlay')">名字浮出</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.bar === 'stack' ? 'bg-ink text-white' : 'bg-white'" @click="setBar('stack')">图标在上</button>
       </div>
-      <p class="mt-4 text-xs text-ink/45">播放器位置</p>
+      <p class="mt-4 text-xs text-ink/45">悬浮球位置</p>
       <div class="mt-2 flex gap-2">
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'top' ? 'bg-ink text-white' : 'bg-white'" @click="setPlayer('top')">上方</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'bottom' || !appearance.player ? 'bg-ink text-white' : 'bg-white'" @click="setPlayer('bottom')">下方</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'corner' ? 'bg-ink text-white' : 'bg-white'" @click="setPlayer('corner')">右下</button>
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'corner' || !appearance.player ? 'bg-ink text-white' : 'bg-white'" @click="setPlayer('corner')">右下角</button>
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'bottom' ? 'bg-ink text-white' : 'bg-white'" @click="setPlayer('bottom')">正下方</button>
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'side' ? 'bg-ink text-white' : 'bg-white'" @click="setPlayer('side')">右侧中间</button>
       </div>
       <label class="mt-4 flex items-center gap-2 text-sm text-ink/80">
         <input type="checkbox" :checked="appearance.low_power" @change="setLowPower" />

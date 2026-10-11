@@ -933,3 +933,36 @@
   - 修改 `.gitignore`
   - 修改 `docs/VERSIONS.md`
 
+## M9 阶段 2 · 2026-10-11
+- **任务**：修好密码管理器的眼睛、确认密码和条目排版，并做音乐悬浮球。M9 收官。
+- **实现**：
+  - 密码框改成自己的眼睛。聚焦时出现，点外面后隐藏，再点回去会重新出现。系统自带的那只眼睛被关掉。
+  - 第一次设主密码和备份密码都要再输一次。设置里点「修改密码」在原处展开：先验证原密码，再填新密码和确认。新密码和原来一样会提示。
+  - 条目改成单行：名字最大、最亮，账号和密码列对齐，超长省略，账号悬停能看全。复制按钮是方块。编辑和删除悬停才出现。有简介才多一行。
+  - 右键改成「移到最前」和「置顶」。置顶显示 📌，锁定显示 🔒，都在名字前面。锁定后仍能复制密码，只是不能把明文显示出来。
+  - 播放器换成悬浮球。歌名在球里滚动。悬停时上一首、下一首、音量沿弧线展开。右下角、正下方、右侧中间可切换。播放方式在面板里循环。重启后从上次的歌、进度和是否在播接着来。
+- **技术架构**：弧线和面板用 GSAP 3（含 MotionPathPlugin）。节拍用 AnalyserNode，低频超过 128 且比上一帧高出 22 才弹出音符，170ms 内不连发，最多 6 个，向上约 72–96px、0.9 秒淡出。歌单写在 `music/index.json` 的 `list` 字段。播放进度只在本机 localStorage。
+- **与阶段 1 相比的变化**：
+  - 密码管理器能看、能改、锁定后仍能复制
+  - 细条播放器换成悬浮球
+- **已知问题**：
+  - 浏览器若拦住自动播放，重启后会停在上次进度，需要再点一次播放。
+  - 原来设成「上方」的播放器位置会变成「右侧中间」。
+  - 播客、我喜欢的、收藏要在面板里把曲子归进去，空歌单不会自己有内容。
+- **文件变更**：
+  - 新增 `frontend/src/components/PasswordField.vue`
+  - 修改 `frontend/src/components/VaultPanel.vue`
+  - 修改 `frontend/src/components/PrivacyPanel.vue`
+  - 修改 `frontend/src/components/BackupPanel.vue`
+  - 修改 `frontend/src/components/MusicDock.vue`
+  - 修改 `frontend/src/components/AppearanceDialog.vue`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/package.json`
+  - 修改 `frontend/package-lock.json`
+  - 修改 `backend/app/privacy.py`
+  - 修改 `backend/app/appearance.py`
+  - 修改 `backend/app/routes/music.py`
+  - 修改 `docs/VERSIONS.md`
+

@@ -9,6 +9,7 @@ import {
   restoreNamedBackup,
   unlockBackup,
 } from '../api/client'
+import PasswordField from './PasswordField.vue'
 import { showToast } from '../toast'
 
 const emit = defineEmits(['need-privacy'])
@@ -149,7 +150,7 @@ onMounted(() => {
     <button v-if="!backupSet" type="button" class="h-8 w-fit rounded bg-moss px-3 text-xs text-white" @click="emit('need-privacy')">去设置备份密码</button>
     <template v-else-if="!backupUnlocked">
       <p class="text-xs text-ink/50">应用重启后要再输一次备份密码，之后这次运行里备份不用再输。</p>
-      <input v-model="sessionPassword" type="password" autocomplete="current-password" class="wv-surface h-10 rounded border border-black/10 px-3 outline-none" placeholder="输入备份密码" />
+      <PasswordField v-model="sessionPassword" placeholder="输入备份密码" />
       <button type="button" class="h-8 w-fit rounded border border-black/15 px-3 text-xs" @click="unlockSession">记住到本次运行</button>
     </template>
     <input v-model="label" type="text" class="wv-surface h-10 rounded border border-black/10 px-3 outline-none" placeholder="可选命名，例如 十月版本" />
@@ -167,7 +168,7 @@ onMounted(() => {
       <input v-model="restoreName" type="radio" :value="item.filename" />
       <span>{{ item.label || '（无命名）' }} · {{ item.time }} · {{ sizeLabel(item.size) }}</span>
     </label>
-    <input v-model="restorePassword" type="password" autocomplete="current-password" class="wv-surface h-10 rounded border border-black/10 px-3 outline-none" placeholder="恢复时输入密码" />
+    <PasswordField v-model="restorePassword" placeholder="恢复时输入密码" />
     <button type="button" class="h-9 w-fit rounded border border-black/15 px-3 text-xs" :disabled="busy" @click="restoreNamed">恢复所选备份</button>
     <p class="mt-2 text-xs text-ink/40">也可以从别处选一个旧的 .wvbak</p>
     <input type="file" accept=".wvbak" @change="file = $event.target.files?.[0] || null" />

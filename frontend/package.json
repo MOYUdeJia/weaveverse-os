@@ -26,6 +26,7 @@
     "cropperjs": "1.6.2",
     "dompurify": "3.2.6",
     "fabric": "6.7.1",
+    "gsap": "^3.13.0",
     "marked": "15.0.12",
     "vue": "3.5.43",
     "vuedraggable": "4.1.0"
