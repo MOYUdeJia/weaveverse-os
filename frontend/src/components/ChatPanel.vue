@@ -1,7 +1,8 @@
 <script setup>
 import { nextTick, ref, watch } from 'vue'
 
-import { getAiSettings, streamAiChat } from '../api/client'
+import { getAiSettings, speakText, streamAiChat, transcribeSpeech } from '../api/client'
+import { showToast } from '../toast'
 
 const props = defineProps({
   open: {
@@ -19,6 +20,11 @@ const modelName = ref('')
 const hasKey = ref(false)
 const loaded = ref(false)
 const list = ref(null)
+const listening = ref(false)
+const player = ref(null)
+let recorder = null
+let recordChunks = []
+let recordStream = null
 
 watch(
   () => props.open,
@@ -97,6 +103,113 @@ async function send() {
   await talk(messages.value.length - 1, null)
 }
 
+function encodeWav(audioBuffer) {
+  const rate = 16000
+  const duration = audioBuffer.duration
+  const length = Math.floor(duration * rate)
+  const channel = audioBuffer.getChannelData(0)
+  const samples = new Int16Array(length)
+  for (let index = 0; index < length; index += 1) {
+    const source = Math.floor((index * audioBuffer.sampleRate) / rate)
+    const value = Math.max(-1, Math.min(1, channel[source] || 0))
+    samples[index] = value < 0 ? value * 0x8000 : value * 0x7fff
+  }
+  const buffer = new ArrayBuffer(44 + samples.length * 2)
+  const view = new DataView(buffer)
+  const write = (offset, text) => {
+    for (let index = 0; index < text.length; index += 1) {
+      view.setUint8(offset + index, text.charCodeAt(index))
+    }
+  }
+  write(0, 'RIFF')
+  view.setUint32(4, 36 + samples.length * 2, true)
+  write(8, 'WAVE')
+  write(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, rate, true)
+  view.setUint32(28, rate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  write(36, 'data')
+  view.setUint32(40, samples.length * 2, true)
+  new Int16Array(buffer, 44).set(samples)
+  return new Blob([buffer], { type: 'audio/wav' })
+}
+
+async function startMic(event) {
+  event.preventDefault()
+  event.currentTarget.setPointerCapture?.(event.pointerId)
+  if (listening.value) {
+    return
+  }
+  recordChunks = []
+  try {
+    recordStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  } catch {
+    showToast('没有拿到麦克风')
+    return
+  }
+  recorder = new MediaRecorder(recordStream)
+  recorder.ondataavailable = (item) => {
+    if (item.data.size) {
+      recordChunks.push(item.data)
+    }
+  }
+  recorder.start()
+  listening.value = true
+  showToast('正在录音。松开后识别，第一次会下载模型')
+}
+
+async function stopMic() {
+  if (!recorder || !listening.value) {
+    return
+  }
+  listening.value = false
+  const finished = new Promise((resolve) => {
+    recorder.onstop = resolve
+  })
+  recorder.stop()
+  recordStream?.getTracks().forEach((track) => track.stop())
+  await finished
+  const blob = new Blob(recordChunks, { type: recorder.mimeType || 'audio/webm' })
+  try {
+    const context = new AudioContext()
+    const decoded = await context.decodeAudioData(await blob.arrayBuffer())
+    const wav = encodeWav(decoded)
+    await context.close()
+    const result = await transcribeSpeech(wav)
+    if (result.text) {
+      draft.value = `${draft.value} ${result.text}`.trim()
+    }
+  } catch (error) {
+    showToast(error.message || '识别失败。如果是第一次，模型可能还在下载。')
+  }
+}
+
+async function readAloud(message) {
+  if (!message.content) {
+    return
+  }
+  if (player.value) {
+    player.value.pause()
+    player.value = null
+    return
+  }
+  try {
+    const blob = await speakText(message.content)
+    const audio = new Audio(URL.createObjectURL(blob))
+    player.value = audio
+    audio.onended = () => {
+      player.value = null
+    }
+    await audio.play()
+  } catch (error) {
+    showToast(error.message || '朗读失败')
+  }
+}
+
 function decide(message, approved) {
   const index = messages.value.indexOf(message)
   const confirm = message.confirm
@@ -133,10 +246,24 @@ function decide(message, approved) {
             </div>
           </div>
           <button v-if="message.link" type="button" class="mt-1 text-xs text-moss" @click="emit('open-nav', message.link)">前往查看</button>
+          <button v-if="message.role === 'assistant' && message.content" type="button" class="mt-1 block text-xs text-ink/50" @click="readAloud(message)">
+            {{ player ? '停止' : '朗读' }}
+          </button>
         </div>
       </div>
     </div>
     <form class="flex gap-2 border-t border-black/10 p-3" @submit.prevent="send">
+      <button
+        type="button"
+        class="h-10 w-10 shrink-0 rounded-full text-sm"
+        :class="listening ? 'bg-ember text-white' : 'wv-chip'"
+        title="按住说话"
+        @pointerdown="startMic"
+        @pointerup="stopMic"
+        @pointercancel="stopMic"
+      >
+        麦
+      </button>
       <input v-model="draft" class="wv-chip h-10 min-w-0 flex-1 rounded px-3 text-sm outline-none" placeholder="输入消息" />
       <button type="submit" class="h-10 rounded bg-moss px-3 text-sm text-white" :disabled="sending">发送</button>
     </form>

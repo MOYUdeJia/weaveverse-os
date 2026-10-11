@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 
-import { getAiSettings, saveAiSettings, testAiConnection } from '../api/client'
+import { getAiSettings, getVoiceSettings, saveAiSettings, saveVoiceSettings, testAiConnection } from '../api/client'
 import { showToast } from '../toast'
 
 const providers = ref([])
@@ -12,6 +12,11 @@ const model = ref('')
 const apiKey = ref('')
 const hasKey = ref(false)
 const busy = ref(false)
+const sttModel = ref('base')
+const ttsVoice = ref('zh-CN-XiaoxiaoNeural')
+const ttsRate = ref(1)
+const voiceList = ref([])
+const modelList = ref(['base', 'small', 'medium'])
 
 const current = computed(() => providers.value.find((item) => item.id === provider.value) || null)
 const keyLabel = computed(() => (apiKey.value.trim() ? '未保存' : hasKey.value ? '已保存' : '未保存'))
@@ -72,8 +77,23 @@ async function test() {
   }
 }
 
+async function loadVoice() {
+  const payload = await getVoiceSettings()
+  sttModel.value = payload.stt_model || 'base'
+  ttsVoice.value = payload.tts_voice || voiceList.value[0] || 'zh-CN-XiaoxiaoNeural'
+  ttsRate.value = payload.tts_rate || 1
+  voiceList.value = payload.voices || []
+  modelList.value = payload.models || modelList.value
+}
+
+async function saveVoice() {
+  await saveVoiceSettings({ stt_model: sttModel.value, tts_voice: ttsVoice.value, tts_rate: Number(ttsRate.value) })
+  showToast('语音设置已保存')
+}
+
 onMounted(() => {
   load().catch((error) => showToast(error.message || '无法加载 AI 设置'))
+  loadVoice().catch(() => {})
 })
 </script>
 
@@ -114,5 +134,17 @@ onMounted(() => {
       <button type="button" class="h-9 rounded bg-moss px-3 text-xs text-white" :disabled="busy" @click="save">保存</button>
       <button type="button" class="wv-chip h-9 rounded px-3 text-xs" :disabled="busy || keyLabel !== '已保存' && !apiKey" @click="test">测试连接</button>
     </div>
+    <p class="mt-2 text-xs text-ink/55">语音</p>
+    <label class="text-xs text-ink/55">识别模型</label>
+    <select v-model="sttModel" class="wv-surface h-10 rounded border border-black/10 px-2 text-sm">
+      <option v-for="name in modelList" :key="name" :value="name">{{ name }}</option>
+    </select>
+    <label class="text-xs text-ink/55">朗读声音</label>
+    <select v-model="ttsVoice" class="wv-surface h-10 rounded border border-black/10 px-2 text-sm">
+      <option v-for="name in voiceList" :key="name" :value="name">{{ name }}</option>
+    </select>
+    <label class="text-xs text-ink/55">语速 {{ ttsRate }}</label>
+    <input v-model="ttsRate" type="range" min="0.5" max="1.5" step="0.1" />
+    <button type="button" class="h-9 rounded bg-moss px-3 text-xs text-white" @click="saveVoice">保存语音</button>
   </div>
 </template>

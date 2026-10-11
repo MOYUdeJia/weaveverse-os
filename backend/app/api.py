@@ -10,6 +10,7 @@ from app.routes.appearance import router as appearance_router
 from app.routes.blocks import router as blocks_router
 from app.routes.inbox import router as inbox_router
 from app.routes.search import router as search_router
+from app.routes.backup import router as backup_router
 from app.routes.books import router as books_router
 from app.routes.groups import router as groups_router
 from app.routes.icons import router as icons_router
@@ -18,6 +19,8 @@ from app.routes.music import router as music_router
 from app.routes.nav import router as nav_router
 from app.routes.page_types import router as page_types_router
 from app.routes.photos import router as photos_router
+from app.routes.remote import router as remote_router
+from app.routes.speech import router as speech_router
 from app.routes.templates import router as templates_router
 
 
@@ -45,6 +48,9 @@ router.include_router(inbox_router)
 router.include_router(photos_router)
 router.include_router(ai_router)
 router.include_router(ideas_router)
+router.include_router(speech_router)
+router.include_router(remote_router)
+router.include_router(backup_router)
 
 
 @router.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

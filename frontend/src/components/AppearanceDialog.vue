@@ -3,6 +3,8 @@ import { computed, ref, watch } from 'vue'
 
 import { backgroundUrl, clearBackground, updateAppearance, uploadBackground } from '../api/client'
 import AiSettings from './AiSettings.vue'
+import BackupPanel from './BackupPanel.vue'
+import RemotePanel from './RemotePanel.vue'
 
 const THEMES = [
   { id: 'warm', label: '暖白', swatch: '#f4efe7' },
@@ -143,8 +145,12 @@ async function clear(kind, groupId) {
       <div class="mb-4 flex gap-2">
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'look' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'look'">外观</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'ai' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'ai'">AI</button>
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'remote' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'remote'">远程</button>
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'backup' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'backup'">备份</button>
       </div>
       <AiSettings v-if="page === 'ai'" />
+      <RemotePanel v-else-if="page === 'remote'" />
+      <BackupPanel v-else-if="page === 'backup'" />
       <template v-else>
       <p class="text-xs text-ink/45">主题</p>
       <div class="mt-2 flex flex-wrap gap-2">

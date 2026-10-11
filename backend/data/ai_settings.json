@@ -5,5 +5,10 @@
       "base_url": "https://api.deepseek.com",
       "model": "deepseek-chat"
     }
+  },
+  "voice": {
+    "stt_model": "base",
+    "tts_voice": "zh-CN-XiaoxiaoNeural",
+    "tts_rate": 1.0
   }
 }

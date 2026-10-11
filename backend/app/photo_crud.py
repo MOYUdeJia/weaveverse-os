@@ -111,9 +111,12 @@ def update_album(
     name: str | None,
     is_private: bool | None,
     password: str | None,
+    color: str | None = None,
 ) -> PhotoAlbum:
     if name is not None:
         row.name = name
+    if color in ALBUM_COLORS:
+        row.color = color
     if is_private is True:
         if not password:
             raise ValueError("请设置密码")

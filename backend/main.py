@@ -22,7 +22,7 @@ import webview
 
 from app import book_crud
 from app.book_files import original_path
-from app.config import BACKEND_DIR, DATABASE_PATH, DATA_DIR, DEV_SERVER_URL, HOST, MIN_HEIGHT, MIN_WIDTH, PORT_FILE, is_dev_mode
+from app.config import BACKEND_DIR, DATABASE_PATH, DATA_DIR, DEV_SERVER_URL, HOST, MIN_HEIGHT, MIN_WIDTH, PORT_FILE, WINDOW_HOST, is_dev_mode
 from app.db import engine
 from app.seed import seed_initial_nav_items
 from app.static import create_app
@@ -239,7 +239,7 @@ def wait_until_ready(port: int, timeout_seconds: float = 8.0) -> None:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         try:
-            with socket.create_connection((HOST, port), timeout=0.25):
+            with socket.create_connection((WINDOW_HOST, port), timeout=0.25):
                 return
         except OSError:
             time.sleep(0.1)
@@ -291,7 +291,7 @@ def main() -> None:
         wait_until_url_accepts_connections(DEV_SERVER_URL)
         target_url = DEV_SERVER_URL
     else:
-        target_url = f"http://{HOST}:{server_port}"
+        target_url = f"http://{WINDOW_HOST}:{server_port}"
 
     window = webview.create_window(
         "Weaveverse OS",

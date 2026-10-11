@@ -6,7 +6,8 @@ import os
 from pathlib import Path
 
 
-HOST = "127.0.0.1"
+HOST = "0.0.0.0"
+WINDOW_HOST = "127.0.0.1"
 MIN_WIDTH = 1000
 MIN_HEIGHT = 700
 

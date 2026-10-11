@@ -530,3 +530,56 @@ export async function streamAiChat(messages, onEvent, resume = null) {
     }
   }
 }
+
+export function getVoiceSettings() {
+  return request('/speech/settings')
+}
+
+export function saveVoiceSettings(data) {
+  return request('/speech/settings', { method: 'PUT', body: JSON.stringify(data) })
+}
+
+export function transcribeSpeech(blob) {
+  const body = new FormData()
+  body.append('file', blob, 'speech.wav')
+  return request('/speech/transcribe', { method: 'POST', body })
+}
+
+export async function speakText(text) {
+  const response = await fetch(`${API_PREFIX}/speech/speak`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+  if (!response.ok) {
+    throw new Error('朗读失败。需要能访问微软语音服务。')
+  }
+  return response.blob()
+}
+
+export function getRemoteStatus() {
+  return request('/remote')
+}
+
+export function getBackupInfo() {
+  return request('/backup')
+}
+
+export async function exportBackup(password) {
+  const response = await fetch(`${API_PREFIX}/backup/export`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  })
+  if (!response.ok) {
+    throw new Error('备份没有做成')
+  }
+  return response.blob()
+}
+
+export function restoreBackup(file, password) {
+  const body = new FormData()
+  body.append('file', file)
+  body.append('password', password)
+  return request('/backup/restore', { method: 'POST', body })
+}

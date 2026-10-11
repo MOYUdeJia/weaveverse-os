@@ -76,6 +76,7 @@ def update_album(album_id: int, data: AlbumUpdate, session: Session = Depends(ge
             name=data.name,
             is_private=data.is_private,
             password=None if data.password is None else data.password.strip(),
+            color=data.color,
         )
     except ValueError as exc:
         raise_api_error(400, "password", str(exc))

@@ -52,6 +52,7 @@ const albumName = ref('')
 const albumPrivate = ref(false)
 const albumPassword = ref('')
 const albumColor = ref('#3f6f57')
+const colorAlbum = ref(null)
 const ungrouped = ref(false)
 const albumColors = ['#c45454', '#e08a7a', '#d77245', '#e2b340', '#8a8f3a', '#3f6f57', '#7aaa78', '#3ca1b0', '#2f7a78', '#5c79a8', '#3d5278', '#7a4e7a', '#c47a96', '#8a6a4a', '#6e7570', '#2c3330']
 const renameDraft = ref('')
@@ -336,6 +337,15 @@ async function persistAlbumOrder() {
   }
 }
 
+async function paintAlbum(color) {
+  if (!colorAlbum.value) {
+    return
+  }
+  await updateAlbum(colorAlbum.value.id, { color })
+  colorAlbum.value = null
+  await loadAlbums()
+}
+
 async function renameAlbum() {
   if (!activeAlbum.value) {
     return
@@ -592,6 +602,7 @@ onBeforeUnmount(() => {
 
       <div v-if="activeAlbum" class="mt-3 flex flex-wrap gap-2 text-xs">
         <button type="button" class="wv-chip rounded px-2 py-1" @click="renameAlbum">改相册名</button>
+        <button type="button" class="wv-chip rounded px-2 py-1" @click="colorAlbum = activeAlbum">改颜色</button>
         <button type="button" class="wv-chip rounded px-2 py-1" @click="markPrivate">{{ activeAlbum.is_private ? '重设密码' : '设为隐私' }}</button>
         <button v-if="activeAlbum.is_private" type="button" class="wv-chip rounded px-2 py-1" @click="clearPrivate">取消隐私</button>
         <button type="button" class="rounded px-2 py-1 text-ember" @click="removeAlbum">删除相册</button>
@@ -756,6 +767,15 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+    <div v-if="colorAlbum" class="fixed inset-0 z-[60] grid place-items-center bg-black/40 px-4" @click.self="colorAlbum = null">
+      <div class="wv-surface w-full max-w-sm rounded-md p-4 shadow-2xl">
+        <p class="text-sm font-medium">相册颜色</p>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button v-for="swatch in albumColors" :key="swatch" type="button" class="h-6 w-6 rounded-full" :style="{ background: swatch }" @click="paintAlbum(swatch)" />
+        </div>
+        <button type="button" class="mt-3 h-8 px-3 text-xs text-ink/55" @click="colorAlbum = null">取消</button>
+      </div>
+    </div>
     <div v-if="albumOpen" class="fixed inset-0 z-[60] grid place-items-center bg-black/40 px-4" @click.self="albumOpen = false">
       <form class="wv-surface w-full max-w-sm rounded-md p-4 shadow-2xl" @submit.prevent="makeAlbum">
         <p class="text-sm font-medium">新建相册</p>
@@ -770,7 +790,7 @@ onBeforeUnmount(() => {
         <input v-if="albumPrivate" v-model="albumPassword" type="password" class="wv-chip mt-2 h-10 w-full rounded px-3 text-sm outline-none" placeholder="密码至少 4 位" />
         <div class="mt-4 flex justify-end gap-2">
           <button type="button" class="h-8 rounded px-3 text-xs" @click="albumOpen = false">取消</button>
-          <button type="submit" class="h-8 rounded bg-moss px-3 text-xs text-white">创建</button>
+          <button type="submit" class="h-8 rounded bg-moss px-3 text-xs text-white" :disabled="!albumName.trim()">创建</button>
         </div>
       </form>
     </div>

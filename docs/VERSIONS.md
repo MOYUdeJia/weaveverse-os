@@ -848,3 +848,44 @@
   - 修改 `frontend/src/components/WorkspacePanel.vue`
   - 修改 `docs/VERSIONS.md`
 
+## M8 阶段 5 · 2026-10-11
+- **任务**：本地语音识别和朗读、Tailscale 远程访问、加密备份。M8 收官。
+- **实现**：
+  - 聊天里按住「麦」录音，松开后用 faster-whisper 的 base 模型转成文字，填进输入框。模型放在 `backend/data/whisper_models/`。第一次使用才会下载。
+  - AI 回复旁有「朗读」，用 edge-tts，默认 `zh-CN-XiaoxiaoNeural`。可停止。设置里能换识别模型、朗读声音和语速。
+  - 设置里有「远程」页：读 Tailscale 是否安装、是否登录，显示 `100.x` 地址、手机访问链接、二维码和复制。不改 Tailscale 配置。服务监听 `0.0.0.0`，窗口仍打开 `127.0.0.1`。
+  - 设置里有「备份 / 恢复」。主密码不保存。备份是 `.wvbak`。恢复前确认，并先把当前数据复制到 `backend/data/safety/`。不含语音模型和钥匙串里的 Key。
+  - 新建相册名为空时不能创建。相册可以改颜色。
+- **技术架构**：识别用 faster-whisper（CPU、int8），不用 whisper.cpp 命令行，也不用 pywhispercpp。朗读用 edge-tts，要联网，不要 Key。密钥用 Argon2id（time=3，memory=64MiB，parallelism=4）派生 32 字节，再用 AES-GCM。文件头是 `WVBK`、版本 1、16 字节盐、12 字节 nonce，后面是密文。
+- **与阶段 4 相比的变化**：
+  - 聊天可以说话和朗读
+  - 同一 Tailscale 账号的手机可以打开本机
+  - 数据可以加密导出再恢复
+- **已知问题**：
+  - 自动每周备份没做。
+  - 恢复后需要手动关掉窗口再打开，程序不会自己重启。
+  - 识别模型要等依赖装好，并且第一次说话时才会下载。
+  - M9 的密码管理器和音乐悬浮球没做。
+- **文件变更**：
+  - 新增 `backend/app/speech.py`
+  - 新增 `backend/app/remote_status.py`
+  - 新增 `backend/app/backup_file.py`
+  - 新增 `backend/app/routes/speech.py`
+  - 新增 `backend/app/routes/remote.py`
+  - 新增 `backend/app/routes/backup.py`
+  - 新增 `frontend/src/components/RemotePanel.vue`
+  - 新增 `frontend/src/components/BackupPanel.vue`
+  - 修改 `backend/app/config.py`
+  - 修改 `backend/main.py`
+  - 修改 `backend/app/api.py`
+  - 修改 `backend/app/photo_crud.py`
+  - 修改 `backend/app/routes/photos.py`
+  - 修改 `backend/requirements.txt`
+  - 修改 `.gitignore`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/components/ChatPanel.vue`
+  - 修改 `frontend/src/components/AiSettings.vue`
+  - 修改 `frontend/src/components/AppearanceDialog.vue`
+  - 修改 `frontend/src/components/PhotoLibraryPanel.vue`
+  - 修改 `docs/VERSIONS.md`
+
