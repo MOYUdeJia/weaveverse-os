@@ -15,7 +15,11 @@ from app.backup_file import (
     write_backup,
 )
 from app.errors import raise_api_error
+from sqlmodel import Session
+
+from app.db import engine
 from app.privacy import require_session, status as privacy_status
+from app import vault_crud
 
 router = APIRouter(prefix="/backup", tags=["backup"])
 
@@ -26,7 +30,7 @@ class BackupNow(BaseModel):
 
 class BackupRestoreNamed(BaseModel):
     filename: str = Field(min_length=1, max_length=200)
-    password: str = Field(min_length=1, max_length=200)
+    password: str = Field(default="", max_length=200)
 
 
 class BackupDelete(BaseModel):
@@ -38,6 +42,7 @@ def backup_info() -> dict:
     return {
         "last_backup_at": last_backup_at(),
         "items": list_backups(),
+        "security_set": privacy_status()["security_set"],
         "backup_set": privacy_status()["backup_set"],
         "backup_unlocked": privacy_status()["backup_unlocked"],
     }
@@ -54,25 +59,39 @@ def export_backup(data: BackupNow) -> dict:
             field = "backup"
         raise_api_error(409, field, message)
     try:
-        result = write_backup(password, data.label)
+        with Session(engine) as session:
+            plain = vault_crud.export_plaintext(session, password)
+        result = write_backup(password, data.label, plain)
+    except ValueError as exc:
+        raise_api_error(400, "backup", str(exc))
     except Exception:
         raise_api_error(500, "backup", "备份没有做成")
     return result
 
 
-@router.post("/restore")
-async def import_backup(file: UploadFile, password: str = Form()) -> dict:
-    blob = await file.read()
+def _restore(blob: bytes, file_password: str) -> dict:
     try:
-        payload = decrypt_backup(blob, password)
-        restore_zip(payload)
+        current = require_session("backup")
+    except PermissionError as exc:
+        raise_api_error(409, "password", str(exc))
+    opener = file_password.strip() or current
+    try:
+        payload = decrypt_backup(blob, opener)
+        restore_zip(payload, current, opener)
     except ValueError as exc:
         raise_api_error(400, "password", str(exc))
     except Exception:
         raise_api_error(500, "backup", "恢复没有完成")
+    return {"ok": True, "restart": True}
+
+
+@router.post("/restore")
+async def import_backup(file: UploadFile, password: str = Form(default="")) -> dict:
+    blob = await file.read()
+    try:
+        return _restore(blob, password)
     finally:
         password = ""
-    return {"ok": True, "restart": True}
 
 
 @router.post("/restore-named")
@@ -84,15 +103,9 @@ def restore_named(data: BackupRestoreNamed) -> dict:
     if not path.is_file():
         raise_api_error(404, "filename", "找不到这个备份")
     try:
-        payload = decrypt_backup(path.read_bytes(), data.password)
-        restore_zip(payload)
-    except ValueError as exc:
-        raise_api_error(400, "password", str(exc))
-    except Exception:
-        raise_api_error(500, "backup", "恢复没有完成")
+        return _restore(path.read_bytes(), data.password)
     finally:
         data.password = ""
-    return {"ok": True, "restart": True}
 
 
 @router.post("/delete")

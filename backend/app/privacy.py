@@ -1,7 +1,8 @@
-"""Privacy passwords for the vault and for backups.
+"""One security password for the vault and for backups.
 
-Stores Argon2 hashes and a vault key-derivation salt in privacy.json.
-Plaintext passwords stay in process memory for the current session only.
+The Argon2id hash and the key-derivation salt live in privacy.json.
+Plaintext stays in process memory for this session only.
+Opening the vault and opening backup are separate unlocks, but they check the same secret.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from app.crypto import hash_password, verify_password
 Kind = Literal["vault", "backup"]
 
 PRIVACY_PATH = DATA_DIR / "privacy.json"
-MIN_PASSWORD = 12
+MIN_PASSWORD = 8
 MAX_PASSWORD = 200
 
 _session: dict[str, str | None] = {"vault": None, "backup": None}
@@ -27,7 +28,19 @@ def _load() -> dict:
         data = json.loads(PRIVACY_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+    legacy = any(key in data for key in ("backup_hash", "vault_hash", "vault_kek_salt"))
+    if data.get("vault_hash") and not data.get("security_hash"):
+        data["security_hash"] = data["vault_hash"]
+    if data.get("vault_kek_salt") and not data.get("security_salt"):
+        data["security_salt"] = data["vault_kek_salt"]
+    if legacy:
+        data.pop("backup_hash", None)
+        data.pop("vault_hash", None)
+        data.pop("vault_kek_salt", None)
+        _save(data)
+    return data
 
 
 def _save(data: dict) -> None:
@@ -44,40 +57,67 @@ def check_length(password: str) -> str:
     return text
 
 
-def vault_secret() -> dict | None:
+def _hash(data: dict) -> str:
+    return str(data.get("security_hash") or "")
+
+
+def _salt(data: dict) -> str:
+    return str(data.get("security_salt") or "")
+
+
+def security_material() -> tuple[str, str] | None:
     data = _load()
-    stored = str(data.get("vault_hash") or "")
-    salt = str(data.get("vault_kek_salt") or "")
+    stored = _hash(data)
+    salt = _salt(data)
     if not stored or not salt:
         return None
-    return {"vault_hash": stored, "vault_kek_salt": salt}
+    return stored, salt
 
 
-def keep_vault_secret(saved: dict | None) -> None:
+def security_secret() -> dict | None:
+    found = security_material()
+    if found is None:
+        return None
+    stored, salt = found
+    return {"security_hash": stored, "security_salt": salt}
+
+
+def vault_secret() -> dict | None:
+    return security_secret()
+
+
+def keep_security_secret(saved: dict | None) -> None:
     if not saved:
         return
     data = _load()
-    data["vault_hash"] = saved["vault_hash"]
-    data["vault_kek_salt"] = saved["vault_kek_salt"]
+    data["security_hash"] = saved["security_hash"]
+    data["security_salt"] = saved["security_salt"]
+    data.pop("vault_hash", None)
+    data.pop("vault_kek_salt", None)
+    data.pop("backup_hash", None)
     _save(data)
 
 
+def keep_vault_secret(saved: dict | None) -> None:
+    keep_security_secret(saved)
+
+
 def status() -> dict:
-    data = _load()
+    ready = security_material() is not None
     return {
-        "vault_set": bool(data.get("vault_hash")),
+        "security_set": ready,
+        "vault_set": ready,
         "vault_unlocked": _session["vault"] is not None,
-        "backup_set": bool(data.get("backup_hash")),
+        "backup_set": ready,
         "backup_unlocked": _session["backup"] is not None,
     }
 
 
 def vault_kek_salt() -> bytes:
-    data = _load()
-    raw = str(data.get("vault_kek_salt") or "")
-    if not raw:
-        raise RuntimeError("还没有设置主密码")
-    return bytes.fromhex(raw)
+    found = security_material()
+    if found is None:
+        raise RuntimeError("还没有设置安全密码")
+    return bytes.fromhex(found[1])
 
 
 def session_password(kind: Kind) -> str | None:
@@ -96,14 +136,23 @@ def restore_file(data: dict) -> None:
     _save(data)
 
 
+def write_security(password: str, salt: bytes) -> None:
+    data = _load()
+    data["security_hash"] = hash_password(password)
+    data["security_salt"] = salt.hex()
+    data.pop("vault_hash", None)
+    data.pop("vault_kek_salt", None)
+    data.pop("backup_hash", None)
+    _save(data)
+
+
 def require_session(kind: Kind) -> str:
     password = _session[kind]
     if password:
         return password
-    label = "主密码" if kind == "vault" else "备份密码"
-    if not status()[f"{kind}_set"]:
-        raise PermissionError(f"请先设置{label}")
-    raise PermissionError(f"请先输入{label}")
+    if security_material() is None:
+        raise PermissionError("请先设置安全密码")
+    raise PermissionError("请先输入安全密码")
 
 
 def lock(kind: Kind | None = None) -> None:
@@ -115,30 +164,10 @@ def lock(kind: Kind | None = None) -> None:
 
 
 def unlock(kind: Kind, password: str) -> None:
-    data = _load()
-    stored = str(data.get(f"{kind}_hash") or "")
-    if not stored:
-        raise PermissionError("还没有设置密码")
+    found = security_material()
+    if found is None:
+        raise PermissionError("还没有设置安全密码")
     text = password.strip()
-    if not verify_password(stored, text):
+    if not verify_password(found[0], text):
         raise PermissionError("密码不对")
-    _session[kind] = text
-
-
-def set_password(kind: Kind, password: str, current: str = "") -> None:
-    text = check_length(password)
-    data = _load()
-    stored = str(data.get(f"{kind}_hash") or "")
-    current_text = current.strip()
-    if stored:
-        if not current_text:
-            raise PermissionError("请输入当前密码")
-        if not verify_password(stored, current_text):
-            raise PermissionError("当前密码不对")
-        if text == current_text:
-            raise ValueError("新密码不能与当前密码相同")
-    data[f"{kind}_hash"] = hash_password(text)
-    if kind == "vault":
-        data["vault_kek_salt"] = os.urandom(16).hex()
-    _save(data)
     _session[kind] = text

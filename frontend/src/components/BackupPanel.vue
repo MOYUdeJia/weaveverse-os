@@ -20,18 +20,20 @@ const backupSet = ref(false)
 const backupUnlocked = ref(false)
 const label = ref('')
 const sessionPassword = ref('')
-const restorePassword = ref('')
+const oldPassword = ref('')
+const needOld = ref(false)
 const restoreName = ref('')
 const file = ref(null)
-const extras = ref([])
 const busy = ref(false)
+const loaded = ref(false)
 
 async function load() {
   const info = await getBackupInfo()
   last.value = info.last_backup_at || ''
   items.value = info.items || []
-  backupSet.value = Boolean(info.backup_set)
+  backupSet.value = Boolean(info.security_set ?? info.backup_set)
   backupUnlocked.value = Boolean(info.backup_unlocked)
+  loaded.value = true
 }
 
 async function unlockSession() {
@@ -39,7 +41,6 @@ async function unlockSession() {
     await unlockBackup(sessionPassword.value)
     sessionPassword.value = ''
     await load()
-    showToast('本会话已记住备份密码')
   } catch (error) {
     showToast(error.message || '密码不对')
   }
@@ -47,19 +48,18 @@ async function unlockSession() {
 
 async function download() {
   if (!backupSet.value) {
-    showToast('请先设置备份密码')
+    showToast('请先设置安全密码')
     emit('need-privacy')
     return
   }
   if (!backupUnlocked.value) {
-    showToast('重启后需要先输入备份密码')
+    showToast('请先输入安全密码')
     return
   }
   busy.value = true
   try {
     const result = await exportBackup(label.value.trim())
     label.value = ''
-    extras.value = result.extras || []
     showToast(`已备份到 ${result.path}`)
     await load()
   } catch (error) {
@@ -73,25 +73,32 @@ async function download() {
   }
 }
 
+function passwordError(error) {
+  const message = error.message || '恢复没有完成'
+  if (message.includes('密码不对') || message.includes('解不开')) {
+    needOld.value = true
+    showToast('这份备份要用当时的安全密码')
+    return
+  }
+  showToast(message)
+}
+
 async function restoreNamed() {
   if (!restoreName.value) {
     showToast('先选一个备份')
     return
   }
-  if (!restorePassword.value) {
-    showToast('恢复需要输入备份密码')
-    return
-  }
-  if (!window.confirm('当前数据会被覆盖。恢复前会把现有数据复制到 data/safety。继续吗？')) {
+  if (!window.confirm('当前数据会被覆盖。恢复前会留下最近 3 份后悔副本。继续吗？')) {
     return
   }
   busy.value = true
   try {
-    await restoreNamedBackup(restoreName.value, restorePassword.value)
-    restorePassword.value = ''
-    showToast('已恢复，请重启应用')
+    await restoreNamedBackup(restoreName.value, needOld.value ? oldPassword.value : '')
+    oldPassword.value = ''
+    needOld.value = false
+    showToast('已恢复，请重启')
   } catch (error) {
-    showToast(error.message || '密码不对')
+    passwordError(error)
   } finally {
     busy.value = false
   }
@@ -102,28 +109,27 @@ async function restoreFile() {
     showToast('先选择 .wvbak 文件')
     return
   }
-  if (!restorePassword.value) {
-    showToast('恢复需要输入备份密码')
-    return
-  }
-  if (!window.confirm('当前数据会被覆盖。恢复前会把现有数据复制到 data/safety。继续吗？')) {
+  if (!window.confirm('当前数据会被覆盖。恢复前会留下最近 3 份后悔副本。继续吗？')) {
     return
   }
   busy.value = true
   try {
-    await restoreBackup(file.value, restorePassword.value)
-    restorePassword.value = ''
-    showToast('已恢复，请重启应用')
+    await restoreBackup(file.value, needOld.value ? oldPassword.value : '')
+    oldPassword.value = ''
+    needOld.value = false
+    showToast('已恢复，请重启')
   } catch (error) {
-    showToast(error.message || '密码不对')
+    passwordError(error)
   } finally {
     busy.value = false
   }
 }
 
-async function dropExtra(filename) {
+async function removeItem(filename) {
   await deleteBackupFile(filename)
-  extras.value = extras.value.filter((item) => item.filename !== filename)
+  if (restoreName.value === filename) {
+    restoreName.value = ''
+  }
   await load()
 }
 
@@ -144,34 +150,36 @@ onMounted(() => {
 
 <template>
   <div class="grid gap-3 text-sm">
+    <p class="text-xs text-ink/70">使用备份/恢复需要输入安全密码，本次登陆有效</p>
     <p class="text-xs text-ink/50">上次备份：{{ last || '还没有' }}</p>
-    <p class="text-xs text-ink/60">备份会加密存到 data/backups。不含语音模型和钥匙串里的 Key。密码本身不会被保存。</p>
-    <p v-if="!backupSet" class="text-xs text-ember">还没有备份密码。</p>
-    <button v-if="!backupSet" type="button" class="h-8 w-fit rounded bg-moss px-3 text-xs text-white" @click="emit('need-privacy')">去设置备份密码</button>
-    <template v-else-if="!backupUnlocked">
-      <p class="text-xs text-ink/50">应用重启后要再输一次备份密码，之后这次运行里备份不用再输。</p>
-      <PasswordField v-model="sessionPassword" placeholder="输入备份密码" />
-      <button type="button" class="h-8 w-fit rounded border border-black/15 px-3 text-xs" @click="unlockSession">记住到本次运行</button>
+    <template v-if="loaded && !backupSet">
+      <p class="text-xs text-ember">请先设置安全密码</p>
+      <button type="button" class="h-8 w-fit rounded bg-moss px-3 text-xs text-white" @click="emit('need-privacy')">去设置安全密码</button>
     </template>
-    <input v-model="label" type="text" class="wv-surface h-10 rounded border border-black/10 px-3 outline-none" placeholder="可选命名，例如 十月版本" />
-    <button type="button" class="h-9 w-fit rounded bg-moss px-3 text-xs text-white" :disabled="busy" @click="download">立即备份</button>
-    <div v-if="extras.length" class="rounded border border-ember/30 p-2 text-xs">
-      <p>已超过最近 5 个。可以删掉更早的：</p>
-      <div v-for="item in extras" :key="item.filename" class="mt-1 flex items-center justify-between gap-2">
-        <span>{{ item.label || '（无命名）' }} · {{ item.time }}</span>
-        <button type="button" class="text-ember" @click="dropExtra(item.filename)">删除</button>
+    <template v-else-if="loaded && !backupUnlocked">
+      <p class="text-xs text-ink/50">输入安全密码后，这次运行里备份和恢复不用再输。</p>
+      <PasswordField v-model="sessionPassword" placeholder="安全密码" />
+      <button type="button" class="h-8 w-fit rounded border border-black/15 px-3 text-xs" @click="unlockSession">解锁</button>
+    </template>
+    <template v-else-if="loaded">
+      <input v-model="label" type="text" class="wv-surface h-10 rounded border border-black/10 px-3 outline-none" placeholder="可选命名" />
+      <button type="button" class="h-9 w-fit rounded bg-moss px-3 text-xs text-white" :disabled="busy" @click="download">立即备份</button>
+      <p class="mt-2 text-xs font-semibold text-ink">历史备份</p>
+      <p v-if="!items.length" class="text-xs text-ink/40">还没有备份文件</p>
+      <div v-for="item in items" :key="item.filename" class="flex items-center gap-2 text-xs">
+        <label class="flex min-w-0 flex-1 items-center gap-2">
+          <input v-model="restoreName" type="radio" :value="item.filename" />
+          <span class="truncate">{{ item.label || '（无命名）' }} · {{ item.time }} · {{ sizeLabel(item.size) }}</span>
+        </label>
+        <button type="button" class="text-ember" title="删除" @click="removeItem(item.filename)">
+          <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14" /><path d="M9 7V5h6v2" /><path d="M8 7l1 12h6l1-12" /></svg>
+        </button>
       </div>
-    </div>
-    <p class="mt-2 text-xs font-semibold text-ink">历史备份</p>
-    <p v-if="!items.length" class="text-xs text-ink/40">还没有备份文件</p>
-    <label v-for="item in items" :key="item.filename" class="flex items-center gap-2 text-xs">
-      <input v-model="restoreName" type="radio" :value="item.filename" />
-      <span>{{ item.label || '（无命名）' }} · {{ item.time }} · {{ sizeLabel(item.size) }}</span>
-    </label>
-    <PasswordField v-model="restorePassword" placeholder="恢复时输入密码" />
-    <button type="button" class="h-9 w-fit rounded border border-black/15 px-3 text-xs" :disabled="busy" @click="restoreNamed">恢复所选备份</button>
-    <p class="mt-2 text-xs text-ink/40">也可以从别处选一个旧的 .wvbak</p>
-    <input type="file" accept=".wvbak" @change="file = $event.target.files?.[0] || null" />
-    <button type="button" class="h-9 w-fit rounded border border-black/15 px-3 text-xs" :disabled="busy" @click="restoreFile">从文件恢复</button>
+      <PasswordField v-if="needOld" v-model="oldPassword" placeholder="当时的安全密码" />
+      <button type="button" class="h-9 w-fit rounded border border-black/15 px-3 text-xs" :disabled="busy" @click="restoreNamed">恢复</button>
+      <p class="mt-2 text-xs text-ink/40">也可以从别处选一个 .wvbak</p>
+      <input type="file" accept=".wvbak" @change="file = $event.target.files?.[0] || null" />
+      <button type="button" class="h-9 w-fit rounded border border-black/15 px-3 text-xs" :disabled="busy" @click="restoreFile">从文件恢复</button>
+    </template>
   </div>
 </template>

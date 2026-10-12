@@ -34,7 +34,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['close', 'change', 'open-guide'])
+const emit = defineEmits(['close', 'change', 'open-guide', 'move-orb'])
 
 const page = ref('look')
 const maskArmed = ref(false)
@@ -79,6 +79,18 @@ async function setBar(id) {
 
 async function setPlayer(id) {
   emit('change', await updateAppearance({ player: id }))
+}
+
+async function setSpread(id) {
+  emit('change', await updateAppearance({ player_spread: id }))
+}
+
+async function setProgressStyle(id) {
+  emit('change', await updateAppearance({ progress_style: id }))
+}
+
+async function setProgressColor(event) {
+  emit('change', await updateAppearance({ progress_style: 'solid', progress_color: event.target.value }))
 }
 
 async function setLowPower(event) {
@@ -193,6 +205,18 @@ async function clear(kind, groupId) {
         <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'corner' || !appearance.player ? 'bg-ink text-white' : 'bg-white'" @click="setPlayer('corner')">右下角</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'bottom' ? 'bg-ink text-white' : 'bg-white'" @click="setPlayer('bottom')">正下方</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'side' ? 'bg-ink text-white' : 'bg-white'" @click="setPlayer('side')">右侧中间</button>
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'free' ? 'bg-ink text-white' : 'bg-white'" @click="emit('move-orb')">移动悬浮球</button>
+      </div>
+      <p class="mt-4 text-xs text-ink/45">面板展开</p>
+      <div class="mt-2 flex gap-2">
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player_spread === 'side' ? 'bg-ink text-white' : 'bg-white'" @click="setSpread('side')">从一侧</button>
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player_spread === 'center' ? 'bg-ink text-white' : 'bg-white'" @click="setSpread('center')">从中间向两边</button>
+      </div>
+      <p class="mt-4 text-xs text-ink/45">进度条</p>
+      <div class="mt-2 flex items-center gap-2">
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.progress_style !== 'gradient' ? 'bg-ink text-white' : 'bg-white'" @click="setProgressStyle('solid')">单色</button>
+        <input type="color" :value="appearance.progress_color || '#3f6f57'" title="进度颜色" @change="setProgressColor" />
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.progress_style === 'gradient' ? 'bg-ink text-white' : 'bg-white'" @click="setProgressStyle('gradient')">彩色</button>
       </div>
       <label class="mt-4 flex items-center gap-2 text-sm text-ink/80">
         <input type="checkbox" :checked="appearance.low_power" @change="setLowPower" />

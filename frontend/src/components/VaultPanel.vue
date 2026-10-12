@@ -10,7 +10,6 @@ import {
   getPrivacy,
   listVaultEntries,
   listVaultSections,
-  lockVault,
   pinVaultEntryTop,
   renameVaultSection,
   reorderVaultEntries,
@@ -81,15 +80,14 @@ async function loadVault() {
 async function enterPage() {
   await refreshPrivacy()
   if (privacy.value.vault_unlocked) {
-    await lockVault()
-    await refreshPrivacy()
+    await loadVault()
   }
 }
 
 async function submitPassword() {
   if (!privacy.value.vault_set) {
-    if (passwordDraft.value.length < 12) {
-      showToast('主密码至少 12 位')
+    if (passwordDraft.value.length < 8) {
+      showToast('密码至少 8 位，建议 12 位')
       return
     }
     if (passwordDraft.value !== confirmDraft.value) {
@@ -109,7 +107,7 @@ async function submitPassword() {
     await refreshPrivacy()
     await loadVault()
   } catch (error) {
-    showToast(error.message || '密码不对')
+    showToast(String(error.message || '密码不对').replace(/^[^:]+:\s*/, ''))
   } finally {
     busy.value = false
   }
@@ -271,7 +269,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  lockVault().catch(() => {})
   passwordDraft.value = ''
   confirmDraft.value = ''
 })
@@ -289,9 +286,9 @@ onBeforeUnmount(() => {
       </div>
 
       <form v-if="!privacy.vault_unlocked" class="mt-8 flex max-w-sm flex-col gap-2" @submit.prevent="submitPassword">
-        <p class="text-sm text-ink/70">{{ privacy.vault_set ? '输入主密码解锁' : '第一次使用，设置主密码（至少 12 位）' }}</p>
-        <p class="text-xs text-ink/45">忘记无法恢复。主密码只在本会话有效，关掉应用要重输。</p>
-        <PasswordField v-model="passwordDraft" :autocomplete="privacy.vault_set ? 'current-password' : 'new-password'" :placeholder="privacy.vault_set ? '主密码' : '至少 12 位'" />
+        <p class="text-sm text-ink/70">{{ privacy.vault_set ? '输入安全密码解锁' : '第一次使用，设置安全密码' }}</p>
+        <p class="text-xs text-ink/45">至少 8 位，建议 12 位。忘记无法恢复。本会话解锁一次即可，关掉应用要重输。</p>
+        <PasswordField v-model="passwordDraft" :autocomplete="privacy.vault_set ? 'current-password' : 'new-password'" :placeholder="privacy.vault_set ? '安全密码' : '至少 8 位，建议 12 位'" />
         <PasswordField v-if="!privacy.vault_set" v-model="confirmDraft" autocomplete="new-password" placeholder="再输入一次" />
         <button type="submit" class="h-10 rounded bg-ink text-sm text-white" :disabled="busy">{{ privacy.vault_set ? '解锁' : '设置并进入' }}</button>
       </form>

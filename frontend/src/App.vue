@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import { backgroundUrl, createGroup, createNav, deleteGroup, deleteNav, getAppearance, getGroups, getHealth, getNav, lockGroup, lockNav, patchNav, pinNav, reorderGroups, reorderNav, updateGroup, updateNav, vaultEntryCount } from './api/client'
+import { backgroundUrl, createGroup, createNav, deleteGroup, deleteNav, getAppearance, getGroups, getHealth, getNav, lockGroup, lockNav, patchNav, pinNav, reorderGroups, reorderNav, updateAppearance, updateGroup, updateNav, vaultEntryCount } from './api/client'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import GroupBar from './components/GroupBar.vue'
 import GroupEditDialog from './components/GroupEditDialog.vue'
@@ -42,6 +42,7 @@ const searchTab = ref('all')
 const noteOpen = ref(false)
 const noteRevision = ref(0)
 const appearanceOpen = ref(false)
+const orbMoving = ref(false)
 const chatOpen = ref(false)
 const guideOpen = ref(false)
 const appearance = ref({
@@ -457,6 +458,20 @@ function applyAppearance(next) {
   document.documentElement.dataset.theme = appearance.value.theme || 'warm'
 }
 
+function startOrbMove() {
+  appearanceOpen.value = false
+  orbMoving.value = true
+}
+
+async function finishOrbMove(payload) {
+  orbMoving.value = false
+  applyAppearance(await updateAppearance(payload))
+}
+
+function cancelOrbMove() {
+  orbMoving.value = false
+}
+
 const groupMedia = computed(() => {
   if (activeGroupId.value == null) {
     return ''
@@ -620,9 +635,20 @@ async function onNoteSaved(saved) {
       @close="appearanceOpen = false"
       @change="applyAppearance"
       @open-guide="guideOpen = true"
+      @move-orb="startOrbMove"
     />
     <ChatPanel :open="chatOpen" @close="chatOpen = false" @open-nav="openSearchNav" />
-    <MusicDock :place="appearance.player || 'bottom'" />
+    <MusicDock
+      :place="appearance.player || 'corner'"
+      :origin-x="appearance.player_x"
+      :origin-y="appearance.player_y"
+      :spread="appearance.player_spread || ''"
+      :progress-style="appearance.progress_style || 'solid'"
+      :progress-color="appearance.progress_color || '#3f6f57'"
+      :moving="orbMoving"
+      @move-done="finishOrbMove"
+      @move-cancel="cancelOrbMove"
+    />
     <p v-if="toastText" class="wv-toast">{{ toastText }}</p>
     <GuideDialog v-if="guideOpen" @close="closeGuide" />
   </main>

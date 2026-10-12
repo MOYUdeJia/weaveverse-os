@@ -6,6 +6,7 @@ Stored beside the database so themes do not need a table migration.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from pathlib import Path
 
@@ -18,11 +19,20 @@ MAX_VIDEO_SECONDS = 30
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 THEMES = {"warm", "mint", "sky", "sakura", "ash"}
 BARS = {"push", "overlay", "stack"}
+PLAYERS = {"bottom", "corner", "side", "free"}
+SPREADS = {"side", "center"}
+PROGRESS_STYLES = {"solid", "gradient"}
+COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 DEFAULT = {
     "theme": "warm",
     "bar": "push",
     "player": "corner",
+    "player_x": None,
+    "player_y": None,
+    "player_spread": "",
+    "progress_style": "solid",
+    "progress_color": "#3f6f57",
     "low_power": False,
     "global_image": "",
     "global_video": "",
@@ -31,6 +41,16 @@ DEFAULT = {
     "groups": {},
     "group_names": {},
 }
+
+
+def _ratio(value: object) -> float | None:
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if number != number:
+        return None
+    return max(0.0, min(1.0, number))
 
 
 def load_settings() -> dict:
@@ -46,9 +66,19 @@ def load_settings() -> dict:
     player = merged.get("player")
     if player == "top":
         player = "side"
-    if player not in {"bottom", "corner", "side"}:
+    if player not in PLAYERS:
         player = "corner"
     merged["player"] = player
+    merged["player_x"] = _ratio(merged.get("player_x"))
+    merged["player_y"] = _ratio(merged.get("player_y"))
+    if merged["player"] == "free" and (merged["player_x"] is None or merged["player_y"] is None):
+        merged["player"] = "corner"
+    spread = merged.get("player_spread")
+    merged["player_spread"] = spread if spread in SPREADS else ""
+    style = merged.get("progress_style")
+    merged["progress_style"] = style if style in PROGRESS_STYLES else "solid"
+    color = str(merged.get("progress_color") or "")
+    merged["progress_color"] = color.lower() if COLOR_PATTERN.fullmatch(color) else "#3f6f57"
     merged["low_power"] = bool(merged.get("low_power"))
     groups = merged.get("groups") if isinstance(merged.get("groups"), dict) else {}
     merged["groups"] = {str(key): str(value) for key, value in groups.items() if value}
@@ -73,6 +103,22 @@ def save_settings(data: dict) -> dict:
         current["bar"] = data["bar"]
     if data.get("player") in {"bottom", "corner", "side"}:
         current["player"] = data["player"]
+        current["player_x"] = None
+        current["player_y"] = None
+    elif data.get("player") == "free":
+        current["player"] = "free"
+    if "player_x" in data:
+        current["player_x"] = _ratio(data.get("player_x"))
+    if "player_y" in data:
+        current["player_y"] = _ratio(data.get("player_y"))
+    if data.get("player_spread") in SPREADS or data.get("player_spread") == "":
+        current["player_spread"] = data.get("player_spread") or ""
+    if data.get("progress_style") in PROGRESS_STYLES:
+        current["progress_style"] = data["progress_style"]
+    if "progress_color" in data:
+        color = str(data.get("progress_color") or "")
+        if COLOR_PATTERN.fullmatch(color):
+            current["progress_color"] = color.lower()
     if "low_power" in data:
         current["low_power"] = bool(data["low_power"])
     return _write(current)

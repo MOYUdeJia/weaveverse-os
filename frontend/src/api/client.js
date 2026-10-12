@@ -31,11 +31,13 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     let message = ''
-    try {
-      const payload = await response.json()
-      message = formatDetail(payload.detail)
-    } catch {
-      message = await response.text()
+    const raw = await response.text()
+    if (raw) {
+      try {
+        message = formatDetail(JSON.parse(raw).detail)
+      } catch {
+        message = raw
+      }
     }
     throw new Error(message || `Request failed with ${response.status}`)
   }
@@ -621,13 +623,6 @@ export function unlockVault(password) {
 
 export function lockVault() {
   return request('/privacy/vault/lock', { method: 'POST' })
-}
-
-export function setBackupPassword(password, current = '') {
-  return request('/privacy/backup', {
-    method: 'POST',
-    body: JSON.stringify({ password, current }),
-  })
 }
 
 export function unlockBackup(password) {

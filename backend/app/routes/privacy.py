@@ -1,4 +1,4 @@
-"""Set and unlock the vault master password and the backup password."""
+"""Set and unlock the single security password."""
 
 from __future__ import annotations
 
@@ -22,35 +22,14 @@ class PasswordUnlock(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
-def _apply(kind: privacy.Kind, data: PasswordSet, session: Session | None = None) -> dict:
-    secrets = []
-    previous = privacy.snapshot_file()
-    previous_session = privacy.session_password(kind)
-    if kind == "vault" and privacy.status()["vault_set"]:
-        if not data.current.strip():
-            raise_api_error(401, "current", "请输入当前密码")
-        try:
-            privacy.unlock("vault", data.current)
-            if session is not None:
-                secrets = vault_crud.snapshot_secrets(session)
-        except PermissionError as exc:
-            raise_api_error(401, "current", str(exc))
-        except Exception:
-            raise_api_error(400, "password", "现有条目解不开，主密码没有改")
+def _change(data: PasswordSet, session: Session) -> dict:
     try:
-        privacy.set_password(kind, data.password, data.current)
-        if kind == "vault" and secrets and session is not None:
-            vault_crud.reencrypt_all(session, secrets)
+        vault_crud.change_security_password(session, data.password, data.current)
     except PermissionError as exc:
         raise_api_error(401, "current", str(exc))
     except ValueError as exc:
         raise_api_error(400, "password", str(exc))
     except Exception:
-        privacy.restore_file(previous)
-        if previous_session:
-            privacy.remember(kind, previous_session)
-        else:
-            privacy.lock(kind)
         raise_api_error(500, "password", "密码没有改完")
     finally:
         data.password = ""
@@ -65,7 +44,12 @@ def privacy_status() -> dict:
 
 @router.post("/vault")
 def set_vault_password(data: PasswordSet, session: Session = Depends(get_session)) -> dict:
-    return _apply("vault", data, session)
+    return _change(data, session)
+
+
+@router.post("/security")
+def set_security_password(data: PasswordSet, session: Session = Depends(get_session)) -> dict:
+    return _change(data, session)
 
 
 @router.post("/vault/unlock")
@@ -83,11 +67,6 @@ def unlock_vault(data: PasswordUnlock) -> dict:
 def lock_vault() -> dict:
     privacy.lock("vault")
     return privacy.status()
-
-
-@router.post("/backup")
-def set_backup_password(data: PasswordSet) -> dict:
-    return _apply("backup", data)
 
 
 @router.post("/backup/unlock")

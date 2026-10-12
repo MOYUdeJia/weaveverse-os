@@ -1000,3 +1000,41 @@
   - 修改 `backend/app/routes/vault.py`
   - 修改 `docs/VERSIONS.md`
 
+## M9.2 · 2026-10-12
+- **任务**：把主密码和备份密码收成一把安全密码，并重做悬浮球。
+- **实现**：
+  - 安全密码最低 8 位，建议 12 位。密码库和备份各解锁一次，用的是同一把密码，关掉应用才重新锁定。
+  - 改密码先在内存里用旧密钥解开全部条目，再用新密钥加密，数据库一次提交。提交成功才写 `privacy.json`。写文件失败就把旧密文写回去。
+  - 备份包里的密码条目是明文，整个包再用安全密码加密。恢复时用当前安全密码重新加密。改密码不影响旧备份。恢复前把现有数据复制到 `data/safety/YYYY-MM-DD-HHMM/`，只留最近 3 份。备份文件只留最近 5 个。
+  - 迁移清掉测试用的密码条目和分区，安全密码的哈希和盐留着。
+  - 前端错误处理只读一次响应体，不再出现 body stream already read。
+  - 悬浮球是一个组件。预设位置仍是右下、正下、右侧中。拖动从设置里的「移动悬浮球」进入，画面变暗，右上角「完成」后按屏幕比例保存。
+  - 面板和球共用底色。球在端点时胶囊伸到球心下面，右端按球的圆切开；球在中间时胶囊从球后面穿过去。上下两根进度线画在同一条 SVG 上，裁切范围是胶囊和圆的并集，所以线穿过球。颜色可单色或彩色。
+  - 音量改成竖向一体槽，可拖可滚轮。滚轮之后如果指针还在槽上就不收起，离开后才收。音符五列、最多 18 个、上升约 120–156 像素。歌名滚动改成 16 秒。
+- **技术架构**：没有加新库。加密仍是 Argon2id + AES-GCM。悬浮球位移仍用已有的 GSAP。进度条用 SVG `clipPath`，因为 CSS 边框没法在穿过圆的时候保持一根连续的线。拖动用指针事件，不用列表拖拽库。颜色用系统取色器，不用 Pickr，避免再叠一层弹层。
+- **与 M9.1 相比的变化**：
+  - 主密码和备份密码合并成安全密码
+  - 备份里的密码条目改成明文再整包加密，恢复后用当前密码封上
+  - 悬浮球位置可以拖，面板和球连成一个形状，进度在上下边框上
+- **已知问题**：
+  - 更早的备份如果「打开文件的密码」和「当时的主密码」不是同一把，密码库条目仍解不开。M9.2 之后做的备份没有这个问题。
+  - 后悔副本在 `data/safety/`，应用里没有一键还原按钮，需要时手动把那份拷回来。
+  - 右侧中间的面板仍是向左展开，没有做成上下展开。
+- **文件变更**：
+  - 修改 `backend/app/privacy.py`
+  - 修改 `backend/app/vault_crud.py`
+  - 修改 `backend/app/backup_file.py`
+  - 修改 `backend/app/appearance.py`
+  - 修改 `backend/app/routes/privacy.py`
+  - 修改 `backend/app/routes/backup.py`
+  - 新增 `backend/alembic/versions/20261012_0012_clear_vault.py`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/components/PrivacyPanel.vue`
+  - 修改 `frontend/src/components/BackupPanel.vue`
+  - 修改 `frontend/src/components/VaultPanel.vue`
+  - 修改 `frontend/src/components/AppearanceDialog.vue`
+  - 修改 `frontend/src/components/MusicDock.vue`
+  - 修改 `docs/VERSIONS.md`
+

@@ -1,13 +1,17 @@
 """Password-vault sections and entries.
 
-Entry passwords are encrypted with the session master password.
+Entry passwords are encrypted with the session security password.
+Changing that password re-encrypts every row in one database transaction,
+then writes the new hash. If the file write fails, the old ciphertext is put back.
 """
 
 from __future__ import annotations
 
+import os
+
 from sqlmodel import Session, col, select
 
-from app.crypto import decrypt_text, encrypt_text
+from app.crypto import decrypt_bytes, decrypt_text, derive_key, encrypt_bytes, encrypt_text, verify_password
 from app.models import VaultEntry, VaultSection, utc_now
 from app.privacy import require_session, vault_kek_salt
 
@@ -240,21 +244,90 @@ def delete_entry(session: Session, row: VaultEntry) -> None:
     session.commit()
 
 
-def reencrypt_all(session: Session, secrets: list[tuple[int, str]]) -> None:
-    for entry_id, plaintext in secrets:
+def _write_entry_blobs(session: Session, blobs: list[tuple[int, str]]) -> None:
+    pending = []
+    for entry_id, blob in blobs:
         row = get_entry(session, entry_id)
         if row is None:
-            continue
-        row.password_encrypted = _encrypt(plaintext)
+            session.rollback()
+            raise RuntimeError("改密码时找不到条目")
+        row.password_encrypted = blob
         row.updated_at = utc_now()
+        pending.append(row)
+    for row in pending:
         session.add(row)
-    session.commit()
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
 
 
-def snapshot_secrets(session: Session) -> list[tuple[int, str]]:
-    pairs = []
+def export_plaintext(session: Session, password: str) -> list[dict]:
+    salt = vault_kek_salt()
+    items = []
     for row in list_entries(session):
         if row.id is None:
             continue
-        pairs.append((row.id, _decrypt(row.password_encrypted)))
-    return pairs
+        plain = ""
+        if row.password_encrypted:
+            try:
+                plain = decrypt_text(password, salt, row.password_encrypted, AAD)
+            except Exception as exc:
+                raise ValueError("密码库有条目解不开，备份已取消") from exc
+        items.append({"id": row.id, "password": plain})
+    return items
+
+
+def change_security_password(session: Session, new_password: str, current: str) -> None:
+    """Re-encrypt every entry, commit, then store the new hash and salt."""
+
+    from app import privacy
+
+    text = privacy.check_length(new_password)
+    found = privacy.security_material()
+    current_text = current.strip()
+    old_blobs: list[tuple[int, str]] = []
+    plains: list[tuple[int, str]] = []
+    old_key = None
+    if found is not None:
+        stored, salt_hex = found
+        if not current_text:
+            raise PermissionError("请输入当前密码")
+        if not verify_password(stored, current_text):
+            raise PermissionError("当前密码不对")
+        if text == current_text:
+            raise ValueError("不能与当前相同")
+        old_key = derive_key(current_text, bytes.fromhex(salt_hex))
+        try:
+            for row in list_entries(session):
+                if row.id is None:
+                    continue
+                plain = ""
+                if row.password_encrypted:
+                    plain = decrypt_bytes(old_key, bytes.fromhex(row.password_encrypted), AAD).decode("utf-8")
+                plains.append((row.id, plain))
+                old_blobs.append((row.id, row.password_encrypted))
+        except Exception as exc:
+            raise ValueError("有条目无法用当前安全密码解密，密码没有修改") from exc
+    new_salt = os.urandom(16)
+    new_key = derive_key(text, new_salt)
+    try:
+        new_blobs = [
+            (entry_id, encrypt_bytes(new_key, plain.encode("utf-8"), AAD).hex())
+            for entry_id, plain in plains
+        ]
+        if new_blobs:
+            _write_entry_blobs(session, new_blobs)
+        try:
+            privacy.write_security(text, new_salt)
+        except Exception:
+            if old_blobs:
+                _write_entry_blobs(session, old_blobs)
+            raise
+    finally:
+        del new_key
+        if old_key is not None:
+            del old_key
+    privacy.remember("vault", text)
+    privacy.remember("backup", text)
