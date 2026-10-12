@@ -20,7 +20,7 @@ IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 THEMES = {"warm", "mint", "sky", "sakura", "ash"}
 BARS = {"push", "overlay", "stack"}
 PLAYERS = {"bottom", "corner", "side", "free"}
-SPREADS = {"side", "center"}
+SPREADS = {"auto", "side", "center"}
 PROGRESS_STYLES = {"solid", "gradient"}
 COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
@@ -30,7 +30,7 @@ DEFAULT = {
     "player": "corner",
     "player_x": None,
     "player_y": None,
-    "player_spread": "",
+    "player_spread": "auto",
     "progress_style": "solid",
     "progress_color": "#3f6f57",
     "low_power": False,
@@ -73,8 +73,8 @@ def load_settings() -> dict:
     merged["player_y"] = _ratio(merged.get("player_y"))
     if merged["player"] == "free" and (merged["player_x"] is None or merged["player_y"] is None):
         merged["player"] = "corner"
-    spread = merged.get("player_spread")
-    merged["player_spread"] = spread if spread in SPREADS else ""
+    spread = merged.get("player_spread") or "auto"
+    merged["player_spread"] = spread if spread in SPREADS else "auto"
     style = merged.get("progress_style")
     merged["progress_style"] = style if style in PROGRESS_STYLES else "solid"
     color = str(merged.get("progress_color") or "")
@@ -111,8 +111,8 @@ def save_settings(data: dict) -> dict:
         current["player_x"] = _ratio(data.get("player_x"))
     if "player_y" in data:
         current["player_y"] = _ratio(data.get("player_y"))
-    if data.get("player_spread") in SPREADS or data.get("player_spread") == "":
-        current["player_spread"] = data.get("player_spread") or ""
+    if data.get("player_spread") in SPREADS:
+        current["player_spread"] = data["player_spread"]
     if data.get("progress_style") in PROGRESS_STYLES:
         current["progress_style"] = data["progress_style"]
     if "progress_color" in data:

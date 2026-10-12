@@ -5,6 +5,7 @@ import {
   getPrivacy,
   listUnusedAttachments,
   purgeUnusedAttachments,
+  resetSecurity,
   setVaultPassword,
   unlockVault,
 } from '../api/client'
@@ -20,7 +21,7 @@ const loaded = ref(false)
 const form = ref(blankForm())
 
 function blankForm() {
-  return { open: false, current: '', verified: false, next: '', again: '' }
+  return { open: false, current: '', verified: false, next: '', again: '', hint: '' }
 }
 
 const ready = () => Boolean(status.value.security_set || status.value.vault_set)
@@ -66,12 +67,31 @@ async function save() {
     return
   }
   try {
-    status.value = await setVaultPassword(form.value.next, already ? form.value.current : '')
+    status.value = await setVaultPassword(form.value.next, already ? form.value.current : '', form.value.hint)
     form.value = blankForm()
-    showToast(already ? '修改成功' : '已设置')
+    if (already) {
+      window.dispatchEvent(new Event('wv-privacy-locked'))
+    }
+    showToast(already ? '修改成功，请重新输入新密码' : '已设置')
     emit('change', status.value)
   } catch (error) {
     showToast(String(error.message || '没有保存').replace(/^[^:]+:\s*/, ''))
+  }
+}
+
+async function resetSecret() {
+  const warning = '确定重置安全密码？密码库里的条目会全部删除，不能恢复。笔记、图片和其他数据还在。旧备份仍要用当时的密码打开。'
+  if (!window.confirm(warning)) {
+    return
+  }
+  try {
+    status.value = await resetSecurity()
+    form.value = blankForm()
+    window.dispatchEvent(new Event('wv-privacy-locked'))
+    showToast('已重置，请设置新的安全密码')
+    emit('change', status.value)
+  } catch (error) {
+    showToast(String(error.message || '没有重置').replace(/^[^:]+:\s*/, ''))
   }
 }
 
@@ -112,11 +132,12 @@ onMounted(() => {
   <div class="grid gap-6 text-sm">
     <section>
       <h3 class="text-sm font-semibold text-ink">安全密码</h3>
-      <p class="mt-1 text-xs text-ink/50">打开密码库和加密备份用同一套。至少 8 位，建议 12 位。忘记无法恢复。关掉应用后重新锁定。</p>
+      <p class="mt-1 text-xs text-ink/50">打开密码库和加密备份用同一套。至少 8 位，建议 12 位。关掉应用后重新锁定。改完密码也要再输一次。</p>
       <p v-if="loaded" class="mt-1 text-xs text-moss">{{ ready() ? '已设置' : '未设置' }}</p>
       <div v-if="loaded && !ready()" class="mt-2 grid gap-2">
         <PasswordField v-model="form.next" autocomplete="new-password" placeholder="新安全密码，至少 8 位，建议 12 位" />
         <PasswordField v-model="form.again" autocomplete="new-password" placeholder="再输入一次" />
+        <input v-model="form.hint" type="text" maxlength="80" class="h-8 rounded border border-black/10 px-2 text-xs outline-none" placeholder="提示（可选，不是密码）" />
         <button type="button" class="h-8 w-fit rounded bg-moss px-3 text-xs text-white" @click="save">设置安全密码</button>
       </div>
       <div v-else-if="loaded" class="mt-2">
@@ -130,8 +151,10 @@ onMounted(() => {
             <button type="button" class="h-8 w-fit rounded bg-moss px-3 text-xs text-white" @click="save">提交</button>
           </template>
         </div>
+        <p class="mt-3 text-xs text-ink/50">忘记密码只能重置。重置会清掉安全密码和密码库条目，其他数据还在。</p>
+        <button type="button" class="mt-2 h-8 rounded border border-ember/40 px-3 text-xs text-ember" @click="resetSecret">重置安全密码</button>
       </div>
-      <p class="mt-3 text-xs text-ink/45">备份页使用这套安全密码。改密码不会让已经做好的备份失效。</p>
+      <p class="mt-3 text-xs text-ink/45">备份页使用这套安全密码。改完密码后要重新输入一次。</p>
     </section>
     <section>
       <h3 class="text-sm font-semibold text-ink">清理未使用附件</h3>

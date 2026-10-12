@@ -642,7 +642,7 @@ async function onNoteSaved(saved) {
       :place="appearance.player || 'corner'"
       :origin-x="appearance.player_x"
       :origin-y="appearance.player_y"
-      :spread="appearance.player_spread || ''"
+      :spread="appearance.player_spread || 'auto'"
       :progress-style="appearance.progress_style || 'solid'"
       :progress-color="appearance.progress_color || '#3f6f57'"
       :moving="orbMoving"

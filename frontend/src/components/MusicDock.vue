@@ -67,6 +67,10 @@ const errorMessage = ref('')
 const shellWidth = ref(0)
 const viewport = ref(0)
 const dragPos = ref(null)
+const tight = ref(false)
+const topPathEl = ref(null)
+const botPathEl = ref(null)
+const measured = ref({ top: 1, bot: 1 })
 
 let audioCtx = null
 let analyser = null
@@ -151,24 +155,37 @@ function ballCenter() {
   return { x: window.innerWidth - 16 - 36, y: window.innerHeight - 16 - 36 }
 }
 
-const spreadMode = computed(() => {
+const zone = computed(() => {
   viewport.value
-  if (props.spread === 'center' || props.spread === 'side') {
-    return props.spread
+  const ratio = ballCenter().x / Math.max(window.innerWidth, 1)
+  if (ratio < 0.3) {
+    return 'left'
   }
-  if (props.place === 'bottom') {
-    return 'center'
+  if (ratio > 0.7) {
+    return 'right'
   }
-  if (props.place === 'free') {
-    const x = ballCenter().x / window.innerWidth
-    if (x > 0.35 && x < 0.65) {
-      return 'center'
-    }
-  }
-  return 'side'
+  return 'middle'
 })
 
-const growRight = computed(() => spreadMode.value === 'side' && ballCenter().x < window.innerWidth / 2)
+const spreadMode = computed(() => {
+  const forced = props.spread === 'center' || props.spread === 'side' ? props.spread : 'auto'
+  if (forced === 'center') {
+    return 'center'
+  }
+  if (forced === 'side' || zone.value !== 'middle') {
+    if (zone.value === 'left') {
+      return 'right'
+    }
+    if (zone.value === 'right') {
+      return 'left'
+    }
+    const center = ballCenter()
+    return window.innerWidth - center.x >= center.x ? 'right' : 'left'
+  }
+  return 'center'
+})
+
+const growRight = computed(() => spreadMode.value === 'right')
 
 const fusedClass = computed(() => {
   if (spreadMode.value === 'center') {
@@ -211,9 +228,61 @@ const progressBox = computed(() => {
   return { ...common, left: `${36 - shellWidth.value}px`, transform: 'translateY(-50%)' }
 })
 
-const lineLen = computed(() => progressGeom.value.svgW)
-const dashOffset = computed(() => lineLen.value * (1 - ratio.value))
-const strokePaint = computed(() => (props.progressStyle === 'gradient' ? 'url(#wvRainbow)' : 'var(--wv-progress)'))
+function borderPath(y, outward) {
+  const geom = progressGeom.value
+  const svgW = geom.svgW
+  const straight = { d: `M 0 ${y} H ${svgW}`, len: svgW }
+  if (spreadMode.value !== 'center') {
+    return straight
+  }
+  const radius = 36
+  const cy = 36
+  const dy = y - cy
+  const disc = radius * radius - dy * dy
+  if (disc <= 4) {
+    return straight
+  }
+  const dx = Math.sqrt(disc)
+  const x1 = geom.ballCx - dx
+  const x2 = geom.ballCx + dx
+  const sweep = outward < 0 ? 1 : 0
+  const dot = (-dx) * dx + dy * dy
+  const central = Math.acos(Math.max(-1, Math.min(1, dot / (radius * radius))))
+  return {
+    d: `M 0 ${y} H ${x1.toFixed(2)} A ${radius} ${radius} 0 0 ${sweep} ${x2.toFixed(2)} ${y} H ${svgW}`,
+    len: Math.max(1, x1 + (svgW - x2) + radius * central),
+  }
+}
+
+const topPath = computed(() => borderPath(10, -1))
+const botPath = computed(() => borderPath(62, 1))
+const strokePaint = computed(() => (props.progressStyle === 'gradient' ? 'url(#wvRainbow)' : (props.progressColor || '#3f6f57')))
+
+const songClass = computed(() => {
+  viewport.value
+  const center = ballCenter()
+  const classes = []
+  if (window.innerHeight - (center.y + 36) < 40) {
+    classes.push('is-above')
+  }
+  if (center.x > window.innerWidth - 130) {
+    classes.push('is-end')
+  } else if (center.x < 130) {
+    classes.push('is-start')
+  }
+  return classes
+})
+
+function measurePaths() {
+  nextTick(() => {
+    const top = topPathEl.value?.getTotalLength?.()
+    const bot = botPathEl.value?.getTotalLength?.()
+    measured.value = {
+      top: top > 1 ? top : topPath.value.len,
+      bot: bot > 1 ? bot : botPath.value.len,
+    }
+  })
+}
 
 function clampPos(left, top) {
   return {
@@ -328,6 +397,19 @@ watch(playing, (value) => {
     }
   }
   writeState()
+})
+
+watch([spreadMode, viewport], () => {
+  if (!panelOpen.value) {
+    return
+  }
+  tweenShell(targetWidth(), true)
+})
+
+watch([topPath, botPath, panelOpen], () => {
+  if (panelOpen.value) {
+    measurePaths()
+  }
 })
 
 watch(volume, (value) => {
@@ -446,25 +528,47 @@ function arcPoints() {
   const right = rect ? window.innerWidth - rect.right : 200
   const top = rect ? rect.top : 200
   const bottom = rect ? window.innerHeight - rect.bottom : 200
-  const upward = top >= 168
-  volDown.value = !upward
-  if (right < 96 && bottom < 96) {
-    volDown.value = false
-    return {
-      prev: { x: -68, y: -6 },
-      next: { x: -30, y: -56 },
-      vol: { x: 6, y: -62 },
-      panel: { x: -58, y: -38 },
-      mode: { x: -36, y: 4 },
+  tight.value = Math.min(left, right, top, bottom) < 88
+  const btn = tight.value ? 30 : 36
+  const pad = 8
+  const roomL = Math.max(24, left - pad - btn / 2)
+  const roomR = Math.max(24, right - pad - btn / 2)
+  const roomT = Math.max(24, top - pad - btn / 2)
+  const roomB = Math.max(24, bottom - pad - btn / 2)
+  volDown.value = roomT < (tight.value ? 110 : 150)
+  const reach = tight.value ? 48 : 64
+  const drop = tight.value ? 36 : 46
+  const points = {
+    prev: { x: -Math.min(reach, roomL), y: roomL < 44 ? -Math.min(28, roomT) : 0 },
+    next: { x: Math.min(reach, roomR), y: roomR < 44 ? -Math.min(28, roomT) : 0 },
+    vol: { x: 0, y: volDown.value ? Math.min(58, roomB) : -Math.min(58, roomT) },
+    panel: { x: -Math.min(drop, roomL), y: Math.min(drop, roomB) },
+    mode: { x: Math.min(drop, roomR), y: Math.min(drop, roomB) },
+  }
+  const names = Object.keys(points)
+  const gap = btn + 6
+  for (let pass = 0; pass < 4; pass += 1) {
+    for (let i = 0; i < names.length; i += 1) {
+      for (let j = i + 1; j < names.length; j += 1) {
+        const a = points[names[i]]
+        const b = points[names[j]]
+        const dx = b.x - a.x
+        const dy = b.y - a.y
+        const dist = Math.hypot(dx, dy) || 0.01
+        if (dist >= gap) {
+          continue
+        }
+        const push = (gap - dist) / 2
+        const ux = dx / dist
+        const uy = dy / dist
+        a.x -= ux * push
+        a.y -= uy * push
+        b.x += ux * push
+        b.y += uy * push
+      }
     }
   }
-  return {
-    prev: left > 84 ? { x: -64, y: 0 } : { x: -28, y: upward ? -50 : 50 },
-    next: right > 84 ? { x: 64, y: 0 } : { x: 28, y: upward ? -50 : 50 },
-    vol: { x: 0, y: upward ? -58 : 62 },
-    panel: bottom > 78 ? { x: -46, y: 46 } : { x: -54, y: -28 },
-    mode: bottom > 78 ? { x: 46, y: 46 } : { x: 54, y: -28 },
-  }
+  return points
 }
 
 function openArc() {
@@ -521,16 +625,14 @@ function closeArc() {
 
 function targetWidth() {
   const center = ballCenter()
-  const margin = 28
+  const leftRoom = Math.max(0, center.x)
+  const rightRoom = Math.max(0, window.innerWidth - center.x)
   if (spreadMode.value === 'center') {
-    const half = Math.min(center.x - margin, window.innerWidth - center.x - margin)
-    const want = Math.round(window.innerWidth * 0.66)
-    const span = Math.max(180, half * 2)
-    return Math.min(want, span)
+    const span = Math.max(0, Math.min(leftRoom, rightRoom) - 16) * 2
+    return Math.max(0, Math.min(window.innerWidth * 0.6, span))
   }
-  const room = growRight.value ? window.innerWidth - center.x - margin : center.x - margin
-  const cap = Math.min(480, Math.max(260, window.innerWidth - 340))
-  return Math.max(180, Math.min(cap, room))
+  const room = spreadMode.value === 'right' ? rightRoom : leftRoom
+  return Math.max(0, Math.min(window.innerWidth * 0.45, room - 24))
 }
 
 function tweenShell(width, open) {
@@ -848,31 +950,31 @@ onBeforeUnmount(() => {
         class="wv-progress"
         :style="progressBox"
       >
-        <svg class="wv-progress-svg" :viewBox="`0 0 ${progressGeom.svgW} 72`" preserveAspectRatio="none">
+        <svg class="wv-progress-svg" :viewBox="`0 0 ${progressGeom.svgW} 72`">
           <defs>
-            <linearGradient id="wvRainbow" x1="0" y1="0" x2="1" y2="0">
+            <linearGradient id="wvRainbow" gradientUnits="userSpaceOnUse" x1="0" y1="0" :x2="progressGeom.svgW" y2="0">
               <stop offset="0" stop-color="#e85d4c" />
               <stop offset="0.35" stop-color="#f2c14e" />
               <stop offset="0.68" stop-color="#3f6f57" />
               <stop offset="1" stop-color="#4c7fe8" />
             </linearGradient>
             <clipPath id="wvFuseClip">
-              <rect :x="progressGeom.capX" y="10" :width="progressGeom.capW" height="52" rx="26" />
-              <circle :cx="progressGeom.ballCx" cy="36" r="36" />
+              <rect :x="progressGeom.capX" y="8" :width="progressGeom.capW" height="56" rx="28" />
+              <circle :cx="progressGeom.ballCx" cy="36" r="38" />
             </clipPath>
           </defs>
           <g clip-path="url(#wvFuseClip)">
-            <line x1="0" y1="10" :x2="progressGeom.svgW" y2="10" class="wv-line-track" />
-            <line x1="0" y1="62" :x2="progressGeom.svgW" y2="62" class="wv-line-track" />
-            <line x1="0" y1="10" :x2="progressGeom.svgW" y2="10" :stroke="strokePaint" :stroke-dasharray="lineLen" :stroke-dashoffset="dashOffset" class="wv-line-fill" />
-            <line x1="0" y1="62" :x2="progressGeom.svgW" y2="62" :stroke="strokePaint" :stroke-dasharray="lineLen" :stroke-dashoffset="dashOffset" class="wv-line-fill" />
+            <path :d="topPath.d" class="wv-line-track" />
+            <path :d="botPath.d" class="wv-line-track" />
+            <path ref="topPathEl" :d="topPath.d" :stroke="strokePaint" :stroke-dasharray="measured.top" :stroke-dashoffset="measured.top * (1 - ratio)" class="wv-line-fill" />
+            <path ref="botPathEl" :d="botPath.d" :stroke="strokePaint" :stroke-dasharray="measured.bot" :stroke-dashoffset="measured.bot * (1 - ratio)" class="wv-line-fill" />
           </g>
         </svg>
         <button type="button" class="wv-seek is-top" title="进度" @pointerdown="seekAt" />
         <button type="button" class="wv-seek is-bottom" title="进度" @pointerdown="seekAt" />
       </div>
 
-      <div ref="stageEl" class="wv-orb-stage" :class="{ 'is-open': controlsOpen, 'is-playing': playing }" @mouseenter="openArc" @mouseleave="closeArc">
+      <div ref="stageEl" class="wv-orb-stage" :class="{ 'is-open': controlsOpen, 'is-playing': playing, 'is-tight': tight }" @mouseenter="openArc" @mouseleave="closeArc">
         <div class="wv-orb-pad" />
         <span v-for="note in notes" :key="note.id" :data-note="note.id" class="wv-orb-note">{{ note.glyph }}</span>
         <button ref="prevEl" type="button" class="wv-orb-btn" title="上一首" @click="step(-1)">‹</button>
@@ -909,14 +1011,14 @@ onBeforeUnmount(() => {
           <svg v-else viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 7h10v4" /><path d="M17 17H7v-4" /><path d="M14 4l3 3-3 3" /><path d="M10 20l-3-3 3-3" /></svg>
         </button>
         <button type="button" class="wv-orb-ball" :class="moving ? 'is-drag' : ''" @pointerdown="startDrag" @click="togglePlay" @contextmenu="onMenu">
-          <svg class="wv-orb-glyph" :class="playing && !controlsOpen && !panelOpen ? 'is-spin' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 18V6l10-2v12" /><circle cx="7" cy="18" r="2.2" /><circle cx="17" cy="16" r="2.2" /></svg>
-          <span v-show="(controlsOpen || panelOpen) && !moving" class="wv-orb-veil">
+          <svg v-show="!((controlsOpen || panelOpen) && !moving)" class="wv-orb-glyph" :class="playing && !controlsOpen && !panelOpen ? 'is-spin' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 18V6l10-2v12" /><circle cx="7" cy="18" r="2.2" /><circle cx="17" cy="16" r="2.2" /></svg>
+          <span v-show="(controlsOpen || panelOpen) && !moving" class="wv-orb-veil" :class="panelOpen ? 'is-same' : ''">
             <svg v-if="playing" viewBox="0 0 24 24" class="h-6 w-6 fill-white"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
             <svg v-else viewBox="0 0 24 24" class="h-6 w-6 fill-white"><path d="M8 5.2v13.6c0 .7.8 1.1 1.4.7l10.2-6.8c.6-.4.6-1.3 0-1.7L9.4 4.5C8.8 4.1 8 4.5 8 5.2z" /></svg>
           </span>
         </button>
       </div>
-      <p v-show="!controlsOpen && !panelOpen && !moving" class="wv-song"><span>{{ current?.title || '还没有音频' }}</span></p>
+      <p v-show="!controlsOpen && !panelOpen && !moving" class="wv-song" :class="songClass"><span>{{ current?.title || '还没有音频' }}</span></p>
       <p v-if="errorMessage" class="wv-orb-error">{{ errorMessage }}</p>
       <audio
         ref="audio"
@@ -930,21 +1032,25 @@ onBeforeUnmount(() => {
       <input ref="fileInput" class="wv-file-input" type="file" accept="audio/mpeg,audio/ogg,audio/wav,audio/mp4,audio/flac,.mp3,.ogg,.wav,.m4a,.flac" @change="onFile" />
     </div>
     <div v-if="menu" ref="menuEl" class="wv-orb-menu" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }" @mouseleave="menu = null">
-      <button type="button" :title="panelOpen ? '关闭面板' : '打开面板'" @click="togglePanel(!panelOpen)">
+      <button type="button" class="wv-menu-main" @click="togglePanel(!panelOpen)">
         <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8h14" /><path d="M5 12h14" /><path d="M5 16h10" /></svg>
+        <span>{{ panelOpen ? '关闭面板' : '打开面板' }}</span>
       </button>
       <p class="wv-menu-title"><span>{{ current?.title || '还没有音频' }}</span></p>
       <div class="wv-menu-row">
         <button type="button" title="上一首" @click="step(-1)">‹</button>
-        <button type="button" title="播放" @click="togglePlay">{{ playing ? '❚❚' : '▶' }}</button>
+        <button type="button" title="播放" @click="togglePlay">
+          <svg v-if="playing" viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+          <svg v-else viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor"><path d="M8 5.2v13.6c0 .7.8 1.1 1.4.7l10.2-6.8c.6-.4.6-1.3 0-1.7L9.4 4.5C8.8 4.1 8 4.5 8 5.2z" /></svg>
+        </button>
         <button type="button" title="下一首" @click="step(1)">›</button>
       </div>
       <div class="wv-menu-row">
-        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10h3l4-3v10l-4-3H4z" /></svg>
+        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10h3l4-3v10l-4-3H4z" /><path d="M15 9a4 4 0 010 6" /></svg>
         <input type="range" min="0" max="1" step="0.05" :value="volume" @input="volume = Number($event.target.value)" />
       </div>
       <div class="wv-menu-mode" @mouseenter="menu = { ...menu, modes: true }">
-        <span>{{ modeLabel }}</span>
+        <span>播放方式 · {{ modeLabel }}</span>
         <div v-if="menu.modes" class="wv-menu-sub" :class="menu.flip ? 'is-flip' : ''">
           <button v-for="item in MODES" :key="item.id" type="button" @click="setMode(item.id)">{{ item.label }}</button>
         </div>

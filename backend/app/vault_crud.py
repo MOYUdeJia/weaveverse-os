@@ -279,7 +279,7 @@ def export_plaintext(session: Session, password: str) -> list[dict]:
     return items
 
 
-def change_security_password(session: Session, new_password: str, current: str) -> None:
+def change_security_password(session: Session, new_password: str, current: str, hint: str | None = None) -> None:
     """Re-encrypt every entry, commit, then store the new hash and salt."""
 
     from app import privacy
@@ -320,7 +320,7 @@ def change_security_password(session: Session, new_password: str, current: str) 
         if new_blobs:
             _write_entry_blobs(session, new_blobs)
         try:
-            privacy.write_security(text, new_salt)
+            privacy.write_security(text, new_salt, hint)
         except Exception:
             if old_blobs:
                 _write_entry_blobs(session, old_blobs)
@@ -329,5 +329,4 @@ def change_security_password(session: Session, new_password: str, current: str) 
         del new_key
         if old_key is not None:
             del old_key
-    privacy.remember("vault", text)
-    privacy.remember("backup", text)
+    privacy.lock()

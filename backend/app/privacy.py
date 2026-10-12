@@ -102,10 +102,16 @@ def keep_vault_secret(saved: dict | None) -> None:
     keep_security_secret(saved)
 
 
+def security_hint() -> str:
+    data = _load()
+    return str(data.get("security_hint") or "").strip()[:80]
+
+
 def status() -> dict:
     ready = security_material() is not None
     return {
         "security_set": ready,
+        "security_hint": security_hint(),
         "vault_set": ready,
         "vault_unlocked": _session["vault"] is not None,
         "backup_set": ready,
@@ -136,14 +142,28 @@ def restore_file(data: dict) -> None:
     _save(data)
 
 
-def write_security(password: str, salt: bytes) -> None:
+def write_security(password: str, salt: bytes, hint: str | None = None) -> None:
     data = _load()
     data["security_hash"] = hash_password(password)
     data["security_salt"] = salt.hex()
     data.pop("vault_hash", None)
     data.pop("vault_kek_salt", None)
     data.pop("backup_hash", None)
+    if hint is not None:
+        cleaned = " ".join(hint.split())[:80]
+        if cleaned:
+            data["security_hint"] = cleaned
+        else:
+            data.pop("security_hint", None)
     _save(data)
+
+
+def clear_security() -> None:
+    data = _load()
+    for key in ("security_hash", "security_salt", "security_hint", "backup_hash", "vault_hash", "vault_kek_salt"):
+        data.pop(key, None)
+    _save(data)
+    lock()
 
 
 def require_session(kind: Kind) -> str:

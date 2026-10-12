@@ -43,6 +43,7 @@ def backup_info() -> dict:
         "last_backup_at": last_backup_at(),
         "items": list_backups(),
         "security_set": privacy_status()["security_set"],
+        "security_hint": privacy_status()["security_hint"],
         "backup_set": privacy_status()["backup_set"],
         "backup_unlocked": privacy_status()["backup_unlocked"],
     }

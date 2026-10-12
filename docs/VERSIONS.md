@@ -1038,3 +1038,41 @@
   - 修改 `frontend/src/components/MusicDock.vue`
   - 修改 `docs/VERSIONS.md`
 
+## M9.3 · 2026-10-12
+- **任务**：密码文案和重置，以及悬浮球按键、进度条、展开策略。
+- **实现**：
+  - 分区按钮改成「重命名」。复制密码换成剪贴板图标。账密行改成名称、账号、密码、操作四列，间距加大。
+  - 首次设置可以填一条提示，提示是明文，不是密码。忘记密码可以重置：确认后只删除安全密码和密码库条目，其他数据不动。旧备份仍要用当时的密码打开。
+  - 修改安全密码成功后，本会话的解锁立刻失效，密码库和备份都要重新输入新密码。
+  - 靠近屏幕边缘时按键缩到 30px，并按剩余空间收短弧线，互相重叠时再推开。
+  - 右键菜单补全五栏：开关面板、滚动歌名、上一首/播放/下一首、音量、播放方式及二级菜单。
+  - 面板展开时球去掉半透明黑布，播放/暂停用和面板一样的底色。
+  - 彩色进度用 `gradientUnits="userSpaceOnUse"`。直线的包围盒高度是 0，原来的渐变画不出来。
+  - 球在中间时，上下边线遇到球就沿圆弧凸起绕过。球在端点时仍是直线穿过。
+  - 球靠近底部时歌名改到球上方，并加宽、靠边缘时对齐，避免被切掉。
+  - 展开默认按球的横坐标：小于 0.30 向右，大于 0.70 向左，中间向两边。长度先量可用空间。设置里可以改成强制从中间或强制从一侧。位置变了会重新算并做过渡。
+- **技术架构**：没有加新库。进度绕球是 SVG 路径上的圆弧，不是新的绘图库。
+- **与 M9.2 相比的变化**：
+  - 改密码后必须重输
+  - 可以填提示，也可以重置安全密码
+  - 进度条在球中间时绕过，不再直穿
+  - 展开方向按位置自动判断
+- **已知问题**：
+  - 重置不能找回已经加密的条目。旧备份如果当时的密码和现在不同，仍然要用当时的密码打开。
+  - 强制从中间且球贴在边上时，面板会比较短，因为两侧可用空间很小。
+- **文件变更**：
+  - 修改 `backend/app/privacy.py`
+  - 修改 `backend/app/vault_crud.py`
+  - 修改 `backend/app/routes/privacy.py`
+  - 修改 `backend/app/routes/backup.py`
+  - 修改 `backend/app/appearance.py`
+  - 修改 `frontend/src/api/client.js`
+  - 修改 `frontend/src/App.vue`
+  - 修改 `frontend/src/style.css`
+  - 修改 `frontend/src/components/PrivacyPanel.vue`
+  - 修改 `frontend/src/components/BackupPanel.vue`
+  - 修改 `frontend/src/components/VaultPanel.vue`
+  - 修改 `frontend/src/components/AppearanceDialog.vue`
+  - 修改 `frontend/src/components/MusicDock.vue`
+  - 修改 `docs/VERSIONS.md`
+

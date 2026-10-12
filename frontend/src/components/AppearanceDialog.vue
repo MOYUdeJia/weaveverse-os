@@ -209,8 +209,9 @@ async function clear(kind, groupId) {
       </div>
       <p class="mt-4 text-xs text-ink/45">面板展开</p>
       <div class="mt-2 flex gap-2">
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player_spread === 'side' ? 'bg-ink text-white' : 'bg-white'" @click="setSpread('side')">从一侧</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player_spread === 'center' ? 'bg-ink text-white' : 'bg-white'" @click="setSpread('center')">从中间向两边</button>
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="!appearance.player_spread || appearance.player_spread === 'auto' ? 'bg-ink text-white' : 'bg-white'" @click="setSpread('auto')">自动</button>
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player_spread === 'center' ? 'bg-ink text-white' : 'bg-white'" @click="setSpread('center')">强制从中间</button>
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player_spread === 'side' ? 'bg-ink text-white' : 'bg-white'" @click="setSpread('side')">强制从一侧</button>
       </div>
       <p class="mt-4 text-xs text-ink/45">进度条</p>
       <div class="mt-2 flex items-center gap-2">

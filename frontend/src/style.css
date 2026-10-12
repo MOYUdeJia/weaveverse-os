@@ -486,10 +486,24 @@ html[data-theme] .bg-dawn {
 
 .wv-vault-line {
   display: grid;
-  grid-template-columns: 14px 40px minmax(8rem, 1fr) 128px 84px 36px 36px 32px 28px 28px;
+  grid-template-columns: 16px minmax(0, 1.6fr) minmax(7rem, 1fr) minmax(7rem, 0.9fr) auto;
   align-items: center;
-  column-gap: 6px;
-  min-height: 48px;
+  column-gap: 16px;
+  min-height: 56px;
+  padding: 6px 0;
+}
+
+.wv-vault-namebox {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.wv-vault-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .wv-vault-marks {
@@ -573,7 +587,7 @@ html[data-theme] .bg-dawn {
 }
 
 .wv-vault-note {
-  margin: 0 0 2px 60px;
+  margin: 0 0 8px 32px;
   overflow: hidden;
   color: color-mix(in srgb, var(--wv-ink, #16201d) 45%, transparent);
   font-size: 12px;
@@ -635,10 +649,15 @@ html[data-theme] .bg-dawn {
 }
 
 .wv-orb-stage {
+  --wv-btn: 36px;
   position: relative;
   z-index: 3;
   width: 72px;
   height: 72px;
+}
+
+.wv-orb-stage.is-tight {
+  --wv-btn: 30px;
 }
 
 .wv-orb-pad {
@@ -695,17 +714,45 @@ html[data-theme] .bg-dawn {
   inset: 0;
 }
 
+.wv-orb-veil.is-same {
+  background: transparent;
+  color: var(--wv-ink, #16201d);
+}
+
+.wv-orb-veil.is-same svg {
+  fill: currentColor;
+}
+
 .wv-song {
   position: absolute;
   top: 78px;
   left: 50%;
-  width: 148px;
+  width: 196px;
   overflow: hidden;
   color: var(--wv-ink, #16201d);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 16px;
   white-space: nowrap;
   transform: translateX(-50%);
   pointer-events: none;
+}
+
+.wv-song.is-above {
+  top: auto;
+  bottom: 78px;
+}
+
+.wv-song.is-end {
+  left: auto;
+  right: 0;
+  text-align: right;
+  transform: none;
+}
+
+.wv-song.is-start {
+  left: 0;
+  text-align: left;
+  transform: none;
 }
 
 .wv-song span,
@@ -728,12 +775,12 @@ html[data-theme] .bg-dawn {
 
 .wv-orb-btn {
   position: absolute;
-  top: 18px;
-  left: 18px;
+  top: calc((72px - var(--wv-btn)) / 2);
+  left: calc((72px - var(--wv-btn)) / 2);
   z-index: 5;
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: var(--wv-btn);
+  height: var(--wv-btn);
   place-items: center;
   border-radius: 999px;
   background: var(--wv-orb, color-mix(in srgb, var(--wv-work, #fcfaf5) 92%, transparent));
@@ -748,8 +795,8 @@ html[data-theme] .bg-dawn {
 
 .wv-orb-vol {
   display: flex;
-  width: 36px;
-  height: 36px;
+  width: var(--wv-btn);
+  height: var(--wv-btn);
   align-items: flex-end;
   justify-content: center;
   overflow: visible;
@@ -761,8 +808,8 @@ html[data-theme] .bg-dawn {
   position: relative;
   z-index: 2;
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: var(--wv-btn);
+  height: var(--wv-btn);
   place-items: center;
   border-radius: 999px;
   background: var(--wv-orb, color-mix(in srgb, var(--wv-work, #fcfaf5) 92%, transparent));
@@ -777,6 +824,11 @@ html[data-theme] .bg-dawn {
 .wv-orb-vol.is-hot.is-down > button {
   border-radius: 18px 18px 0 0;
   box-shadow: none;
+}
+
+.wv-orb-stage.is-tight .wv-stem {
+  width: 30px;
+  height: 104px;
 }
 
 .wv-stem {
@@ -932,6 +984,7 @@ html[data-theme] .bg-dawn {
   fill: none;
   stroke-width: 2.5;
   stroke-linecap: butt;
+  stroke-linejoin: round;
 }
 
 .wv-line-track {
@@ -958,14 +1011,26 @@ html[data-theme] .bg-dawn {
 .wv-orb-menu {
   position: fixed;
   z-index: 80;
-  width: 220px;
+  width: 232px;
   padding: 8px;
+  overflow: visible;
   border-radius: 12px;
   background: color-mix(in srgb, var(--wv-work, #fcfaf5) 96%, transparent);
   box-shadow: 0 12px 28px rgba(22, 32, 29, 0.18);
 }
 
-.wv-orb-menu > button,
+.wv-menu-main {
+  display: flex;
+  width: 100%;
+  height: auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.wv-orb-menu > button:not(.wv-menu-main),
 .wv-menu-sub button,
 .wv-menu-row button {
   display: grid;
@@ -976,10 +1041,8 @@ html[data-theme] .bg-dawn {
   font-size: 13px;
 }
 
-.wv-orb-menu > button {
-  width: 100%;
-  justify-items: start;
-  padding-left: 6px;
+.wv-menu-main {
+  justify-content: flex-start;
 }
 
 .wv-menu-title {

@@ -607,11 +607,15 @@ export function getPrivacy() {
   return request('/privacy')
 }
 
-export function setVaultPassword(password, current = '') {
+export function setVaultPassword(password, current = '', hint = '') {
   return request('/privacy/vault', {
     method: 'POST',
-    body: JSON.stringify({ password, current }),
+    body: JSON.stringify({ password, current, hint }),
   })
+}
+
+export function resetSecurity() {
+  return request('/privacy/reset', { method: 'POST' })
 }
 
 export function unlockVault(password) {

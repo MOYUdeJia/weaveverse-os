@@ -16,6 +16,7 @@ router = APIRouter(prefix="/privacy", tags=["privacy"])
 class PasswordSet(BaseModel):
     password: str = Field(min_length=1, max_length=200)
     current: str = Field(default="", max_length=200)
+    hint: str = Field(default="", max_length=80)
 
 
 class PasswordUnlock(BaseModel):
@@ -23,8 +24,14 @@ class PasswordUnlock(BaseModel):
 
 
 def _change(data: PasswordSet, session: Session) -> dict:
+    first = privacy.security_material() is None
     try:
-        vault_crud.change_security_password(session, data.password, data.current)
+        vault_crud.change_security_password(
+            session,
+            data.password,
+            data.current,
+            data.hint if first else None,
+        )
     except PermissionError as exc:
         raise_api_error(401, "current", str(exc))
     except ValueError as exc:
@@ -60,6 +67,13 @@ def unlock_vault(data: PasswordUnlock) -> dict:
         raise_api_error(401, "password", str(exc))
     finally:
         data.password = ""
+    return privacy.status()
+
+
+@router.post("/reset")
+def reset_security(session: Session = Depends(get_session)) -> dict:
+    vault_crud.wipe_vault(session)
+    privacy.clear_security()
     return privacy.status()
 
 
