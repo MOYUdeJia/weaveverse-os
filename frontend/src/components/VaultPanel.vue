@@ -369,9 +369,16 @@ onBeforeUnmount(() => {
                       <button type="button" class="wv-vault-copy" title="复制密码" @click="copyText(entry.password, '密码')">
                         <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="10" width="10" height="8" rx="1.5" /><path d="M9 10V8a3 3 0 016 0v2" /></svg>
                       </button>
-                      <button type="button" class="wv-vault-eye" title="显示密码" :disabled="entry.locked" @click="toggleShow(entry)">{{ shown[entry.id] && !entry.locked ? '隐' : '眼' }}</button>
-                      <button type="button" class="wv-vault-edit" title="编辑" @click="startEdit(entry)">改</button>
-                      <button type="button" class="wv-vault-edit is-danger" title="删除" @click="removeEntry(entry)">删</button>
+                      <button type="button" class="wv-vault-eye" title="显示密码" :disabled="entry.locked" @click="toggleShow(entry)">
+                        <svg v-if="shown[entry.id] && !entry.locked" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l18 18" /><path d="M10.6 10.6a2 2 0 002.8 2.8" /><path d="M9.9 5.2A10.4 10.4 0 0112 5c5 0 8.5 3.5 10 7-.6 1.3-1.5 2.6-2.7 3.7" /><path d="M6.1 6.2C4.3 7.5 2.9 9.2 2 12c1.1 2.6 3.6 5.2 7.4 6.2" /></svg>
+                        <svg v-else viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+                      </button>
+                      <button type="button" class="wv-vault-edit" title="编辑" @click="startEdit(entry)">
+                        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h4l10-10-4-4L4 16v4z" /><path d="M13 7l4 4" /></svg>
+                      </button>
+                      <button type="button" class="wv-vault-edit is-danger" title="删除" @click="removeEntry(entry)">
+                        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14" /><path d="M9 7V5h6v2" /><path d="M8 7l1 12h6l1-12" /></svg>
+                      </button>
                     </div>
                     <p v-if="entry.note" class="wv-vault-note" :title="entry.note">{{ entry.note }}</p>
                   </div>

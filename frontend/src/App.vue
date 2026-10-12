@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import { backgroundUrl, createGroup, createNav, deleteGroup, deleteNav, getAppearance, getGroups, getHealth, getNav, lockGroup, lockNav, patchNav, pinNav, reorderGroups, reorderNav, updateGroup, updateNav } from './api/client'
+import { backgroundUrl, createGroup, createNav, deleteGroup, deleteNav, getAppearance, getGroups, getHealth, getNav, lockGroup, lockNav, patchNav, pinNav, reorderGroups, reorderNav, updateGroup, updateNav, vaultEntryCount } from './api/client'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import GroupBar from './components/GroupBar.vue'
 import GroupEditDialog from './components/GroupEditDialog.vue'
@@ -235,8 +235,20 @@ async function saveNavItem(data, done) {
   }
 }
 
-function removeNavItem(item) {
-  askConfirm('删除导航项', `确定删除「${item.title}」吗？`, async () => {
+async function removeNavItem(item) {
+  let title = '删除导航项'
+  let message = `确定删除「${item.title}」吗？`
+  if (item.page_type === 'password_vault') {
+    let count = 0
+    try {
+      count = (await vaultEntryCount()).count || 0
+    } catch {
+      count = 0
+    }
+    title = '删除密码管理器'
+    message = `将删除所有 ${count} 条密码，不可恢复`
+  }
+  askConfirm(title, message, async () => {
     noticeMessage.value = ''
     await deleteNav(item.id)
     const nextItems = navItems.value.filter((navItem) => navItem.id !== item.id)

@@ -19,6 +19,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from app.config import BACKUPS_DIR, DATA_DIR, DATABASE_PATH
 from app.crypto import derive_key
+from app.privacy import keep_vault_secret, vault_secret
 
 MAGIC = b"WVBK"
 VERSION = 1
@@ -106,6 +107,7 @@ def _safe_member(name: str) -> Path | None:
 
 
 def restore_zip(payload: bytes) -> None:
+    kept = vault_secret()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     safety = SAFETY_DIR / stamp
     safety.mkdir(parents=True, exist_ok=True)
@@ -129,6 +131,7 @@ def restore_zip(payload: bytes) -> None:
                 continue
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(archive.read(info))
+    keep_vault_secret(kept)
 
 
 def remember_backup() -> None:

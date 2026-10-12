@@ -1,7 +1,7 @@
 {
   "theme": "sakura",
   "bar": "overlay",
-  "player": "bottom",
+  "player": "side",
   "low_power": false,
   "global_image": "35612905ecfc4302b003d2d70c92b40f.png",
   "global_video": "1d720dd08a26469eb651e739607142ca.mp4",

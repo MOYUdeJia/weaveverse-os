@@ -5,7 +5,6 @@ import gsap from 'gsap'
 import { MotionPathPlugin } from 'gsap/MotionPathPlugin'
 
 import { assignTrackList, deleteTrack, listTracks, trackUrl, uploadTrack } from '../api/client'
-import { showMenu } from '../contextMenu'
 
 gsap.registerPlugin(MotionPathPlugin)
 
@@ -32,10 +31,12 @@ const mode = ref('order')
 const index = ref(0)
 const audio = ref(null)
 const fileInput = ref(null)
-const panelEl = ref(null)
 const prevEl = ref(null)
 const nextEl = ref(null)
 const volEl = ref(null)
+const panelBtn = ref(null)
+const modeBtn = ref(null)
+const menu = ref(null)
 const playing = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
@@ -104,9 +105,11 @@ function wireAnalyser() {
   audioCtx = new Ctx()
   const source = audioCtx.createMediaElementSource(audio.value)
   analyser = audioCtx.createAnalyser()
-  analyser.fftSize = 256
+  analyser.fftSize = 1024
+  analyser.smoothingTimeConstant = 0.55
   source.connect(analyser)
   analyser.connect(audioCtx.destination)
+  audioCtx.resume()
 }
 
 function spawnNote() {
@@ -122,12 +125,12 @@ function spawnNote() {
     if (!el) {
       return
     }
-    gsap.fromTo(el, { y: 8, x: 0, opacity: 0.95, scale: 0.7 }, {
-      y: -72 - Math.random() * 24,
-      x: (Math.random() - 0.5) * 28,
+    gsap.fromTo(el, { y: 0, x: 0, opacity: 0.9, scale: 1.15 }, {
+      y: -52 - Math.random() * 10,
+      x: (Math.random() - 0.5) * 22,
       opacity: 0,
-      scale: 1,
-      duration: 0.9,
+      scale: 0.35,
+      duration: 0.72,
       ease: 'power1.out',
       onComplete: () => {
         notes.value = notes.value.filter((item) => item.id !== id)
@@ -141,19 +144,18 @@ function tickEnergy() {
   if (!playing.value || !analyser) {
     return
   }
-  const bins = new Uint8Array(analyser.frequencyBinCount)
-  analyser.getByteFrequencyData(bins)
-  let sum = 0
-  for (let bin = 1; bin <= 6; bin += 1) {
-    sum += bins[bin] || 0
+  const wave = new Uint8Array(analyser.fftSize)
+  analyser.getByteTimeDomainData(wave)
+  let peak = 0
+  for (let bin = 0; bin < wave.length; bin += 8) {
+    peak = Math.max(peak, Math.abs(wave[bin] - 128))
   }
-  const bass = sum / 6
   const now = performance.now()
-  if (bass > 128 && bass - lastBass > 22 && now - lastSpawn > 170) {
+  if (!controlsOpen.value && !panelOpen.value && peak > 12 && peak - lastBass > 5 && now - lastSpawn > 150) {
     spawnNote()
     lastSpawn = now
   }
-  lastBass = lastBass * 0.55 + bass * 0.45
+  lastBass = lastBass * 0.4 + peak * 0.6
   raf = requestAnimationFrame(tickEnergy)
 }
 
@@ -256,67 +258,77 @@ function onMeta() {
   duration.value = Number.isFinite(audio.value?.duration) ? audio.value.duration : 0
 }
 
+function arcButtons() {
+  return [prevEl.value, nextEl.value, volEl.value, panelBtn.value, modeBtn.value].filter(Boolean)
+}
+
 function openArc() {
-  overStage.value = true
-  controlsOpen.value = true
-  if (!prevEl.value || !nextEl.value || !volEl.value) {
+  if (panelOpen.value) {
     return
   }
-  gsap.killTweensOf([prevEl.value, nextEl.value, volEl.value])
-  travel(prevEl.value, [{ x: 0, y: 0 }, { x: -16, y: -22 }, { x: -52, y: 2 }])
-  travel(nextEl.value, [{ x: 0, y: 0 }, { x: 16, y: -22 }, { x: 52, y: 2 }])
-  travel(volEl.value, [{ x: 0, y: 0 }, { x: 18, y: -18 }, { x: 0, y: -52 }])
+  overStage.value = true
+  controlsOpen.value = true
+  const buttons = arcButtons()
+  if (buttons.length < 5) {
+    return
+  }
+  gsap.killTweensOf(buttons)
+  travel(prevEl.value, [{ x: 0, y: 0 }, { x: -18, y: -8 }, { x: -64, y: 0 }])
+  travel(nextEl.value, [{ x: 0, y: 0 }, { x: 18, y: -8 }, { x: 64, y: 0 }])
+  travel(volEl.value, [{ x: 0, y: 0 }, { x: 10, y: -20 }, { x: 0, y: -58 }])
+  travel(panelBtn.value, [{ x: 0, y: 0 }, { x: -20, y: 16 }, { x: -46, y: 46 }])
+  travel(modeBtn.value, [{ x: 0, y: 0 }, { x: 20, y: 16 }, { x: 46, y: 46 }])
 }
 
 function closeArc() {
   overStage.value = false
-  if (volHold.value || volHot.value) {
+  if (volHold.value || volHot.value || menu.value) {
     return
   }
   controlsOpen.value = false
-  ;[prevEl.value, nextEl.value, volEl.value].forEach((el) => {
-    if (!el) {
-      return
-    }
+  volHot.value = false
+  arcButtons().forEach((el) => {
     gsap.killTweensOf(el)
-    gsap.to(el, { x: 0, y: 0, opacity: 0, duration: 0.24, ease: 'power2.in' })
+    gsap.to(el, { x: 0, y: 0, opacity: 0, duration: 0.28, ease: 'power2.in' })
   })
 }
 
-function panelOrigin() {
-  return props.place === 'bottom' ? '50% 100%' : '100% 50%'
+function capWidth() {
+  return Math.min(480, Math.max(280, window.innerWidth - 340))
 }
 
 function togglePanel(force) {
   const open = typeof force === 'boolean' ? force : !panelOpen.value
+  menu.value = null
   if (open) {
+    controlsOpen.value = false
+    volHot.value = false
+    arcButtons().forEach((el) => {
+      gsap.killTweensOf(el)
+      gsap.set(el, { x: 0, y: 0, opacity: 0 })
+    })
     panelOpen.value = true
     nextTick(() => {
-      if (!panelEl.value) {
-        return
-      }
-      gsap.fromTo(panelEl.value, { scale: 0.35, opacity: 0, x: props.place === 'bottom' ? 0 : 18 }, {
-        scale: 1,
+      const nodes = document.querySelectorAll('.wv-capsule')
+      gsap.fromTo(nodes, { width: 0, opacity: 0 }, {
+        width: props.place === 'bottom' ? capWidth() / 2 : capWidth(),
         opacity: 1,
-        x: 0,
-        duration: 0.34,
-        ease: 'power2.out',
-        transformOrigin: panelOrigin(),
+        duration: 0.42,
+        ease: 'power3.out',
       })
     })
     return
   }
-  if (!panelEl.value) {
+  const nodes = document.querySelectorAll('.wv-capsule')
+  if (!nodes.length) {
     panelOpen.value = false
     return
   }
-  gsap.to(panelEl.value, {
-    scale: 0.35,
+  gsap.to(nodes, {
+    width: 0,
     opacity: 0,
-    x: props.place === 'bottom' ? 0 : 18,
-    duration: 0.24,
+    duration: 0.28,
     ease: 'power2.in',
-    transformOrigin: panelOrigin(),
     onComplete: () => {
       panelOpen.value = false
     },
@@ -335,19 +347,24 @@ function switchList(id) {
 }
 
 function onMenu(event) {
-  showMenu(event, [
-    ...LISTS.map((item) => ({
-      label: item.id === listId.value ? `✓ ${item.label}` : item.label,
-      onClick: () => switchList(item.id),
-    })),
-    { label: '打开面板', onClick: () => togglePanel(true) },
-    { label: '上一首', onClick: () => step(-1) },
-    { label: '下一首', onClick: () => step(1) },
-    { label: playing.value ? '暂停' : '播放', onClick: togglePlay },
-    { label: modeLabel.value, onClick: cycleMode },
-    { label: '音量加', onClick: () => { volume.value = Math.min(1, +(volume.value + 0.1).toFixed(2)) } },
-    { label: '音量减', onClick: () => { volume.value = Math.max(0, +(volume.value - 0.1).toFixed(2)) } },
-  ])
+  event.preventDefault()
+  if (!controlsOpen.value) {
+    return
+  }
+  menu.value = { x: event.clientX, y: event.clientY, modes: false }
+}
+
+function setMode(id) {
+  mode.value = id
+  writeState()
+  if (menu.value) {
+    menu.value = { ...menu.value, modes: false }
+  }
+}
+
+function onVolWheel(event) {
+  const delta = event.deltaY > 0 ? -0.05 : 0.05
+  volume.value = Math.min(1, Math.max(0, +(volume.value + delta).toFixed(2)))
 }
 
 function onTime() {
@@ -448,66 +465,96 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="wv-orb-dock" :class="placeClass">
-    <div v-show="panelOpen" ref="panelEl" class="wv-orb-panel">
-      <div class="mb-2 flex items-center justify-between gap-2">
-        <p class="text-xs font-semibold">{{ listLabel }}</p>
-        <button type="button" class="rounded bg-white/80 px-2 py-1 text-[11px]" @click="cycleMode">{{ modeLabel }}</button>
-        <button type="button" class="text-xs text-ink/45" @click="togglePanel(false)">收起</button>
-      </div>
-      <div class="mb-2 flex items-center gap-2 text-[10px] text-ink/50">
-        <span>{{ clock(currentTime) }}</span>
-        <input class="min-w-0 flex-1" type="range" min="0" :max="duration || 0" step="0.1" :value="currentTime" @input="seek" />
-        <span>{{ clock(duration) }}</span>
-      </div>
-      <p v-if="!shown.length" class="py-3 text-xs text-ink/45">这个歌单还没有音频</p>
-      <button
-        v-for="track in shown"
-        :key="track.filename"
-        type="button"
-        class="flex w-full items-center gap-2 py-1.5 text-left text-xs"
-        :class="track.filename === current?.filename ? 'text-moss' : 'text-ink/75'"
-        @click="load(shown.findIndex((item) => item.filename === track.filename), true)"
-      >
-        <span class="min-w-0 flex-1 truncate">{{ track.title }}</span>
-        <select class="max-w-[5.5rem] bg-transparent text-[10px]" :value="track.list || 'playlist'" @click.stop @change="moveTrack(track, $event.target.value)">
+  <div class="wv-orb-dock" :class="[placeClass, panelOpen ? 'is-panel' : '']">
+    <div v-if="place === 'bottom' && panelOpen" class="wv-cap-line">
+      <input type="range" min="0" :max="duration || 0" step="0.1" :value="currentTime" @input="seek" />
+      <span class="wv-cap-bump" />
+    </div>
+    <div class="wv-orb-row">
+      <div v-show="panelOpen" class="wv-capsule">
+        <button type="button" class="wv-icon-btn" title="收回" @click="togglePanel(false)">
+          <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 12h8" /><path d="M11 9l-3 3 3 3" /></svg>
+        </button>
+        <p class="wv-cap-title" :title="current?.title || ''">{{ current?.title || '还没有音频' }}</p>
+        <template v-if="place !== 'bottom'">
+          <span class="wv-cap-time">{{ clock(currentTime) }}</span>
+          <input class="wv-cap-seek" type="range" min="0" :max="duration || 0" step="0.1" :value="currentTime" @input="seek" />
+          <span class="wv-cap-time">{{ clock(duration) }}</span>
+        </template>
+        <span v-else class="wv-cap-time">{{ clock(currentTime) }} / {{ clock(duration) }}</span>
+        <select class="wv-cap-select" :value="current?.filename || ''" title="曲目" @change="load(shown.findIndex((item) => item.filename === $event.target.value), true)">
+          <option v-for="track in shown" :key="track.filename" :value="track.filename">{{ track.title }}</option>
+        </select>
+        <select class="wv-cap-select" :value="listId" title="歌单" @change="switchList($event.target.value)">
           <option v-for="item in LISTS" :key="item.id" :value="item.id">{{ item.label }}</option>
         </select>
-        <span class="text-ink/35" @click.stop="removeAt(track)">移除</span>
-      </button>
-      <button type="button" class="mt-2 h-7 rounded bg-white/80 px-2 text-xs" @click="fileInput.click()">添加音频</button>
-      <p v-if="errorMessage" class="mt-1 text-xs text-ember">{{ errorMessage }}</p>
-    </div>
-
-    <div class="wv-orb-stage" :class="controlsOpen ? 'is-open' : ''" @mouseenter="openArc" @mouseleave="closeArc">
-      <div class="wv-orb-pad" />
-      <span v-for="note in notes" :key="note.id" :data-note="note.id" class="wv-orb-note">{{ note.glyph }}</span>
-      <button ref="prevEl" type="button" class="wv-orb-btn" title="上一首" @click="step(-1)">‹</button>
-      <button ref="nextEl" type="button" class="wv-orb-btn" title="下一首" @click="step(1)">›</button>
-      <div
-        ref="volEl"
-        class="wv-orb-btn wv-orb-vol"
-        @mouseenter="volHot = true"
-        @mouseleave="volHot = false"
-      >
-        <input
-          v-show="volHot || volHold"
-          class="wv-orb-slider"
-          type="range"
-          min="0"
-          max="1"
-          step="0.05"
-          :value="volume"
-          title="音量"
-          @pointerdown="volHold = true"
-          @input="volume = Number($event.target.value)"
-        />
-        <button type="button" title="音量">♫</button>
+        <button type="button" class="wv-icon-btn" :title="modeLabel" @click="cycleMode">
+          <svg v-if="mode === 'one'" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 7h10v4" /><path d="M17 17H7v-4" /><path d="M14 4l3 3-3 3" /><path d="M10 20l-3-3 3-3" /><path d="M12 11v2h2" /></svg>
+          <svg v-else-if="mode === 'shuffle'" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h4l10 10" /><path d="M4 17h4L18 7" /><path d="M16 6h4v4" /><path d="M16 18h4v-4" /></svg>
+          <svg v-else viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 7h10v4" /><path d="M17 17H7v-4" /><path d="M14 4l3 3-3 3" /><path d="M10 20l-3-3 3-3" /></svg>
+        </button>
+        <input class="w-16" type="range" min="0" max="1" step="0.05" :value="volume" title="音量" @input="volume = Number($event.target.value)" />
+        <button type="button" class="wv-icon-btn" title="添加" @click="fileInput.click()">+</button>
+        <button v-if="current" type="button" class="wv-icon-btn" title="移除" @click="removeAt(current)">×</button>
+        <button v-if="place !== 'bottom'" type="button" class="wv-icon-btn" title="上一首" @click="step(-1)">‹</button>
+        <button v-if="place !== 'bottom'" type="button" class="wv-icon-btn" title="下一首" @click="step(1)">›</button>
+        <button v-else type="button" class="wv-icon-btn" title="上一首" @click="step(-1)">‹</button>
       </div>
-      <button type="button" class="wv-orb-ball" :title="current?.title || '还没有音频'" @click="togglePlay" @contextmenu="onMenu">
-        <span class="wv-orb-title"><span>{{ current?.title || '♪' }}</span></span>
-        <span class="wv-orb-state">{{ playing ? '暂停' : '播放' }}</span>
-      </button>
+
+      <div class="wv-orb-stage" :class="{ 'is-open': controlsOpen, 'is-playing': playing }" @mouseenter="openArc" @mouseleave="closeArc">
+        <div class="wv-orb-pad" />
+        <span v-for="note in notes" :key="note.id" :data-note="note.id" class="wv-orb-note">{{ note.glyph }}</span>
+        <button ref="prevEl" type="button" class="wv-orb-btn" title="上一首" @click="step(-1)">‹</button>
+        <button ref="nextEl" type="button" class="wv-orb-btn" title="下一首" @click="step(1)">›</button>
+        <div ref="volEl" class="wv-orb-btn wv-orb-vol" :class="volHot || volHold ? 'is-hot' : ''" @mouseenter="volHot = true" @mouseleave="volHot = false" @wheel.prevent="onVolWheel">
+          <div v-show="volHot || volHold" class="wv-vol-capsule" @pointerdown="volHold = true">
+            <input type="range" min="0" max="1" step="0.01" :value="volume" @input="volume = Number($event.target.value)" />
+          </div>
+          <button type="button" title="音量" @click="volHot = true">
+            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10h3l4-3v10l-4-3H4z" /><path d="M15 9a4 4 0 010 6" /></svg>
+          </button>
+        </div>
+        <button ref="panelBtn" type="button" class="wv-orb-btn" title="打开面板" @click="togglePanel(true)">
+          <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8h14" /><path d="M5 12h14" /><path d="M5 16h10" /></svg>
+        </button>
+        <button ref="modeBtn" type="button" class="wv-orb-btn" :title="modeLabel" @click="cycleMode">
+          <svg v-if="mode === 'shuffle'" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h4l10 10" /><path d="M4 17h4L18 7" /></svg>
+          <svg v-else-if="mode === 'one'" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 7h10v4" /><path d="M17 17H7v-4" /><path d="M12 10v4" /></svg>
+          <svg v-else viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 7h10v4" /><path d="M17 17H7v-4" /></svg>
+        </button>
+        <button type="button" class="wv-orb-ball" @click="togglePlay" @contextmenu="onMenu">
+          <svg class="wv-orb-glyph" :class="playing && !controlsOpen ? 'is-spin' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 18V6l10-2v12" /><circle cx="7" cy="18" r="2.2" /><circle cx="17" cy="16" r="2.2" /></svg>
+          <span v-show="controlsOpen || panelOpen" class="wv-orb-veil">
+            <svg v-if="playing" viewBox="0 0 24 24" class="h-6 w-6 fill-white"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+            <svg v-else viewBox="0 0 24 24" class="h-6 w-6 fill-white"><path d="M8 5.2v13.6c0 .7.8 1.1 1.4.7l10.2-6.8c.6-.4.6-1.3 0-1.7L9.4 4.5C8.8 4.1 8 4.5 8 5.2z" /></svg>
+          </span>
+        </button>
+      </div>
+
+      <div v-show="panelOpen && place === 'bottom'" class="wv-capsule">
+        <button type="button" class="wv-icon-btn" title="下一首" @click="step(1)">›</button>
+        <button type="button" class="wv-icon-btn" title="添加" @click="fileInput.click()">+</button>
+      </div>
+    </div>
+    <p v-show="!controlsOpen && !panelOpen" class="wv-song"><span>{{ current?.title || '还没有音频' }}</span></p>
+    <div v-if="menu" class="wv-orb-menu" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }" @mouseleave="menu = null">
+      <button type="button" @click="togglePanel(!panelOpen)">{{ panelOpen ? '关闭面板' : '打开面板' }}</button>
+      <p class="wv-menu-title"><span>{{ current?.title || '还没有音频' }}</span></p>
+      <div class="wv-menu-row">
+        <button type="button" title="上一首" @click="step(-1)">‹</button>
+        <button type="button" title="播放" @click="togglePlay">{{ playing ? '❚❚' : '▶' }}</button>
+        <button type="button" title="下一首" @click="step(1)">›</button>
+      </div>
+      <div class="wv-menu-row">
+        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10h3l4-3v10l-4-3H4z" /></svg>
+        <input type="range" min="0" max="1" step="0.05" :value="volume" @input="volume = Number($event.target.value)" />
+      </div>
+      <div class="wv-menu-mode" @mouseenter="menu = { ...menu, modes: true }">
+        <span>{{ modeLabel }}</span>
+        <div v-if="menu.modes" class="wv-menu-sub">
+          <button v-for="item in MODES" :key="item.id" type="button" @click="setMode(item.id)">{{ item.label }}</button>
+        </div>
+      </div>
     </div>
     <audio
       ref="audio"

@@ -44,6 +44,24 @@ def check_length(password: str) -> str:
     return text
 
 
+def vault_secret() -> dict | None:
+    data = _load()
+    stored = str(data.get("vault_hash") or "")
+    salt = str(data.get("vault_kek_salt") or "")
+    if not stored or not salt:
+        return None
+    return {"vault_hash": stored, "vault_kek_salt": salt}
+
+
+def keep_vault_secret(saved: dict | None) -> None:
+    if not saved:
+        return
+    data = _load()
+    data["vault_hash"] = saved["vault_hash"]
+    data["vault_kek_salt"] = saved["vault_kek_salt"]
+    _save(data)
+
+
 def status() -> dict:
     data = _load()
     return {

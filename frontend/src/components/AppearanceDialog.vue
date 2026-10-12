@@ -37,6 +37,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'change', 'open-guide'])
 
 const page = ref('look')
+const maskArmed = ref(false)
 const busy = ref('')
 const busyName = ref('')
 const errorMessage = ref('')
@@ -118,6 +119,18 @@ function onVideo(event) {
   takeFile(event, 'video', null)
 }
 
+function onMaskDown(event) {
+  maskArmed.value = event.target === event.currentTarget
+}
+
+function onMaskUp(event) {
+  const close = maskArmed.value && event.target === event.currentTarget
+  maskArmed.value = false
+  if (close) {
+    emit('close')
+  }
+}
+
 function onGroupImage(event) {
   if (props.groupId == null) {
     return
@@ -137,7 +150,7 @@ async function clear(kind, groupId) {
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 z-[70] grid place-items-center bg-black/40 px-4" @click.self="emit('close')">
+  <div v-if="open" class="fixed inset-0 z-[70] grid place-items-center bg-black/40 px-4" @pointerdown="onMaskDown" @pointerup="onMaskUp">
     <div class="wv-surface max-h-[86vh] w-full max-w-lg overflow-y-auto rounded-md p-5 shadow-2xl">
       <div class="mb-4 flex items-center justify-between">
         <h2 class="text-lg font-semibold text-ink">设置</h2>

@@ -100,6 +100,21 @@ def reorder_sections(session: Session, ids: list[int]) -> list[VaultSection]:
     return list_sections(session)
 
 
+def count_entries(session: Session) -> int:
+    return len(session.exec(select(VaultEntry.id)).all())
+
+
+def wipe_vault(session: Session) -> int:
+    rows = list(session.exec(select(VaultEntry)).all())
+    sections = list(session.exec(select(VaultSection)).all())
+    for row in rows:
+        session.delete(row)
+    for row in sections:
+        session.delete(row)
+    session.commit()
+    return len(rows)
+
+
 def list_entries(session: Session) -> list[VaultEntry]:
     statement = select(VaultEntry).order_by(
         col(VaultEntry.pinned).desc(),

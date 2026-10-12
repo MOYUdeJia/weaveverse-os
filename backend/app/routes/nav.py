@@ -11,6 +11,7 @@ from app.db import get_session
 from app.errors import raise_api_error
 from app.icon_files import release_icon
 from app.models import NavItem
+from app import vault_crud
 from app.page_types import OVERVIEW_PAGE_TYPE, PAGE_TYPES, default_icon_for, is_focus_page
 from app.schemas import (
     BlockCreate,
@@ -262,6 +263,8 @@ def delete_nav(nav_id: int, session: Session = Depends(get_session)) -> dict[str
         raise_api_error(409, "id", "分组导览不能单独删除")
     if item.locked:
         raise_api_error(409, "id", "已锁定，不能删除")
+    if item.page_type == "password_vault":
+        vault_crud.wipe_vault(session)
     previous_icon = item.icon
     crud.delete_nav_item(session, item)
     release_icon(session, previous_icon)

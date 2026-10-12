@@ -637,6 +637,10 @@ export function unlockBackup(password) {
   })
 }
 
+export function vaultEntryCount() {
+  return request('/vault/count')
+}
+
 export function listVaultSections() {
   return request('/vault/sections')
 }

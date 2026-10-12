@@ -50,6 +50,11 @@ def _unlocked() -> None:
         raise_api_error(401, "password", str(exc))
 
 
+@router.get("/count")
+def vault_count(session: Session = Depends(get_session)) -> dict[str, int]:
+    return {"count": vault_crud.count_entries(session)}
+
+
 @router.get("/sections")
 def list_sections(session: Session = Depends(get_session)) -> list[dict]:
     _unlocked()
