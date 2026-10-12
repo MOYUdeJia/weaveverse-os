@@ -464,6 +464,7 @@ function startOrbMove() {
 }
 
 async function finishOrbMove(payload) {
+  appearance.value = { ...appearance.value, ...payload }
   orbMoving.value = false
   applyAppearance(await updateAppearance(payload))
 }

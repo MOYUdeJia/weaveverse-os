@@ -1,6 +1,6 @@
 <script setup>
 // 通用音乐悬浮球。球的坐标固定，胶囊和按键都相对它展开。
-// 进度是上下两根同步的描边，用 SVG 裁在「胶囊 ∪ 圆」里，所以线会穿过球。
+// 进度是上下两根同步的描边。走到圆上就改走外圆弧，不从球内部穿过去。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import gsap from 'gsap'
 import { MotionPathPlugin } from 'gsap/MotionPathPlugin'
@@ -155,32 +155,24 @@ function ballCenter() {
   return { x: window.innerWidth - 16 - 36, y: window.innerHeight - 16 - 36 }
 }
 
-const zone = computed(() => {
-  viewport.value
-  const ratio = ballCenter().x / Math.max(window.innerWidth, 1)
-  if (ratio < 0.3) {
-    return 'left'
-  }
-  if (ratio > 0.7) {
-    return 'right'
-  }
-  return 'middle'
-})
-
 const spreadMode = computed(() => {
+  viewport.value
+  props.place
+  props.originX
+  props.originY
   const forced = props.spread === 'center' || props.spread === 'side' ? props.spread : 'auto'
+  const ratio = ballCenter().x / Math.max(window.innerWidth, 1)
   if (forced === 'center') {
     return 'center'
   }
-  if (forced === 'side' || zone.value !== 'middle') {
-    if (zone.value === 'left') {
-      return 'right'
-    }
-    if (zone.value === 'right') {
-      return 'left'
-    }
-    const center = ballCenter()
-    return window.innerWidth - center.x >= center.x ? 'right' : 'left'
+  if (ratio < 0.3) {
+    return 'right'
+  }
+  if (ratio > 0.7) {
+    return 'left'
+  }
+  if (forced === 'side') {
+    return ratio <= 0.5 ? 'right' : 'left'
   }
   return 'center'
 })
@@ -230,17 +222,13 @@ const progressBox = computed(() => {
 
 function borderPath(y, outward) {
   const geom = progressGeom.value
-  const svgW = geom.svgW
-  const straight = { d: `M 0 ${y} H ${svgW}`, len: svgW }
-  if (spreadMode.value !== 'center') {
-    return straight
-  }
+  const svgW = Math.max(geom.svgW, 1)
   const radius = 36
   const cy = 36
   const dy = y - cy
   const disc = radius * radius - dy * dy
   if (disc <= 4) {
-    return straight
+    return { d: `M 0 ${y} H ${svgW}`, len: svgW }
   }
   const dx = Math.sqrt(disc)
   const x1 = geom.ballCx - dx
@@ -248,9 +236,22 @@ function borderPath(y, outward) {
   const sweep = outward < 0 ? 1 : 0
   const dot = (-dx) * dx + dy * dy
   const central = Math.acos(Math.max(-1, Math.min(1, dot / (radius * radius))))
+  const left = Math.max(0, Math.min(x1, svgW))
+  const right = Math.max(0, Math.min(x2, svgW))
+  let d = `M ${left.toFixed(2)} ${y}`
+  if (x1 > 0) {
+    d = `M 0 ${y} H ${left.toFixed(2)}`
+  }
+  if (right - left > 0.5) {
+    d += ` A ${radius} ${radius} 0 0 ${sweep} ${right.toFixed(2)} ${y}`
+  }
+  if (x2 < svgW) {
+    d += ` H ${svgW}`
+  }
+  const straight = (x1 > 0 ? left : 0) + (x2 < svgW ? svgW - right : 0)
   return {
-    d: `M 0 ${y} H ${x1.toFixed(2)} A ${radius} ${radius} 0 0 ${sweep} ${x2.toFixed(2)} ${y} H ${svgW}`,
-    len: Math.max(1, x1 + (svgW - x2) + radius * central),
+    d,
+    len: Math.max(1, straight + (right - left > 0.5 ? radius * central : 0)),
   }
 }
 
@@ -960,7 +961,7 @@ onBeforeUnmount(() => {
             </linearGradient>
             <clipPath id="wvFuseClip">
               <rect :x="progressGeom.capX" y="8" :width="progressGeom.capW" height="56" rx="28" />
-              <circle :cx="progressGeom.ballCx" cy="36" r="38" />
+              <circle :cx="progressGeom.ballCx" cy="36" r="37" />
             </clipPath>
           </defs>
           <g clip-path="url(#wvFuseClip)">

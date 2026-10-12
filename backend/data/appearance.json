@@ -1,7 +1,7 @@
 {
   "theme": "sakura",
   "bar": "overlay",
-  "player": "bottom",
+  "player": "corner",
   "player_x": null,
   "player_y": null,
   "player_spread": "auto",
