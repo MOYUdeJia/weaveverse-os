@@ -231,6 +231,47 @@ export function backgroundUrl(filename) {
   return `${API_PREFIX}/appearance/files/${encodeURIComponent(filename)}`
 }
 
+export function splashUrl(filename) {
+  return `${API_PREFIX}/appearance/splash/${encodeURIComponent(filename)}`
+}
+
+export function uploadSplash(file) {
+  const body = new FormData()
+  body.append('file', file)
+  return request('/appearance/splash', {
+    method: 'POST',
+    body,
+  })
+}
+
+export function clearSplash() {
+  return request('/appearance/splash', { method: 'DELETE' })
+}
+
+export function importThemeFile(file) {
+  const body = new FormData()
+  body.append('file', file)
+  return request('/appearance/themes', {
+    method: 'POST',
+    body,
+  })
+}
+
+export function deleteCustomTheme(themeId) {
+  return request(`/appearance/themes/${encodeURIComponent(themeId)}`, { method: 'DELETE' })
+}
+
+export async function downloadCurrentTheme() {
+  const response = await fetch(`${API_PREFIX}/appearance/themes/export`)
+  if (!response.ok) {
+    throw new Error('导出主题失败')
+  }
+  const blob = await response.blob()
+  const header = response.headers.get('Content-Disposition') || ''
+  const matched = header.match(/filename="([^"]+)"/)
+  return { blob, filename: matched?.[1] || 'theme.wvtheme' }
+}
+
 export function saveQuickNote(text, tags = []) {
   return request('/inbox/notes', {
     method: 'POST',

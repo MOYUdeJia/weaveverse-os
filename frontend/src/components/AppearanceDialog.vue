@@ -1,7 +1,18 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
-import { backgroundUrl, clearBackground, updateAppearance, uploadBackground } from '../api/client'
+import {
+  backgroundUrl,
+  clearBackground,
+  clearSplash,
+  deleteCustomTheme,
+  downloadCurrentTheme,
+  importThemeFile,
+  splashUrl,
+  updateAppearance,
+  uploadBackground,
+  uploadSplash,
+} from '../api/client'
 import AiSettings from './AiSettings.vue'
 import BackupPanel from './BackupPanel.vue'
 import PrivacyPanel from './PrivacyPanel.vue'
@@ -14,6 +25,8 @@ const THEMES = [
   { id: 'sakura', label: '樱粉', swatch: '#fbeaf0' },
   { id: 'ash', label: '灰调', swatch: '#eceeef' },
 ]
+
+const SPLASH_SECONDS = [2, 3, 5, 10]
 
 const props = defineProps({
   open: {
@@ -34,7 +47,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['close', 'change', 'open-guide', 'move-orb'])
+const emit = defineEmits(['close', 'change', 'open-guide', 'move-orb', 'opacity'])
 
 const page = ref('look')
 const maskArmed = ref(false)
@@ -45,6 +58,10 @@ const statusMessage = ref('')
 const imageInput = ref(null)
 const videoInput = ref(null)
 const groupInput = ref(null)
+const splashInput = ref(null)
+const themeInput = ref(null)
+const opacityPercent = ref(85)
+let opacityTimer
 
 const groupFile = computed(() => {
   if (props.groupId == null) {
@@ -60,6 +77,23 @@ const groupLabel = computed(() => {
   return props.appearance.group_names?.[String(props.groupId)] || groupFile.value
 })
 
+const currentThemeName = computed(() => {
+  const builtin = THEMES.find((item) => item.id === props.appearance.theme)
+  if (builtin) {
+    return builtin.label
+  }
+  const custom = (props.appearance.custom_themes || []).find((item) => item.id === props.appearance.theme)
+  return custom?.name || props.appearance.theme || '暖白'
+})
+
+const splashPreview = computed(() => {
+  const file = props.appearance.splash_file
+  if (!file || props.appearance.splash_mode === 'default') {
+    return ''
+  }
+  return splashUrl(file)
+})
+
 watch(
   () => props.open,
   () => {
@@ -67,6 +101,17 @@ watch(
     statusMessage.value = ''
     busyName.value = ''
   },
+)
+
+watch(
+  () => props.appearance.bg_opacity,
+  (value) => {
+    const next = Math.round((value ?? 0.85) * 100)
+    if (next !== opacityPercent.value) {
+      opacityPercent.value = next
+    }
+  },
+  { immediate: true },
 )
 
 async function setTheme(id) {
@@ -95,6 +140,24 @@ async function setProgressColor(event) {
 
 async function setLowPower(event) {
   emit('change', await updateAppearance({ low_power: event.target.checked }))
+}
+
+async function setSplashDuration(seconds) {
+  emit('change', await updateAppearance({ splash_duration: seconds }))
+}
+
+async function setSplashLoop(event) {
+  emit('change', await updateAppearance({ splash_loop: event.target.checked }))
+}
+
+function onOpacityInput(event) {
+  const next = Number(event.target.value)
+  opacityPercent.value = next
+  emit('opacity', next / 100)
+  window.clearTimeout(opacityTimer)
+  opacityTimer = window.setTimeout(async () => {
+    emit('change', await updateAppearance({ bg_opacity: next / 100 }))
+  }, 180)
 }
 
 async function sendFile(file, kind, groupId) {
@@ -150,6 +213,77 @@ function onGroupImage(event) {
   takeFile(event, 'image', props.groupId)
 }
 
+async function onSplash(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) {
+    errorMessage.value = '没有读到文件'
+    return
+  }
+  busy.value = 'splash'
+  busyName.value = file.name
+  errorMessage.value = ''
+  try {
+    emit('change', await uploadSplash(file))
+    statusMessage.value = `封面已替换为 ${file.name}`
+  } catch (error) {
+    errorMessage.value = error.message || '封面上传失败'
+  } finally {
+    busy.value = ''
+  }
+}
+
+async function resetSplash() {
+  try {
+    emit('change', await clearSplash())
+    statusMessage.value = '已恢复默认封面'
+  } catch (error) {
+    errorMessage.value = error.message || '无法恢复默认封面'
+  }
+}
+
+async function onThemeFile(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) {
+    return
+  }
+  busy.value = 'theme'
+  busyName.value = file.name
+  errorMessage.value = ''
+  try {
+    emit('change', await importThemeFile(file))
+    statusMessage.value = `已导入 ${file.name}`
+  } catch (error) {
+    errorMessage.value = error.message || '导入主题失败'
+  } finally {
+    busy.value = ''
+  }
+}
+
+async function exportTheme() {
+  try {
+    const { blob, filename } = await downloadCurrentTheme()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.click()
+    URL.revokeObjectURL(url)
+    statusMessage.value = '已导出当前主题'
+  } catch (error) {
+    errorMessage.value = error.message || '导出失败'
+  }
+}
+
+async function dropTheme(themeId) {
+  try {
+    emit('change', await deleteCustomTheme(themeId))
+  } catch (error) {
+    errorMessage.value = error.message || '无法删除主题'
+  }
+}
+
 async function clear(kind, groupId) {
   errorMessage.value = ''
   statusMessage.value = ''
@@ -168,8 +302,9 @@ async function clear(kind, groupId) {
         <h2 class="text-lg font-semibold text-ink">设置</h2>
         <button type="button" class="text-ink/50" @click="emit('close')">×</button>
       </div>
-      <div class="mb-4 flex gap-2">
+      <div class="mb-4 flex flex-wrap gap-2">
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'look' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'look'">外观</button>
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'theme' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'theme'">主题</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'ai' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'ai'">AI</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'remote' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'remote'">远程</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'backup' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'backup'">备份</button>
@@ -179,21 +314,54 @@ async function clear(kind, groupId) {
       <RemotePanel v-else-if="page === 'remote'" />
       <BackupPanel v-else-if="page === 'backup'" @need-privacy="page = 'privacy'" />
       <PrivacyPanel v-else-if="page === 'privacy'" />
+      <template v-else-if="page === 'theme'">
+        <p class="text-xs text-ink/45">当前主题</p>
+        <p class="mt-1 text-sm text-ink">{{ currentThemeName }}</p>
+        <p class="mt-4 text-xs text-ink/45">预设</p>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <button
+            v-for="theme in THEMES"
+            :key="theme.id"
+            type="button"
+            class="h-9 rounded px-3 text-xs"
+            :class="appearance.theme === theme.id ? 'bg-ink text-white' : 'bg-white text-ink'"
+            @click="setTheme(theme.id)"
+          >
+            <span class="mr-1 inline-block h-3 w-3 rounded-full border border-black/10" :style="{ background: theme.swatch }" />
+            {{ theme.label }}
+          </button>
+        </div>
+        <p class="mt-4 text-xs text-ink/45">导入的主题</p>
+        <div v-if="appearance.custom_themes?.length" class="mt-2 space-y-2">
+          <div v-for="theme in appearance.custom_themes" :key="theme.id" class="flex items-center gap-2">
+            <button
+              type="button"
+              class="h-9 flex-1 rounded px-3 text-left text-xs"
+              :class="appearance.theme === theme.id ? 'bg-ink text-white' : 'bg-white text-ink'"
+              @click="setTheme(theme.id)"
+            >
+              <span class="mr-1 inline-block h-3 w-3 rounded-full border border-black/10" :style="{ background: theme.vars?.dawn }" />
+              {{ theme.name || theme.id }}
+            </button>
+            <button type="button" class="h-8 rounded px-2 text-xs text-ink/50" @click="dropTheme(theme.id)">删除</button>
+          </div>
+        </div>
+        <p v-else class="mt-2 text-xs text-ink/45">还没有导入主题。文件扩展名用 .wvtheme 或 .json。</p>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button type="button" class="h-8 rounded bg-white px-3 text-xs" :disabled="busy === 'theme'" @click="themeInput.click()">导入主题</button>
+          <button type="button" class="h-8 rounded bg-white px-3 text-xs" @click="exportTheme">导出当前主题</button>
+        </div>
+        <p v-if="busy === 'theme'" class="mt-2 text-xs text-moss">正在导入 {{ busyName }}…</p>
+        <p v-else-if="statusMessage" class="mt-2 text-xs text-moss">{{ statusMessage }}</p>
+        <p v-if="errorMessage" class="mt-2 text-xs text-ember">{{ errorMessage }}</p>
+      </template>
       <template v-else>
-      <p class="text-xs text-ink/45">主题</p>
-      <div class="mt-2 flex flex-wrap gap-2">
-        <button
-          v-for="theme in THEMES"
-          :key="theme.id"
-          type="button"
-          class="h-9 rounded px-3 text-xs"
-          :class="appearance.theme === theme.id ? 'bg-ink text-white' : 'bg-white text-ink'"
-          @click="setTheme(theme.id)"
-        >
-          <span class="mr-1 inline-block h-3 w-3 rounded-full border border-black/10" :style="{ background: theme.swatch }" />
-          {{ theme.label }}
-        </button>
+      <p class="text-xs text-ink/45">背景不透明度</p>
+      <div class="mt-2 flex items-center gap-3">
+        <input type="range" min="0" max="100" :value="opacityPercent" class="flex-1" @input="onOpacityInput" />
+        <span class="w-10 text-right text-xs text-ink/70">{{ opacityPercent }}%</span>
       </div>
+      <p class="mt-1 text-xs text-ink/40">100% 完全显示背景图，0% 只留界面底色。</p>
       <p class="mt-4 text-xs text-ink/45">分组栏</p>
       <div class="mt-2 flex gap-2">
         <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.bar === 'push' ? 'bg-ink text-white' : 'bg-white'" @click="setBar('push')">推栏</button>
@@ -247,12 +415,48 @@ async function clear(kind, groupId) {
         <p v-if="groupFile" class="mt-2 text-xs text-ink/70">分组背景 {{ groupLabel }}</p>
         <img v-if="groupFile" :src="backgroundUrl(groupFile)" alt="" class="mt-2 h-20 w-full rounded object-cover" />
       </div>
+      <p class="mt-5 text-xs text-ink/45">欢迎封面</p>
+      <p class="mt-1 text-xs text-ink/70">
+        {{ appearance.splash_mode === 'default' ? '默认封面' : `当前：${appearance.splash_name || appearance.splash_file}（${appearance.splash_mode}）` }}
+      </p>
+      <img v-if="appearance.splash_mode === 'image' && splashPreview" :src="splashPreview" alt="" class="mt-2 h-20 w-full rounded object-cover" />
+      <video
+        v-else-if="appearance.splash_mode === 'video' && splashPreview"
+        :src="splashPreview"
+        class="mt-2 h-20 w-full rounded object-cover"
+        muted
+        playsinline
+      />
+      <p v-else-if="appearance.splash_mode === 'lottie'" class="mt-2 text-xs text-ink/50">Lottie 动画已保存，下次启动播放。</p>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <button type="button" class="h-8 rounded bg-white px-3 text-xs" :disabled="busy === 'splash'" @click="splashInput.click()">替换封面</button>
+        <button type="button" class="h-8 rounded px-3 text-xs text-ink/50" @click="resetSplash">恢复默认</button>
+      </div>
+      <p class="mt-3 text-xs text-ink/45">播放时长</p>
+      <div class="mt-2 flex gap-2">
+        <button
+          v-for="seconds in SPLASH_SECONDS"
+          :key="seconds"
+          type="button"
+          class="h-8 rounded px-3 text-xs"
+          :class="(appearance.splash_duration || 2) === seconds ? 'bg-ink text-white' : 'bg-white'"
+          @click="setSplashDuration(seconds)"
+        >
+          {{ seconds }} 秒
+        </button>
+      </div>
+      <label class="mt-3 flex items-center gap-2 text-sm text-ink/80">
+        <input type="checkbox" :checked="appearance.splash_loop !== false" @change="setSplashLoop" />
+        视频循环到时长结束
+      </label>
       <p v-if="errorMessage" class="mt-3 text-xs text-ember">{{ errorMessage }}</p>
-      <button type="button" class="mt-5 text-sm text-moss" @click="emit('open-guide')">再看一次使用说明</button>
+      <button type="button" class="mt-5 text-sm text-moss" @click="emit('open-guide')">再次显示使用说明</button>
       </template>
       <input ref="imageInput" class="wv-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" @change="onImage" />
       <input ref="videoInput" class="wv-file-input" type="file" accept="video/mp4,.mp4" @change="onVideo" />
       <input ref="groupInput" class="wv-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" @change="onGroupImage" />
+      <input ref="splashInput" class="wv-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/webm,video/mp4,application/json,.png,.jpg,.jpeg,.webp,.gif,.webm,.mp4,.json,.lottie" @change="onSplash" />
+      <input ref="themeInput" class="wv-file-input" type="file" accept=".wvtheme,application/json,.json" @change="onThemeFile" />
     </div>
   </div>
 </template>

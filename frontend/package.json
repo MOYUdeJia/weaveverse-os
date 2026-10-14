@@ -27,6 +27,7 @@
     "dompurify": "3.2.6",
     "fabric": "6.7.1",
     "gsap": "^3.13.0",
+    "lottie-web": "5.12.2",
     "marked": "15.0.12",
     "vue": "3.5.43",
     "vuedraggable": "4.1.0"

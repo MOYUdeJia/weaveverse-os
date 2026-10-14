@@ -193,8 +193,6 @@ async function addBlock(blockType) {
 
 <template>
   <section class="wv-work relative flex h-screen min-h-0 min-w-0 flex-1 flex-col">
-    <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-moss via-ember to-aurora" />
-
     <div v-if="overviewGroup && !loading && !errorMessage" class="min-h-0 flex-1 overflow-y-auto px-10 py-12">
       <GroupOverview
         :group="overviewGroup"

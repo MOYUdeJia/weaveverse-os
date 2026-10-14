@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import socket
+import sys
 import threading
 import time
 import webbrowser
@@ -216,7 +217,8 @@ def run_server(port: int) -> None:
     global server
 
     app = create_app()
-    config = uvicorn.Config(app, host=HOST, port=port, log_level="info")
+    log_level = "warning" if getattr(sys, "frozen", False) else "info"
+    config = uvicorn.Config(app, host=HOST, port=port, log_level=log_level)
     server = uvicorn.Server(config)
     server.run()
 
@@ -275,6 +277,9 @@ def shutdown_backend() -> None:
 # Migrate, seed, start the server, and open the desktop window.
 def main() -> None:
     global server_port
+
+    if getattr(sys, "frozen", False):
+        os.chdir(Path(sys._MEIPASS))
 
     database_existed = run_migrations()
     seed_initial_nav_items(should_seed=not database_existed)

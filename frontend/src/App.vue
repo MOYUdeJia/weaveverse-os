@@ -18,6 +18,9 @@ import WorkspacePanel from './components/WorkspacePanel.vue'
 import { toastText } from './toast'
 
 const splashVisible = ref(true)
+const splashArmed = ref(false)
+const shellReady = ref(false)
+const guideOffered = ref(false)
 const groups = ref([])
 const activeGroupId = ref(null)
 const navItems = ref([])
@@ -49,6 +52,13 @@ const appearance = ref({
   theme: 'warm',
   bar: 'push',
   low_power: false,
+  bg_opacity: 0.85,
+  hide_guide: false,
+  splash_mode: 'default',
+  splash_file: '',
+  splash_duration: 2,
+  splash_loop: true,
+  custom_themes: [],
   global_image: '',
   global_video: '',
   player: 'corner',
@@ -128,6 +138,15 @@ async function loadShellData() {
     await getHealth()
     groups.value = await getGroups()
     applyAppearance(await getAppearance())
+    try {
+      if (localStorage.getItem('wv.guide.seen') === '1' && !appearance.value.hide_guide) {
+        applyAppearance(await updateAppearance({ hide_guide: true }))
+        localStorage.removeItem('wv.guide.seen')
+      }
+    } catch {
+      // 旧版 localStorage 迁移失败时仍按 appearance.json 决定。
+    }
+    splashArmed.value = true
     const firstId = groups.value[0]?.id ?? null
     if (firstId == null) {
       navItems.value = []
@@ -138,8 +157,10 @@ async function loadShellData() {
   } catch (error) {
     console.error('Weaveverse startup request failed:', error)
     errorMessage.value = '后端暂时没有回应，请确认 Weaveverse 服务已经启动。'
+    splashArmed.value = true
   } finally {
     isLoading.value = false
+    shellReady.value = true
   }
 }
 
@@ -453,9 +474,38 @@ function openSearch(query = '', tab = 'all') {
   searchOpen.value = true
 }
 
+function applyThemeVars(settings) {
+  const root = document.documentElement
+  const themeId = settings.theme || 'warm'
+  const custom = (settings.custom_themes || []).find((item) => item.id === themeId)
+  const keys = ['dawn', 'group', 'nav', 'work', 'orb', 'progress']
+  if (custom?.vars) {
+    root.dataset.theme = 'custom'
+    keys.forEach((key) => {
+      if (custom.vars[key]) {
+        root.style.setProperty(`--wv-${key}`, custom.vars[key])
+      }
+    })
+  } else {
+    root.dataset.theme = themeId
+    keys.forEach((key) => root.style.removeProperty(`--wv-${key}`))
+  }
+  const opacity = settings.bg_opacity
+  root.style.setProperty('--wv-bg-opacity', String(opacity == null ? 0.85 : opacity))
+}
+
 function applyAppearance(next) {
-  appearance.value = { ...appearance.value, ...next, groups: next.groups || {} }
-  document.documentElement.dataset.theme = appearance.value.theme || 'warm'
+  appearance.value = {
+    ...appearance.value,
+    ...next,
+    groups: next.groups || {},
+    custom_themes: next.custom_themes || appearance.value.custom_themes || [],
+  }
+  applyThemeVars(appearance.value)
+}
+
+function previewOpacity(value) {
+  document.documentElement.style.setProperty('--wv-bg-opacity', String(value))
 }
 
 function startOrbMove() {
@@ -482,26 +532,25 @@ const groupMedia = computed(() => {
 
 const stillMedia = computed(() => groupMedia.value || appearance.value.global_image || '')
 
-function closeGuide() {
-  try {
-    localStorage.setItem('wv.guide.seen', '1')
-  } catch {
-    // 说明看过与否写失败时，这次仍然关掉。
-  }
+async function closeGuide(hideNext) {
   guideOpen.value = false
-}
-
-watch(splashVisible, (visible) => {
-  if (visible) {
+  const hide = Boolean(hideNext)
+  if (hide === Boolean(appearance.value.hide_guide)) {
     return
   }
   try {
-    if (!localStorage.getItem('wv.guide.seen')) {
-      guideOpen.value = true
-    }
-  } catch {
-    guideOpen.value = false
+    applyAppearance(await updateAppearance({ hide_guide: hide }))
+  } catch (error) {
+    console.error('Failed to save guide preference:', error)
   }
+}
+
+watch([splashVisible, shellReady, () => appearance.value.hide_guide], () => {
+  if (splashVisible.value || !shellReady.value || appearance.value.hide_guide || guideOffered.value) {
+    return
+  }
+  guideOffered.value = true
+  guideOpen.value = true
 })
 
 async function openSearchNav({ groupId, navId }) {
@@ -539,10 +588,11 @@ async function onNoteSaved(saved) {
     class="relative min-h-screen overflow-hidden text-ink"
     :class="stillMedia || (appearance.global_video && !appearance.low_power) ? 'wv-has-media' : 'bg-dawn'"
   >
-    <SplashScreen v-if="splashVisible" @finished="splashVisible = false" />
+    <div v-if="splashVisible && !splashArmed" class="fixed inset-0 z-[100] bg-[#121816]" />
+    <SplashScreen v-else-if="splashVisible" :appearance="appearance" @finished="splashVisible = false" />
 
     <section class="relative z-10 isolate flex min-h-screen">
-      <div v-if="stillMedia || (appearance.global_video && !appearance.low_power)" class="pointer-events-none fixed inset-0 -z-10">
+      <div v-if="stillMedia || (appearance.global_video && !appearance.low_power)" class="wv-media-layer pointer-events-none fixed inset-0 -z-10">
         <video
           v-if="appearance.global_video && !appearance.low_power"
           :src="backgroundUrl(appearance.global_video)"
@@ -635,6 +685,7 @@ async function onNoteSaved(saved) {
       :group-name="activeGroup?.name || ''"
       @close="appearanceOpen = false"
       @change="applyAppearance"
+      @opacity="previewOpacity"
       @open-guide="guideOpen = true"
       @move-orb="startOrbMove"
     />
@@ -651,6 +702,6 @@ async function onNoteSaved(saved) {
       @move-cancel="cancelOrbMove"
     />
     <p v-if="toastText" class="wv-toast">{{ toastText }}</p>
-    <GuideDialog v-if="guideOpen" @close="closeGuide" />
+    <GuideDialog v-if="guideOpen" :hide-next="appearance.hide_guide" @close="closeGuide" />
   </main>
 </template>

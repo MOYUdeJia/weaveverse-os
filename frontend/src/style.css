@@ -326,6 +326,17 @@ html[data-theme] .bg-dawn {
   background-color: var(--wv-dawn);
 }
 
+html[data-theme='custom'] {
+  --wv-dawn: #f4efe7;
+  --wv-group: #efeae1;
+  --wv-nav: rgba(248, 245, 238, 0.92);
+  --wv-work: rgba(252, 250, 245, 0.94);
+}
+
+.wv-media-layer {
+  opacity: var(--wv-bg-opacity, 0.85);
+}
+
 .wv-has-media .wv-group {
   background: color-mix(in srgb, var(--wv-group, #efeae1) 84%, transparent);
 }
@@ -336,6 +347,11 @@ html[data-theme] .bg-dawn {
 
 .wv-has-media .wv-work {
   background: color-mix(in srgb, var(--wv-work, #fcfaf5) 86%, transparent);
+}
+
+.wv-splash {
+  contain: strict;
+  isolation: isolate;
 }
 
 .wv-file-input {

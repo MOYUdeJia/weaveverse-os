@@ -1,9 +1,23 @@
 <script setup>
+import { ref } from 'vue'
+
+const props = defineProps({
+  hideNext: {
+    type: Boolean,
+    default: false,
+  },
+})
+
 const emit = defineEmits(['close'])
+const hideNextTime = ref(props.hideNext)
+
+function close() {
+  emit('close', hideNextTime.value)
+}
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[75] grid place-items-center bg-black/45 px-4" @click.self="emit('close')">
+  <div class="fixed inset-0 z-[75] grid place-items-center bg-black/45 px-4" @click.self="close">
     <article class="max-h-[84vh] w-full max-w-lg overflow-y-auto rounded-md bg-[#fcfaf5] p-6 shadow-2xl">
       <h2 class="text-xl font-semibold text-ink">Weaveverse 怎么用</h2>
       <div class="mt-4 space-y-3 text-sm leading-7 text-ink/80">
@@ -13,8 +27,12 @@ const emit = defineEmits(['close'])
         <p>分组从左侧栏新建。悬停展开；外观里可以改成覆盖在内容上面。</p>
         <p>快捷键：Ctrl+K 搜索页面名，Ctrl+Shift+N 速记，长文里 Ctrl+点击打开链接。</p>
       </div>
+      <label class="mt-5 flex items-center gap-2 text-sm text-ink/80">
+        <input v-model="hideNextTime" type="checkbox" />
+        不再提示
+      </label>
       <div class="mt-6 flex justify-end">
-        <button type="button" class="h-9 rounded bg-ink px-4 text-sm text-white" @click="emit('close')">知道了</button>
+        <button type="button" class="h-9 rounded bg-ink px-4 text-sm text-white" @click="close">知道了</button>
       </div>
     </article>
   </div>

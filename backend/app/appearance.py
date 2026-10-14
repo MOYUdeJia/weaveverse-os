@@ -11,17 +11,21 @@ import uuid
 from pathlib import Path
 
 from app.config import BACKGROUNDS_DIR, DATA_DIR
+from app.splash import drop_splash
+from app.themes import BUILTIN, drop_custom, find_custom, upsert_custom
 
 SETTINGS_PATH = DATA_DIR / "appearance.json"
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_VIDEO_BYTES = 50 * 1024 * 1024
 MAX_VIDEO_SECONDS = 30
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
-THEMES = {"warm", "mint", "sky", "sakura", "ash"}
+THEMES = set(BUILTIN)
 BARS = {"push", "overlay", "stack"}
 PLAYERS = {"bottom", "corner", "side", "free"}
 SPREADS = {"auto", "side", "center"}
 PROGRESS_STYLES = {"solid", "gradient"}
+SPLASH_MODES = {"default", "image", "video", "lottie"}
+SPLASH_DURATIONS = {2, 3, 5, 10}
 COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 DEFAULT = {
@@ -34,6 +38,14 @@ DEFAULT = {
     "progress_style": "solid",
     "progress_color": "#3f6f57",
     "low_power": False,
+    "bg_opacity": 0.85,
+    "hide_guide": False,
+    "splash_mode": "default",
+    "splash_file": "",
+    "splash_name": "",
+    "splash_duration": 2,
+    "splash_loop": True,
+    "custom_themes": [],
     "global_image": "",
     "global_video": "",
     "global_image_name": "",
@@ -59,8 +71,6 @@ def load_settings() -> dict:
     except (OSError, json.JSONDecodeError):
         data = {}
     merged = {**DEFAULT, **data}
-    if merged["theme"] not in THEMES:
-        merged["theme"] = "warm"
     if merged["bar"] not in BARS:
         merged["bar"] = "push"
     player = merged.get("player")
@@ -80,6 +90,23 @@ def load_settings() -> dict:
     color = str(merged.get("progress_color") or "")
     merged["progress_color"] = color.lower() if COLOR_PATTERN.fullmatch(color) else "#3f6f57"
     merged["low_power"] = bool(merged.get("low_power"))
+    opacity = _ratio(merged.get("bg_opacity"))
+    merged["bg_opacity"] = 0.85 if opacity is None else opacity
+    merged["hide_guide"] = bool(merged.get("hide_guide"))
+    mode = merged.get("splash_mode") or "default"
+    merged["splash_mode"] = mode if mode in SPLASH_MODES else "default"
+    merged["splash_file"] = str(merged.get("splash_file") or "")
+    merged["splash_name"] = str(merged.get("splash_name") or "")[:120]
+    try:
+        duration = int(merged.get("splash_duration") or 2)
+    except (TypeError, ValueError):
+        duration = 2
+    merged["splash_duration"] = duration if duration in SPLASH_DURATIONS else 2
+    merged["splash_loop"] = bool(merged.get("splash_loop") if merged.get("splash_loop") is not None else True)
+    custom = merged.get("custom_themes") if isinstance(merged.get("custom_themes"), list) else []
+    merged["custom_themes"] = [item for item in custom if isinstance(item, dict) and item.get("id")]
+    if merged["theme"] not in THEMES and not find_custom(merged["custom_themes"], merged["theme"]):
+        merged["theme"] = "warm"
     groups = merged.get("groups") if isinstance(merged.get("groups"), dict) else {}
     merged["groups"] = {str(key): str(value) for key, value in groups.items() if value}
     names = merged.get("group_names") if isinstance(merged.get("group_names"), dict) else {}
@@ -97,8 +124,10 @@ def _write(settings: dict) -> dict:
 
 def save_settings(data: dict) -> dict:
     current = load_settings()
-    if "theme" in data and data["theme"] in THEMES:
-        current["theme"] = data["theme"]
+    if "theme" in data:
+        theme_id = str(data["theme"] or "")
+        if theme_id in THEMES or find_custom(current["custom_themes"], theme_id):
+            current["theme"] = theme_id
     if "bar" in data and data["bar"] in BARS:
         current["bar"] = data["bar"]
     if data.get("player") in {"bottom", "corner", "side"}:
@@ -121,7 +150,63 @@ def save_settings(data: dict) -> dict:
             current["progress_color"] = color.lower()
     if "low_power" in data:
         current["low_power"] = bool(data["low_power"])
+    if "bg_opacity" in data:
+        opacity = _ratio(data.get("bg_opacity"))
+        if opacity is not None:
+            current["bg_opacity"] = opacity
+    if "hide_guide" in data:
+        current["hide_guide"] = bool(data["hide_guide"])
+    if data.get("splash_mode") in SPLASH_MODES:
+        current["splash_mode"] = data["splash_mode"]
+        if current["splash_mode"] == "default":
+            drop_splash(current.get("splash_file") or "")
+            current["splash_file"] = ""
+            current["splash_name"] = ""
+    if "splash_duration" in data:
+        try:
+            duration = int(data.get("splash_duration"))
+        except (TypeError, ValueError):
+            duration = current["splash_duration"]
+        if duration in SPLASH_DURATIONS:
+            current["splash_duration"] = duration
+    if "splash_loop" in data:
+        current["splash_loop"] = bool(data["splash_loop"])
     return _write(current)
+
+
+def assign_splash(filename: str, kind: str, label: str = "") -> dict:
+    settings = load_settings()
+    drop_splash(settings.get("splash_file") or "")
+    settings["splash_file"] = filename
+    settings["splash_name"] = (label or filename)[:120]
+    settings["splash_mode"] = kind if kind in SPLASH_MODES else "image"
+    return _write(settings)
+
+
+def clear_splash() -> dict:
+    settings = load_settings()
+    drop_splash(settings.get("splash_file") or "")
+    settings["splash_file"] = ""
+    settings["splash_name"] = ""
+    settings["splash_mode"] = "default"
+    return _write(settings)
+
+
+def import_theme(theme: dict) -> dict:
+    settings = load_settings()
+    settings["custom_themes"] = upsert_custom(settings["custom_themes"], theme)
+    settings["theme"] = theme["id"]
+    return _write(settings)
+
+
+def remove_theme(theme_id: str) -> dict:
+    settings = load_settings()
+    if theme_id in THEMES:
+        raise ValueError("预设主题不能删除")
+    settings["custom_themes"] = drop_custom(settings["custom_themes"], theme_id)
+    if settings["theme"] == theme_id:
+        settings["theme"] = "warm"
+    return _write(settings)
 
 
 def store_image(payload: bytes, suffix: str) -> str:

@@ -1092,3 +1092,31 @@
   - 修改 `frontend/src/App.vue`
   - 修改 `docs/VERSIONS.md`
 
+## M10 · 2026-10-14
+- **任务**：首次说明、工作区残留、背景不透明度、主题导入导出、欢迎封面、PyInstaller 打包、桌宠规划、RVC 记录。
+- **实现**：
+  - 使用说明是否再弹存在 `appearance.json` 的 `hide_guide`，弹窗带「不再提示」。旧版 `localStorage wv.guide.seen` 会迁过去。
+  - 去掉工作区顶部 4px 渐变条；开屏结束后等透明度过渡再卸 DOM，并加 `contain`，避免 WebView 残留图层。
+  - 背景图/视频用 `--wv-bg-opacity`，默认 0.85，设置里滑块即时预览。
+  - 设置增加「主题」页。主题文件是 JSON（`.wvtheme`），见 `docs/THEME.md`。
+  - 欢迎封面存 `data/splash/`（打包后在 `%APPDATA%/WeaveverseOS/splash/`）。视频用 `<video muted autoplay playsinline>`，Lottie 用 `lottie-web`，`.lottie` 在后端解成 JSON。
+  - 打包选 PyInstaller onedir（`build.ps1` / `weaveverse.spec`），用户数据在 `%APPDATA%/WeaveverseOS/`。不打 faster-whisper/torch。可用 `-Console` 出带控制台的包。
+- **技术架构**：外观仍走 JSON 文件，不加表。自定义主题是 CSS 变量，不是换组件库。
+- **与 M9.4 相比的变化**：
+  - 说明弹窗可关掉且能再打开
+  - 主题可导入导出
+  - 开屏可换成图/视频/Lottie
+  - 有 Windows 独立运行目录
+- **已知问题**：
+  - 打包后的 exe 里没有本地 Whisper；语音识别仍要 `python main.py` 的 venv。
+  - 需要本机已装 WebView2。
+  - 单文件 exe 没有做（onedir 对 pywebview 更稳）。
+- **文件变更**：
+  - 新增 `backend/app/themes.py`、`backend/app/splash.py`
+  - 新增 `docs/THEME.md`、`docs/PET-SYSTEM.md`
+  - 新增 `weaveverse.spec`、`build.ps1`
+  - 修改 `backend/app/config.py`、`backend/app/appearance.py`、`backend/app/routes/appearance.py`、`backend/app/backup_file.py`、`backend/main.py`
+  - 修改 `frontend/src/App.vue`、`frontend/src/style.css`、`frontend/src/api/client.js`
+  - 修改 `frontend/src/components/AppearanceDialog.vue`、`GuideDialog.vue`、`SplashScreen.vue`、`WorkspacePanel.vue`
+  - 修改 `docs/FEATURES.md`、`docs/ROADMAP.md`、`docs/VERSIONS.md`
+

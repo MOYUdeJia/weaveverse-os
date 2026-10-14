@@ -1,22 +1,29 @@
-"""HTTP routes for theme, bar style, and background files."""
+"""HTTP routes for theme, bar style, splash covers, and background files."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app.appearance import (
     assign_file,
+    assign_splash,
     background_path,
     clear_file,
+    clear_splash,
+    import_theme,
     load_settings,
+    remove_theme,
     save_settings,
     store_image,
     store_video,
 )
 from app.errors import raise_api_error
+from app.splash import splash_path, store_splash
+from app.themes import BUILTIN, builtin_export, export_payload, find_custom, parse_theme_bytes
 
 
 router = APIRouter(prefix="/appearance", tags=["appearance"])
@@ -63,3 +70,77 @@ def read_background(filename: str):
     if not path.is_file():
         raise_api_error(404, "filename", "背景不存在")
     return FileResponse(path)
+
+
+@router.post("/splash")
+async def upload_splash(file: UploadFile) -> dict:
+    payload = await file.read()
+    suffix = Path(file.filename or "").suffix.lower()
+    try:
+        filename, kind = store_splash(payload, suffix)
+        return assign_splash(filename, kind, Path(file.filename or "").name)
+    except ValueError as exc:
+        raise_api_error(400, "file", str(exc))
+
+
+@router.delete("/splash")
+def delete_splash() -> dict:
+    return clear_splash()
+
+
+@router.get("/splash/{filename}")
+def read_splash(filename: str):
+    try:
+        path = splash_path(filename)
+    except ValueError as exc:
+        raise_api_error(400, "filename", str(exc))
+    if not path.is_file():
+        raise_api_error(404, "filename", "封面不存在")
+    return FileResponse(path)
+
+
+@router.post("/themes")
+async def upload_theme(file: UploadFile) -> dict:
+    payload = await file.read()
+    try:
+        theme = parse_theme_bytes(payload)
+        return import_theme(theme)
+    except ValueError as exc:
+        raise_api_error(400, "file", str(exc))
+
+
+@router.delete("/themes/{theme_id}")
+def delete_theme(theme_id: str) -> dict:
+    try:
+        return remove_theme(theme_id)
+    except ValueError as exc:
+        raise_api_error(400, "theme", str(exc))
+
+
+@router.get("/themes/export")
+def export_theme():
+    settings = load_settings()
+    theme_id = settings.get("theme") or "warm"
+    try:
+        if theme_id in BUILTIN:
+            payload = builtin_export(theme_id)
+        else:
+            custom = find_custom(settings.get("custom_themes") or [], theme_id)
+            if custom is None:
+                raise ValueError("没有可导出的主题")
+            payload = export_payload(
+                custom["id"],
+                custom.get("name") or custom["id"],
+                custom.get("author") or "",
+                custom.get("version") or "1.0.0",
+                custom.get("vars") or {},
+            )
+    except ValueError as exc:
+        raise_api_error(400, "theme", str(exc))
+    name = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in payload["id"]) or "theme"
+    body = json.dumps(payload, ensure_ascii=False, indent=2)
+    return Response(
+        content=body,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{name}.wvtheme"'},
+    )
