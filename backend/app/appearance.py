@@ -60,7 +60,41 @@ DEFAULT = {
     "global_video_name": "",
     "groups": {},
     "group_names": {},
+    "current_preset": "",
+    "slots": {"colors": "warm", "background": None, "splash": None, "icons": None},
+    "slot_config": {"splash": {"duration": 2, "slogan": ""}},
+    "dirty": False,
+    "library_ready": False,
+    "slot_background": "",
+    "slot_background_media": "",
 }
+
+
+def _slots(raw: object) -> dict:
+    source = raw if isinstance(raw, dict) else {}
+    slots = {}
+    for key in ("colors", "background", "splash", "icons"):
+        value = source.get(key)
+        text = str(value or "").strip()
+        if key == "colors":
+            slots[key] = text[:40] or "warm"
+        elif text in {"", "default", "none"}:
+            slots[key] = None
+        else:
+            slots[key] = text[:40]
+    return slots
+
+
+def _slot_config(raw: object) -> dict:
+    source = raw if isinstance(raw, dict) else {}
+    splash = source.get("splash") if isinstance(source.get("splash"), dict) else {}
+    try:
+        duration = int(splash.get("duration") or 2)
+    except (TypeError, ValueError):
+        duration = 2
+    if duration not in SPLASH_DURATIONS:
+        duration = 2
+    return {"splash": {"duration": duration, "slogan": str(splash.get("slogan") or "")[:40]}}
 
 
 def _ratio(value: object) -> float | None:
@@ -74,6 +108,9 @@ def _ratio(value: object) -> float | None:
 
 
 def load_settings() -> dict:
+    from app.library import ensure_library
+
+    ensure_library()
     try:
         data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -132,6 +169,14 @@ def load_settings() -> dict:
     merged["group_names"] = {str(key): str(value)[:120] for key, value in names.items() if value}
     merged["global_image_name"] = str(merged.get("global_image_name") or "")[:120]
     merged["global_video_name"] = str(merged.get("global_video_name") or "")[:120]
+    merged["current_preset"] = str(merged.get("current_preset") or "")[:40]
+    merged["dirty"] = bool(merged.get("dirty"))
+    merged["library_ready"] = bool(merged.get("library_ready"))
+    merged["slot_background"] = str(merged.get("slot_background") or "")[:40]
+    media = merged.get("slot_background_media") or ""
+    merged["slot_background_media"] = media if media in {"image", "video"} else ""
+    merged["slots"] = _slots(merged.get("slots"))
+    merged["slot_config"] = _slot_config(merged.get("slot_config"))
     from app.packs import list_packs
 
     merged["packs"] = list_packs()

@@ -205,6 +205,45 @@ class DesktopBridge:
             return {"error": "无法保存主题文件"}
         return {"path": str(target)}
 
+    # 把主题包写到用户选的路径。内容是 base64，避免桥接传二进制。
+    # Write a theme pack to the path chosen in the system Save As dialog.
+    def save_binary_file(self, content_b64: str, suggested_name: str = "preset.wvpack") -> dict | None:
+        import base64
+
+        if not isinstance(content_b64, str) or len(content_b64) > 120_000_000:
+            return {"error": "文件太大"}
+        try:
+            payload = base64.b64decode(content_b64)
+        except Exception:
+            return {"error": "文件内容无效"}
+        folder = DATA_DIR / "themes"
+        folder.mkdir(parents=True, exist_ok=True)
+        name = Path(suggested_name or "preset.wvpack").name
+        if not name.endswith(".wvpack"):
+            name = f"{name}.wvpack"
+        window = webview.windows[0] if webview.windows else None
+        if window is None:
+            return {"error": "窗口还没准备好"}
+        try:
+            selected = window.create_file_dialog(
+                webview.FileDialog.SAVE,
+                directory=str(folder),
+                save_filename=name,
+                file_types=("Weaveverse 预设 (*.wvpack)",),
+            )
+        except Exception:
+            return {"error": "无法打开保存对话框"}
+        if not selected:
+            return None
+        target = Path(selected[0] if isinstance(selected, (list, tuple)) else selected)
+        if target.suffix.lower() != ".wvpack":
+            target = target.with_suffix(".wvpack")
+        try:
+            target.write_bytes(payload)
+        except OSError:
+            return {"error": "无法保存文件"}
+        return {"path": str(target)}
+
 
 # 探测本机端口是否可绑定。
 # Probe whether a local port can be bound.

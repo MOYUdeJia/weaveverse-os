@@ -1146,3 +1146,24 @@
   - 修改 `frontend/src/components/AppearanceDialog.vue`、`SplashScreen.vue`
   - 修改 `docs/VERSIONS.md`
 
+## M11 阶段 1 · 2026-10-16
+- **任务**：把主题拆成素材、槽位、预设三层，并提供 API。界面留到阶段 2。
+- **实现**：
+  - 素材索引在 `data/assets/assets.json`，预设索引在 `data/presets/presets.json`，每套预设一个文件。
+  - 四个槽是颜色、背景、开屏、图标。空槽用 `null`，表示默认开屏或不用背景/图标包。
+  - 不透明度、分组栏、悬浮球仍在 `appearance.json`，不写入预设。开屏时长和标语在预设的 `slot_config.splash`。
+  - 五套内置颜色各有一份系统预设。已安装的龙娘包只迁了颜色，`startup.mp4` 没有收进素材库。
+  - `.wvtheme` 导入成颜色素材。旧 `.wvpack` 拆成素材加一套用户预设；新 `.wvpack`（spec 2）按槽引用系统素材，只打包用户自己的文件。
+  - 改槽立即写入当前状态并标 `dirty`。切换预设时如果未保存，接口返回 409，需带 `save`、`save_as` 或 `discard`。系统预设不能覆盖。
+- **技术架构**：仍是 JSON 文件，没有新表。图标包只保存文件列表，应用预设时不改导航图标。
+- **与 M10.1 相比的变化**：
+  - 主题不再是一整包绑死
+  - 开屏和壁纸分成两个槽
+- **已知问题**：
+  - 设置界面还是旧的，阶段 2 才换成三个 Tab。
+  - 当前如果颜色是樱粉、壁纸又是自己的视频，不会自动算作「正在使用樱粉预设」，避免把个人壁纸标成未保存修改。
+- **文件变更**：
+  - 新增 `backend/app/library.py`、`backend/app/routes/library.py`
+  - 修改 `backend/app/api.py`、`appearance.py`、`config.py`、`backup_file.py`
+  - 修改 `.gitignore`、`docs/VERSIONS.md`
+

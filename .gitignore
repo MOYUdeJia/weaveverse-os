@@ -33,6 +33,10 @@ backend/data/splash/*
 !backend/data/splash/.gitkeep
 backend/data/themes/*
 !backend/data/themes/.gitkeep
+backend/data/assets/**
+!backend/data/assets/.gitkeep
+backend/data/presets/**
+!backend/data/presets/.gitkeep
 vendor/
 build/
 backend/data/music/*

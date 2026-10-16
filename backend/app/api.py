@@ -17,6 +17,7 @@ from app.routes.vault import router as vault_router
 from app.routes.books import router as books_router
 from app.routes.groups import router as groups_router
 from app.routes.icons import router as icons_router
+from app.routes.library import router as library_router
 from app.routes.ideas import router as ideas_router
 from app.routes.music import router as music_router
 from app.routes.nav import router as nav_router
@@ -43,6 +44,7 @@ router.include_router(groups_router)
 router.include_router(nav_router)
 router.include_router(music_router)
 router.include_router(appearance_router)
+router.include_router(library_router)
 router.include_router(blocks_router)
 router.include_router(books_router)
 router.include_router(icons_router)
