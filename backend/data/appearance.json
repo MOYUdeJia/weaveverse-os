@@ -1,5 +1,5 @@
 {
-  "theme": "sakura",
+  "theme": "mint",
   "bar": "overlay",
   "player": "corner",
   "player_x": null,
@@ -8,6 +8,37 @@
   "progress_style": "gradient",
   "progress_color": "#b5175c",
   "low_power": false,
+  "bg_opacity": 0.73,
+  "hide_guide": true,
+  "splash_mode": "default",
+  "splash_file": "",
+  "splash_name": "",
+  "splash_owner": "",
+  "splash_caption": "正在编织你的宇宙",
+  "splash_duration": 14,
+  "splash_loop": false,
+  "active_pack": "",
+  "pack_background_kind": "",
+  "pack_background": "",
+  "pack_caption": "",
+  "decorations": [],
+  "startup_sound": "",
+  "custom_themes": [
+    {
+      "id": "dragon-girl",
+      "name": "龙娘主题",
+      "author": "个人使用",
+      "version": "1.0",
+      "vars": {
+        "dawn": "#f3f0fa",
+        "group": "#e6e0f2",
+        "nav": "rgba(243, 240, 250, 0.92)",
+        "work": "rgba(250, 248, 253, 0.94)",
+        "orb": "#f7f4fc",
+        "progress": "#6f6a9e"
+      }
+    }
+  ],
   "global_image": "35612905ecfc4302b003d2d70c92b40f.png",
   "global_video": "1d720dd08a26469eb651e739607142ca.mp4",
   "global_image_name": "26_04_27_17_33_52.png",

@@ -25,7 +25,7 @@ PLAYERS = {"bottom", "corner", "side", "free"}
 SPREADS = {"auto", "side", "center"}
 PROGRESS_STYLES = {"solid", "gradient"}
 SPLASH_MODES = {"default", "image", "video", "lottie"}
-SPLASH_DURATIONS = {2, 3, 5, 10}
+SPLASH_DURATIONS = {2, 3, 5, 10, 14}
 COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 DEFAULT = {
@@ -43,8 +43,16 @@ DEFAULT = {
     "splash_mode": "default",
     "splash_file": "",
     "splash_name": "",
+    "splash_owner": "",
+    "splash_caption": "正在编织你的宇宙",
     "splash_duration": 2,
     "splash_loop": True,
+    "active_pack": "",
+    "pack_background_kind": "",
+    "pack_background": "",
+    "pack_caption": "",
+    "decorations": [],
+    "startup_sound": "",
     "custom_themes": [],
     "global_image": "",
     "global_video": "",
@@ -97,6 +105,17 @@ def load_settings() -> dict:
     merged["splash_mode"] = mode if mode in SPLASH_MODES else "default"
     merged["splash_file"] = str(merged.get("splash_file") or "")
     merged["splash_name"] = str(merged.get("splash_name") or "")[:120]
+    owner = merged.get("splash_owner") or ""
+    merged["splash_owner"] = owner if owner in {"user", "pack"} else ""
+    merged["splash_caption"] = str(merged.get("splash_caption") or "正在编织你的宇宙")[:40]
+    merged["active_pack"] = str(merged.get("active_pack") or "")[:40]
+    kind = merged.get("pack_background_kind") or ""
+    merged["pack_background_kind"] = kind if kind in {"image", "video"} else ""
+    merged["pack_background"] = str(merged.get("pack_background") or "")[:180]
+    merged["pack_caption"] = str(merged.get("pack_caption") or "")[:40]
+    decorations = merged.get("decorations") if isinstance(merged.get("decorations"), list) else []
+    merged["decorations"] = [str(item)[:180] for item in decorations if item][:6]
+    merged["startup_sound"] = str(merged.get("startup_sound") or "")[:180]
     try:
         duration = int(merged.get("splash_duration") or 2)
     except (TypeError, ValueError):
@@ -113,13 +132,21 @@ def load_settings() -> dict:
     merged["group_names"] = {str(key): str(value)[:120] for key, value in names.items() if value}
     merged["global_image_name"] = str(merged.get("global_image_name") or "")[:120]
     merged["global_video_name"] = str(merged.get("global_video_name") or "")[:120]
+    from app.packs import list_packs
+
+    merged["packs"] = list_packs()
     return merged
 
 
 def _write(settings: dict) -> dict:
+    stored = {key: value for key, value in settings.items() if key != "packs"}
     SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SETTINGS_PATH.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
-    return settings
+    SETTINGS_PATH.write_text(json.dumps(stored, ensure_ascii=False, indent=2), encoding="utf-8")
+    stored["packs"] = settings.get("packs") if isinstance(settings.get("packs"), list) else []
+    from app.packs import list_packs
+
+    stored["packs"] = list_packs()
+    return stored
 
 
 def save_settings(data: dict) -> dict:
@@ -128,6 +155,8 @@ def save_settings(data: dict) -> dict:
         theme_id = str(data["theme"] or "")
         if theme_id in THEMES or find_custom(current["custom_themes"], theme_id):
             current["theme"] = theme_id
+            if current.get("active_pack") and theme_id != current["active_pack"]:
+                _clear_pack_visuals(current)
     if "bar" in data and data["bar"] in BARS:
         current["bar"] = data["bar"]
     if data.get("player") in {"bottom", "corner", "side"}:
@@ -159,9 +188,13 @@ def save_settings(data: dict) -> dict:
     if data.get("splash_mode") in SPLASH_MODES:
         current["splash_mode"] = data["splash_mode"]
         if current["splash_mode"] == "default":
-            drop_splash(current.get("splash_file") or "")
+            if current.get("splash_owner") != "pack":
+                drop_splash(current.get("splash_file") or "")
             current["splash_file"] = ""
             current["splash_name"] = ""
+            current["splash_owner"] = ""
+    if "splash_caption" in data:
+        current["splash_caption"] = str(data.get("splash_caption") or "正在编织你的宇宙")[:40]
     if "splash_duration" in data:
         try:
             duration = int(data.get("splash_duration"))
@@ -180,6 +213,7 @@ def assign_splash(filename: str, kind: str, label: str = "") -> dict:
     settings["splash_file"] = filename
     settings["splash_name"] = (label or filename)[:120]
     settings["splash_mode"] = kind if kind in SPLASH_MODES else "image"
+    settings["splash_owner"] = "user"
     return _write(settings)
 
 
@@ -189,6 +223,60 @@ def clear_splash() -> dict:
     settings["splash_file"] = ""
     settings["splash_name"] = ""
     settings["splash_mode"] = "default"
+    settings["splash_owner"] = ""
+    return _write(settings)
+
+
+def _clear_pack_visuals(current: dict) -> None:
+    if current.get("splash_owner") == "pack":
+        current["splash_mode"] = "default"
+        current["splash_file"] = ""
+        current["splash_name"] = ""
+        current["splash_owner"] = ""
+    current["active_pack"] = ""
+    current["pack_background_kind"] = ""
+    current["pack_background"] = ""
+    current["pack_caption"] = ""
+    current["decorations"] = []
+    current["startup_sound"] = ""
+
+
+def activate_pack(pack_id: str) -> dict:
+    from app.packs import read_pack
+
+    pack = read_pack(pack_id)
+    settings = load_settings()
+    settings["custom_themes"] = upsert_custom(settings["custom_themes"], pack["theme"])
+    settings["theme"] = pack["theme"]["id"]
+    settings["active_pack"] = pack["id"]
+    splash = pack["splash"]
+    if splash["path"]:
+        settings["splash_mode"] = splash["type"]
+        settings["splash_file"] = splash["path"]
+        settings["splash_name"] = pack["name"]
+        settings["splash_owner"] = "pack"
+        settings["splash_duration"] = splash["duration"]
+        settings["splash_loop"] = splash["loop"]
+    settings["pack_background_kind"] = pack["background"]["type"]
+    settings["pack_background"] = pack["background"]["path"]
+    if pack["background"]["opacity"] is not None:
+        settings["bg_opacity"] = pack["background"]["opacity"]
+    settings["decorations"] = pack["decorations"]
+    settings["startup_sound"] = pack["startup_sound"]
+    settings["pack_caption"] = pack["caption"]
+    return _write(settings)
+
+
+def delete_pack(pack_id: str) -> dict:
+    from app.packs import remove_pack
+
+    remove_pack(pack_id)
+    settings = load_settings()
+    settings["custom_themes"] = drop_custom(settings["custom_themes"], pack_id)
+    if settings.get("active_pack") == pack_id or settings.get("theme") == pack_id:
+        _clear_pack_visuals(settings)
+        if settings.get("theme") == pack_id:
+            settings["theme"] = "warm"
     return _write(settings)
 
 

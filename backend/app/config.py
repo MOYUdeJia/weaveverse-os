@@ -48,6 +48,7 @@ ICONS_DIR = DATA_DIR / "icons"
 BACKGROUNDS_DIR = DATA_DIR / "backgrounds"
 BACKUPS_DIR = DATA_DIR / "backups"
 SPLASH_DIR = DATA_DIR / "splash"
+THEMES_DIR = DATA_DIR / "themes"
 
 DEV_SERVER_URL = os.getenv("WEAVEVERSE_DEV_SERVER_URL", "http://127.0.0.1:5173")
 

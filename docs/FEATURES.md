@@ -207,6 +207,11 @@ M10 已完成（首次说明、主题导入导出、欢迎封面、PyInstaller �
 - 欢迎封面：PNG/JPG/GIF/WebM/MP4/Lottie
 - PyInstaller onedir 打包（`build.ps1`）
 
+### 主题包素材来源（未来）
+- dsh-chat-wallpaper 仓库无素材
+- 需要找独立的壁纸素材（Pixiv / Wallpaper Engine / GitHub 搜索）
+- 支持用户手动打包 .wvpack
+
 ### 桌宠系统（M11+）
 - 规划见 `docs/PET-SYSTEM.md`
 - 本阶段不实现

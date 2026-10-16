@@ -172,6 +172,39 @@ class DesktopBridge:
             return {"error": "无法保存这个文件"}
         return {"path": str(target)}
 
+    # 把当前主题存到用户选的路径，默认打开主题目录。
+    # Save the current theme JSON through the system Save As dialog.
+    def save_theme_file(self, content: str, suggested_name: str = "theme.wvtheme") -> dict | None:
+        if not isinstance(content, str) or not content.strip() or len(content) > 64 * 1024:
+            return {"error": "主题内容无效"}
+        folder = DATA_DIR / "themes"
+        folder.mkdir(parents=True, exist_ok=True)
+        name = Path(suggested_name or "theme.wvtheme").name
+        if not name.endswith((".wvtheme", ".json")):
+            name = f"{name}.wvtheme"
+        window = webview.windows[0] if webview.windows else None
+        if window is None:
+            return {"error": "窗口还没准备好"}
+        try:
+            selected = window.create_file_dialog(
+                webview.FileDialog.SAVE,
+                directory=str(folder),
+                save_filename=name,
+                file_types=("Weaveverse 主题 (*.wvtheme;*.json)",),
+            )
+        except Exception:
+            return {"error": "无法打开保存对话框"}
+        if not selected:
+            return None
+        target = Path(selected[0] if isinstance(selected, (list, tuple)) else selected)
+        if target.suffix.lower() not in {".wvtheme", ".json"}:
+            target = target.with_suffix(".wvtheme")
+        try:
+            target.write_text(content, encoding="utf-8")
+        except OSError:
+            return {"error": "无法保存主题文件"}
+        return {"path": str(target)}
+
 
 # 探测本机端口是否可绑定。
 # Probe whether a local port can be bound.

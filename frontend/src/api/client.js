@@ -235,6 +235,23 @@ export function splashUrl(filename) {
   return `${API_PREFIX}/appearance/splash/${encodeURIComponent(filename)}`
 }
 
+export function packFileUrl(packId, relative) {
+  const path = String(relative || '')
+    .split('/')
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join('/')
+  return `${API_PREFIX}/appearance/packs/${encodeURIComponent(packId)}/files/${path}`
+}
+
+export function activatePack(packId) {
+  return request(`/appearance/packs/${encodeURIComponent(packId)}/activate`, { method: 'POST' })
+}
+
+export function deletePack(packId) {
+  return request(`/appearance/packs/${encodeURIComponent(packId)}`, { method: 'DELETE' })
+}
+
 export function uploadSplash(file) {
   const body = new FormData()
   body.append('file', file)
@@ -266,10 +283,10 @@ export async function downloadCurrentTheme() {
   if (!response.ok) {
     throw new Error('导出主题失败')
   }
-  const blob = await response.blob()
+  const text = await response.text()
   const header = response.headers.get('Content-Disposition') || ''
   const matched = header.match(/filename="([^"]+)"/)
-  return { blob, filename: matched?.[1] || 'theme.wvtheme' }
+  return { text, filename: matched?.[1] || 'theme.wvtheme' }
 }
 
 export function saveQuickNote(text, tags = []) {

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import { backgroundUrl, createGroup, createNav, deleteGroup, deleteNav, getAppearance, getGroups, getHealth, getNav, lockGroup, lockNav, patchNav, pinNav, reorderGroups, reorderNav, updateAppearance, updateGroup, updateNav, vaultEntryCount } from './api/client'
+import { backgroundUrl, createGroup, createNav, deleteGroup, deleteNav, getAppearance, getGroups, getHealth, getNav, lockGroup, lockNav, packFileUrl, patchNav, pinNav, reorderGroups, reorderNav, updateAppearance, updateGroup, updateNav, vaultEntryCount } from './api/client'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import GroupBar from './components/GroupBar.vue'
 import GroupEditDialog from './components/GroupEditDialog.vue'
@@ -56,8 +56,17 @@ const appearance = ref({
   hide_guide: false,
   splash_mode: 'default',
   splash_file: '',
+  splash_owner: '',
+  splash_caption: '正在编织你的宇宙',
   splash_duration: 2,
   splash_loop: true,
+  active_pack: '',
+  pack_background_kind: '',
+  pack_background: '',
+  pack_caption: '',
+  decorations: [],
+  startup_sound: '',
+  packs: [],
   custom_themes: [],
   global_image: '',
   global_video: '',
@@ -474,24 +483,49 @@ function openSearch(query = '', tab = 'all') {
   searchOpen.value = true
 }
 
+function solidColor(value, fallback) {
+  const text = String(value || '')
+  if (/^#[0-9a-fA-F]{6}/.test(text)) {
+    return text.slice(0, 7)
+  }
+  return fallback
+}
+
+function chromeFor(opacity) {
+  const t = Math.min(1, Math.max(0, Number(opacity) || 0))
+  if (t >= 0.85) {
+    return 82 + (18 * (t - 0.85)) / 0.15
+  }
+  return 100 - (18 * t) / 0.85
+}
+
+function paintOpacity(opacity) {
+  const root = document.documentElement
+  const value = opacity == null ? 0.85 : opacity
+  root.style.setProperty('--wv-bg-opacity', String(value))
+  root.style.setProperty('--wv-chrome', String(Math.round(chromeFor(value))))
+}
+
 function applyThemeVars(settings) {
   const root = document.documentElement
   const themeId = settings.theme || 'warm'
   const custom = (settings.custom_themes || []).find((item) => item.id === themeId)
-  const keys = ['dawn', 'group', 'nav', 'work', 'orb', 'progress']
+  const keys = ['dawn', 'group', 'nav', 'work', 'orb', 'progress', 'group-solid', 'nav-solid', 'work-solid']
   if (custom?.vars) {
     root.dataset.theme = 'custom'
-    keys.forEach((key) => {
+    keys.slice(0, 6).forEach((key) => {
       if (custom.vars[key]) {
         root.style.setProperty(`--wv-${key}`, custom.vars[key])
       }
     })
+    root.style.setProperty('--wv-group-solid', solidColor(custom.vars.group, '#efeae1'))
+    root.style.setProperty('--wv-nav-solid', solidColor(custom.vars.nav, '#f8f5ee'))
+    root.style.setProperty('--wv-work-solid', solidColor(custom.vars.work, '#fcfaf5'))
   } else {
     root.dataset.theme = themeId
     keys.forEach((key) => root.style.removeProperty(`--wv-${key}`))
   }
-  const opacity = settings.bg_opacity
-  root.style.setProperty('--wv-bg-opacity', String(opacity == null ? 0.85 : opacity))
+  paintOpacity(settings.bg_opacity)
 }
 
 function applyAppearance(next) {
@@ -505,7 +539,7 @@ function applyAppearance(next) {
 }
 
 function previewOpacity(value) {
-  document.documentElement.style.setProperty('--wv-bg-opacity', String(value))
+  paintOpacity(value)
 }
 
 function startOrbMove() {
@@ -530,7 +564,26 @@ const groupMedia = computed(() => {
   return appearance.value.groups?.[String(activeGroupId.value)] || ''
 })
 
-const stillMedia = computed(() => groupMedia.value || appearance.value.global_image || '')
+const packVideo = computed(() => {
+  if (appearance.value.low_power || appearance.value.pack_background_kind !== 'video' || !appearance.value.pack_background) {
+    return ''
+  }
+  if (!appearance.value.active_pack) {
+    return ''
+  }
+  return packFileUrl(appearance.value.active_pack, appearance.value.pack_background)
+})
+
+const videoSrc = computed(() => packVideo.value || (appearance.value.global_video && !appearance.value.low_power ? backgroundUrl(appearance.value.global_video) : ''))
+
+const packStill = computed(() => {
+  if (appearance.value.pack_background_kind !== 'image' || !appearance.value.pack_background || !appearance.value.active_pack) {
+    return ''
+  }
+  return packFileUrl(appearance.value.active_pack, appearance.value.pack_background)
+})
+
+const stillMedia = computed(() => groupMedia.value || packStill.value || appearance.value.global_image || '')
 
 async function closeGuide(hideNext) {
   guideOpen.value = false
@@ -586,23 +639,23 @@ async function onNoteSaved(saved) {
 <template>
   <main
     class="relative min-h-screen overflow-hidden text-ink"
-    :class="stillMedia || (appearance.global_video && !appearance.low_power) ? 'wv-has-media' : 'bg-dawn'"
+    :class="videoSrc || stillMedia ? 'wv-has-media' : 'bg-dawn'"
   >
     <div v-if="splashVisible && !splashArmed" class="fixed inset-0 z-[100] bg-[#121816]" />
     <SplashScreen v-else-if="splashVisible" :appearance="appearance" @finished="splashVisible = false" />
 
     <section class="relative z-10 isolate flex min-h-screen">
-      <div v-if="stillMedia || (appearance.global_video && !appearance.low_power)" class="wv-media-layer pointer-events-none fixed inset-0 -z-10">
+      <div v-if="videoSrc || stillMedia" class="wv-media-layer pointer-events-none fixed inset-0 -z-10">
         <video
-          v-if="appearance.global_video && !appearance.low_power"
-          :src="backgroundUrl(appearance.global_video)"
+          v-if="videoSrc"
+          :src="videoSrc"
           class="h-full w-full object-cover"
           autoplay
           muted
           loop
           playsinline
         />
-        <img v-else-if="stillMedia" :src="backgroundUrl(stillMedia)" alt="" class="h-full w-full object-cover" />
+        <img v-else-if="stillMedia" :src="stillMedia.startsWith('/api/') ? stillMedia : backgroundUrl(stillMedia)" alt="" class="h-full w-full object-cover" />
       </div>
       <GroupBar
         :groups="groups"
@@ -701,6 +754,16 @@ async function onNoteSaved(saved) {
       @move-done="finishOrbMove"
       @move-cancel="cancelOrbMove"
     />
+    <div v-if="appearance.active_pack && appearance.decorations?.length" class="pointer-events-none fixed inset-0 z-30">
+      <img
+        v-for="(item, index) in appearance.decorations"
+        :key="item"
+        :src="packFileUrl(appearance.active_pack, item)"
+        alt=""
+        class="wv-deco"
+        :class="index === 0 ? 'wv-deco-0' : 'wv-deco-1'"
+      />
+    </div>
     <p v-if="toastText" class="wv-toast">{{ toastText }}</p>
     <GuideDialog v-if="guideOpen" :hide-next="appearance.hide_guide" @close="closeGuide" />
   </main>

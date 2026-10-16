@@ -1120,3 +1120,29 @@
   - 修改 `frontend/src/components/AppearanceDialog.vue`、`GuideDialog.vue`、`SplashScreen.vue`、`WorkspacePanel.vue`
   - 修改 `docs/FEATURES.md`、`docs/ROADMAP.md`、`docs/VERSIONS.md`
 
+## M10.1 · 2026-10-16
+- **任务**：修不透明度与开屏尺寸、导出另存为、Inno Setup 安装包、`.wvpack` 主题包、龙娘主题包。
+- **实现**：
+  - 100% 不透明度把面板合成到不透明色，不再停在半透明的 rgba 上。85% 仍接近原来的玻璃效果。
+  - 开屏图/视频横向铺满、顶对齐，底部约 13% 放标语。标语可在外观里改。
+  - 导出主题走系统「另存为」，默认目录是 `data/themes/`。没有桌面桥时仍下载文件。导入接受 `.wvtheme`、`.json`、`.wvpack`。
+  - `.wvpack` 是 zip，规范在 `docs/THEME-PACK.md`。安装到 `themes/<id>/`，切换时换颜色、开屏、壁纸、角标和启动音。
+  - 安装包脚本是 `installer.iss` + `build-installer.ps1`。选 Inno Setup，不选 NSIS。卸载不删 `%APPDATA%\WeaveverseOS`。
+- **技术架构**：主题包不进数据库。大文件留在包目录里，用相对路径引用。
+- **与 M10 相比的变化**：
+  - 不透明度 100% 会真正盖住背景
+  - 开屏不再是居中小图
+  - 主题可以是一整包，不只是颜色
+  - 多了安装程序脚本
+- **已知问题**：
+  - 安装包已编出 `dist/WeaveverseOS-Setup.exe`。本机 Inno Setup 装在用户目录，不在 Program Files。
+  - `dsh-chat-wallpaper` 仓库里没有图片和视频。龙娘包的背景用的是开机视频本身。
+  - 龙娘包只放在本机 `backend/data/themes/`，已加入 gitignore，不要公开分发。
+- **文件变更**：
+  - 新增 `backend/app/packs.py`、`installer.iss`、`build-installer.ps1`
+  - 新增 `docs/THEME-PACK.md`、`docs/BUILD.md`
+  - 修改 `backend/app/appearance.py`、`config.py`、`routes/appearance.py`、`backup_file.py`、`main.py`
+  - 修改 `frontend/src/App.vue`、`style.css`、`api/client.js`
+  - 修改 `frontend/src/components/AppearanceDialog.vue`、`SplashScreen.vue`
+  - 修改 `docs/VERSIONS.md`
+

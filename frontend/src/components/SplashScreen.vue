@@ -3,7 +3,7 @@ import lottie from 'lottie-web'
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import splashImage from '../assets/splash/splash.png'
-import { splashUrl } from '../api/client'
+import { packFileUrl, splashUrl } from '../api/client'
 
 const props = defineProps({
   appearance: {
@@ -19,12 +19,17 @@ const lottieBox = ref(null)
 let leaveTimer
 let finishTimer
 let animation
+let startupAudio
 
 const mode = props.appearance?.splash_mode || 'default'
 const durationMs = Math.max(2, Number(props.appearance?.splash_duration) || 2) * 1000
 const file = props.appearance?.splash_file || ''
 const loopVideo = props.appearance?.splash_loop !== false
-const mediaSrc = file && mode !== 'default' ? splashUrl(file) : ''
+const fromPack = props.appearance?.splash_owner === 'pack' && props.appearance?.active_pack
+const mediaSrc = file && mode !== 'default'
+  ? (fromPack ? packFileUrl(props.appearance.active_pack, file) : splashUrl(file))
+  : ''
+const caption = (fromPack && props.appearance?.pack_caption) || props.appearance?.splash_caption || '正在编织你的宇宙'
 
 function done() {
   if (isLeaving.value) {
@@ -38,6 +43,11 @@ function done() {
 
 onMounted(async () => {
   leaveTimer = window.setTimeout(done, Math.max(800, durationMs - 420))
+  const sound = props.appearance?.startup_sound
+  if (fromPack && sound) {
+    startupAudio = new Audio(packFileUrl(props.appearance.active_pack, sound))
+    startupAudio.play().catch(() => {})
+  }
   if (mode === 'lottie' && mediaSrc && lottieBox.value) {
     try {
       const payload = await fetch(mediaSrc).then((response) => response.json())
@@ -60,6 +70,10 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.clearTimeout(leaveTimer)
   window.clearTimeout(finishTimer)
+  if (startupAudio) {
+    startupAudio.pause()
+    startupAudio = null
+  }
   if (animation) {
     animation.destroy()
     animation = null
@@ -76,37 +90,37 @@ function onFadeEnd(event) {
 
 <template>
   <div
-    class="wv-splash fixed inset-0 z-[100] grid place-items-center bg-[#121816] transition-opacity duration-500"
+    class="wv-splash fixed inset-0 z-[100] transition-opacity duration-500"
     :class="{ 'opacity-0': isLeaving, 'opacity-100': !isLeaving }"
     @transitionend="onFadeEnd"
   >
-    <div class="flex flex-col items-center gap-7">
+    <div class="wv-splash-stage">
       <video
         v-if="mode === 'video' && mediaSrc"
         :src="mediaSrc"
-        class="max-h-[70vh] max-w-[80vw] rounded-md object-contain"
+        class="wv-splash-media"
         autoplay
         muted
         playsinline
         :loop="loopVideo"
       />
-      <div v-else-if="mode === 'lottie' && mediaSrc" ref="lottieBox" class="h-52 w-52" />
+      <div v-else-if="mode === 'lottie' && mediaSrc" ref="lottieBox" class="wv-splash-lottie" />
       <img
         v-else-if="mode === 'image' && mediaSrc"
         :src="mediaSrc"
-        alt="Weaveverse OS"
-        class="max-h-[70vh] max-w-[80vw] rounded-md object-contain shadow-glow"
+        alt=""
+        class="wv-splash-media"
       />
       <img
         v-else
         :src="splashImage"
         alt="Weaveverse OS"
-        class="h-40 w-40 rounded-full object-cover shadow-glow"
+        class="wv-splash-media wv-splash-mark"
       />
-      <div class="text-center">
-        <p class="text-sm uppercase tracking-[0.32em] text-[#e2d9c8]">Weaveverse OS</p>
-        <h1 class="mt-3 text-3xl font-semibold text-white">正在编织你的宇宙</h1>
-      </div>
     </div>
+    <footer class="wv-splash-caption">
+      <p class="text-sm tracking-[0.18em] text-[#e2d9c8]">Weaveverse OS</p>
+      <h1 class="mt-1 text-2xl font-semibold text-white">{{ caption }}</h1>
+    </footer>
   </div>
 </template>

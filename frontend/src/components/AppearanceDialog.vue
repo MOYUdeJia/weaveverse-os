@@ -2,12 +2,15 @@
 import { computed, ref, watch } from 'vue'
 
 import {
+  activatePack,
   backgroundUrl,
   clearBackground,
   clearSplash,
   deleteCustomTheme,
+  deletePack,
   downloadCurrentTheme,
   importThemeFile,
+  packFileUrl,
   splashUrl,
   updateAppearance,
   uploadBackground,
@@ -26,7 +29,7 @@ const THEMES = [
   { id: 'ash', label: '灰调', swatch: '#eceeef' },
 ]
 
-const SPLASH_SECONDS = [2, 3, 5, 10]
+const SPLASH_SECONDS = [2, 3, 5, 10, 14]
 
 const props = defineProps({
   open: {
@@ -60,7 +63,9 @@ const videoInput = ref(null)
 const groupInput = ref(null)
 const splashInput = ref(null)
 const themeInput = ref(null)
+const themeMenu = ref(null)
 const opacityPercent = ref(85)
+const captionDraft = ref('正在编织你的宇宙')
 let opacityTimer
 
 const groupFile = computed(() => {
@@ -78,12 +83,21 @@ const groupLabel = computed(() => {
 })
 
 const currentThemeName = computed(() => {
+  const pack = (props.appearance.packs || []).find((item) => item.id === props.appearance.active_pack)
+  if (pack && props.appearance.theme === pack.id) {
+    return pack.name
+  }
   const builtin = THEMES.find((item) => item.id === props.appearance.theme)
   if (builtin) {
     return builtin.label
   }
   const custom = (props.appearance.custom_themes || []).find((item) => item.id === props.appearance.theme)
   return custom?.name || props.appearance.theme || '暖白'
+})
+
+const colorThemes = computed(() => {
+  const packIds = new Set((props.appearance.packs || []).map((item) => item.id))
+  return (props.appearance.custom_themes || []).filter((item) => !packIds.has(item.id))
 })
 
 const splashPreview = computed(() => {
@@ -101,6 +115,14 @@ watch(
     statusMessage.value = ''
     busyName.value = ''
   },
+)
+
+watch(
+  () => props.appearance.splash_caption,
+  (value) => {
+    captionDraft.value = value || '正在编织你的宇宙'
+  },
+  { immediate: true },
 )
 
 watch(
@@ -148,6 +170,21 @@ async function setSplashDuration(seconds) {
 
 async function setSplashLoop(event) {
   emit('change', await updateAppearance({ splash_loop: event.target.checked }))
+}
+
+async function saveCaption() {
+  const text = captionDraft.value.trim() || '正在编织你的宇宙'
+  emit('change', await updateAppearance({ splash_caption: text }))
+}
+
+async function usePack(packId) {
+  errorMessage.value = ''
+  try {
+    emit('change', await activatePack(packId))
+    statusMessage.value = '已切换主题包，开屏下次启动时播放'
+  } catch (error) {
+    errorMessage.value = error.message || '无法切换主题包'
+  }
 }
 
 function onOpacityInput(event) {
@@ -263,7 +300,19 @@ async function onThemeFile(event) {
 
 async function exportTheme() {
   try {
-    const { blob, filename } = await downloadCurrentTheme()
+    const { text, filename } = await downloadCurrentTheme()
+    const api = window.pywebview?.api
+    if (api?.save_theme_file) {
+      const saved = await api.save_theme_file(text, filename)
+      if (saved?.error) {
+        throw new Error(saved.error)
+      }
+      if (saved?.path) {
+        statusMessage.value = `已保存到 ${saved.path}`
+      }
+      return
+    }
+    const blob = new Blob([text], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -276,11 +325,36 @@ async function exportTheme() {
   }
 }
 
+function openThemeMenu(event, item) {
+  event.preventDefault()
+  themeMenu.value = {
+    x: event.clientX,
+    y: event.clientY,
+    id: item.id,
+    kind: item.kind,
+  }
+}
+
+function closeThemeMenu() {
+  themeMenu.value = null
+}
+
 async function dropTheme(themeId) {
+  closeThemeMenu()
   try {
     emit('change', await deleteCustomTheme(themeId))
   } catch (error) {
     errorMessage.value = error.message || '无法删除主题'
+  }
+}
+
+async function dropPack(packId) {
+  closeThemeMenu()
+  try {
+    emit('change', await deletePack(packId))
+    statusMessage.value = '已删除主题包'
+  } catch (error) {
+    errorMessage.value = error.message || '无法删除主题包'
   }
 }
 
@@ -315,38 +389,55 @@ async function clear(kind, groupId) {
       <BackupPanel v-else-if="page === 'backup'" @need-privacy="page = 'privacy'" />
       <PrivacyPanel v-else-if="page === 'privacy'" />
       <template v-else-if="page === 'theme'">
-        <p class="text-xs text-ink/45">当前主题</p>
-        <p class="mt-1 text-sm text-ink">{{ currentThemeName }}</p>
-        <p class="mt-4 text-xs text-ink/45">预设</p>
-        <div class="mt-2 flex flex-wrap gap-2">
+        <p class="text-sm text-ink">正在使用 {{ currentThemeName }}</p>
+        <div class="mt-4 space-y-1" @click="closeThemeMenu">
           <button
             v-for="theme in THEMES"
             :key="theme.id"
             type="button"
-            class="h-9 rounded px-3 text-xs"
-            :class="appearance.theme === theme.id ? 'bg-ink text-white' : 'bg-white text-ink'"
+            class="wv-theme-row"
+            :class="appearance.theme === theme.id && !appearance.active_pack ? 'is-on' : ''"
             @click="setTheme(theme.id)"
           >
-            <span class="mr-1 inline-block h-3 w-3 rounded-full border border-black/10" :style="{ background: theme.swatch }" />
-            {{ theme.label }}
+            <span class="wv-theme-swatch" :style="{ background: theme.swatch }" />
+            <span class="min-w-0">
+              <span class="block truncate text-sm text-ink">{{ theme.label }}</span>
+              <span class="block text-xs text-ink/45">预设配色</span>
+            </span>
+          </button>
+          <button
+            v-for="theme in colorThemes"
+            :key="theme.id"
+            type="button"
+            class="wv-theme-row"
+            :class="appearance.theme === theme.id ? 'is-on' : ''"
+            @click="setTheme(theme.id)"
+            @contextmenu="openThemeMenu($event, { id: theme.id, kind: 'color' })"
+          >
+            <span class="wv-theme-swatch" :style="{ background: theme.vars?.dawn || '#efeae1' }" />
+            <span class="min-w-0">
+              <span class="block truncate text-sm text-ink">{{ theme.name || theme.id }}</span>
+              <span class="block truncate text-xs text-ink/45">{{ theme.author || '只换颜色' }}</span>
+            </span>
+          </button>
+          <button
+            v-for="pack in appearance.packs || []"
+            :key="pack.id"
+            type="button"
+            class="wv-theme-row"
+            :class="appearance.active_pack === pack.id ? 'is-on' : ''"
+            @click="usePack(pack.id)"
+            @contextmenu="openThemeMenu($event, { id: pack.id, kind: 'pack' })"
+          >
+            <img v-if="pack.preview" :src="packFileUrl(pack.id, pack.preview)" alt="" class="wv-theme-preview" />
+            <span v-else class="wv-theme-swatch" style="background: #e4dced" />
+            <span class="min-w-0">
+              <span class="block truncate text-sm text-ink">{{ pack.name }}</span>
+              <span class="block truncate text-xs text-ink/45">{{ pack.author || '主题包' }}</span>
+            </span>
           </button>
         </div>
-        <p class="mt-4 text-xs text-ink/45">导入的主题</p>
-        <div v-if="appearance.custom_themes?.length" class="mt-2 space-y-2">
-          <div v-for="theme in appearance.custom_themes" :key="theme.id" class="flex items-center gap-2">
-            <button
-              type="button"
-              class="h-9 flex-1 rounded px-3 text-left text-xs"
-              :class="appearance.theme === theme.id ? 'bg-ink text-white' : 'bg-white text-ink'"
-              @click="setTheme(theme.id)"
-            >
-              <span class="mr-1 inline-block h-3 w-3 rounded-full border border-black/10" :style="{ background: theme.vars?.dawn }" />
-              {{ theme.name || theme.id }}
-            </button>
-            <button type="button" class="h-8 rounded px-2 text-xs text-ink/50" @click="dropTheme(theme.id)">删除</button>
-          </div>
-        </div>
-        <p v-else class="mt-2 text-xs text-ink/45">还没有导入主题。文件扩展名用 .wvtheme 或 .json。</p>
+        <p v-if="!(appearance.packs || []).length && !colorThemes.length" class="mt-3 text-xs text-ink/45">还没有导入的主题。可以选 .wvtheme、.json 或 .wvpack。</p>
         <div class="mt-4 flex flex-wrap gap-2">
           <button type="button" class="h-8 rounded bg-white px-3 text-xs" :disabled="busy === 'theme'" @click="themeInput.click()">导入主题</button>
           <button type="button" class="h-8 rounded bg-white px-3 text-xs" @click="exportTheme">导出当前主题</button>
@@ -354,6 +445,13 @@ async function clear(kind, groupId) {
         <p v-if="busy === 'theme'" class="mt-2 text-xs text-moss">正在导入 {{ busyName }}…</p>
         <p v-else-if="statusMessage" class="mt-2 text-xs text-moss">{{ statusMessage }}</p>
         <p v-if="errorMessage" class="mt-2 text-xs text-ember">{{ errorMessage }}</p>
+        <div
+          v-if="themeMenu"
+          class="fixed z-[80] min-w-28 bg-white py-1 text-sm shadow-lg"
+          :style="{ left: `${themeMenu.x}px`, top: `${themeMenu.y}px` }"
+        >
+          <button type="button" class="block w-full px-3 py-1.5 text-left hover:bg-black/5" @click="themeMenu.kind === 'pack' ? dropPack(themeMenu.id) : dropTheme(themeMenu.id)">删除</button>
+        </div>
       </template>
       <template v-else>
       <p class="text-xs text-ink/45">背景不透明度</p>
@@ -361,7 +459,7 @@ async function clear(kind, groupId) {
         <input type="range" min="0" max="100" :value="opacityPercent" class="flex-1" @input="onOpacityInput" />
         <span class="w-10 text-right text-xs text-ink/70">{{ opacityPercent }}%</span>
       </div>
-      <p class="mt-1 text-xs text-ink/40">100% 完全显示背景图，0% 只留界面底色。</p>
+      <p class="mt-1 text-xs text-ink/40">100% 时界面盖住背景，0% 只留界面底色。</p>
       <p class="mt-4 text-xs text-ink/45">分组栏</p>
       <div class="mt-2 flex gap-2">
         <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.bar === 'push' ? 'bg-ink text-white' : 'bg-white'" @click="setBar('push')">推栏</button>
@@ -445,6 +543,10 @@ async function clear(kind, groupId) {
           {{ seconds }} 秒
         </button>
       </div>
+      <label class="mt-3 block text-xs text-ink/45">
+        底部标语
+        <input v-model="captionDraft" class="mt-1 h-9 w-full bg-white px-2 text-sm text-ink outline-none" maxlength="40" @change="saveCaption" />
+      </label>
       <label class="mt-3 flex items-center gap-2 text-sm text-ink/80">
         <input type="checkbox" :checked="appearance.splash_loop !== false" @change="setSplashLoop" />
         视频循环到时长结束
@@ -456,7 +558,7 @@ async function clear(kind, groupId) {
       <input ref="videoInput" class="wv-file-input" type="file" accept="video/mp4,.mp4" @change="onVideo" />
       <input ref="groupInput" class="wv-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" @change="onGroupImage" />
       <input ref="splashInput" class="wv-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/webm,video/mp4,application/json,.png,.jpg,.jpeg,.webp,.gif,.webm,.mp4,.json,.lottie" @change="onSplash" />
-      <input ref="themeInput" class="wv-file-input" type="file" accept=".wvtheme,application/json,.json" @change="onThemeFile" />
+      <input ref="themeInput" class="wv-file-input" type="file" accept=".wvtheme,.wvpack,.json,application/json,application/zip" @change="onThemeFile" />
     </div>
   </div>
 </template>

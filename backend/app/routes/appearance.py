@@ -9,11 +9,13 @@ from fastapi import APIRouter, UploadFile
 from fastapi.responses import FileResponse, Response
 
 from app.appearance import (
+    activate_pack,
     assign_file,
     assign_splash,
     background_path,
     clear_file,
     clear_splash,
+    delete_pack,
     import_theme,
     load_settings,
     remove_theme,
@@ -21,6 +23,7 @@ from app.appearance import (
     store_image,
     store_video,
 )
+from app.packs import install_pack, pack_file
 from app.errors import raise_api_error
 from app.splash import splash_path, store_splash
 from app.themes import BUILTIN, builtin_export, export_payload, find_custom, parse_theme_bytes
@@ -102,11 +105,40 @@ def read_splash(filename: str):
 @router.post("/themes")
 async def upload_theme(file: UploadFile) -> dict:
     payload = await file.read()
+    suffix = Path(file.filename or "").suffix.lower()
     try:
+        if suffix == ".wvpack":
+            install_pack(payload)
+            return load_settings()
         theme = parse_theme_bytes(payload)
         return import_theme(theme)
     except ValueError as exc:
         raise_api_error(400, "file", str(exc))
+
+
+@router.post("/packs/{pack_id}/activate")
+def use_pack(pack_id: str) -> dict:
+    try:
+        return activate_pack(pack_id)
+    except ValueError as exc:
+        raise_api_error(400, "pack", str(exc))
+
+
+@router.delete("/packs/{pack_id}")
+def drop_pack(pack_id: str) -> dict:
+    try:
+        return delete_pack(pack_id)
+    except ValueError as exc:
+        raise_api_error(400, "pack", str(exc))
+
+
+@router.get("/packs/{pack_id}/files/{file_path:path}")
+def read_pack_file(pack_id: str, file_path: str):
+    try:
+        path = pack_file(pack_id, file_path)
+    except ValueError as exc:
+        raise_api_error(404, "file", str(exc))
+    return FileResponse(path)
 
 
 @router.delete("/themes/{theme_id}")

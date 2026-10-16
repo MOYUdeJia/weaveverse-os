@@ -35,7 +35,7 @@ BACKUP_NAMES = (
     "ai_settings.json",
     "privacy.json",
 )
-BACKUP_DIRS = ("attachments", "books", "music", "icons", "backgrounds", "splash")
+BACKUP_DIRS = ("attachments", "books", "music", "icons", "backgrounds", "splash", "themes")
 SAFETY_DIR = DATA_DIR / "safety"
 META_PATH = DATA_DIR / "backup_meta.json"
 NAME_PATTERN = re.compile(r"^weaveverse-(\d{4}-\d{2}-\d{2})-(\d{4})(?:-(.+))?\.wvbak$")

@@ -31,6 +31,9 @@ backend/data/backgrounds/*
 !backend/data/backgrounds/.gitkeep
 backend/data/splash/*
 !backend/data/splash/.gitkeep
+backend/data/themes/*
+!backend/data/themes/.gitkeep
+vendor/
 build/
 backend/data/music/*
 !backend/data/music/.gitkeep
