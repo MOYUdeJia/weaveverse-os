@@ -193,6 +193,30 @@ def _media_kind(asset_type: str, suffix: str) -> str:
     raise ValueError("这个文件不能放进该素材类型")
 
 
+def store_icon_images(files: list[tuple[str, bytes]], name: str = "") -> dict:
+    asset_id = f"u-{uuid.uuid4().hex[:10]}"
+    folder = _safe_asset_path(f"icons/{asset_id}")
+    folder.mkdir(parents=True, exist_ok=True)
+    count = 0
+    for filename, payload in files:
+        suffix = Path(filename or "").suffix.lower()
+        if suffix not in IMAGE_SUFFIXES or not payload or len(payload) > MAX_MEDIA_BYTES:
+            continue
+        (folder / f"{count:02d}-{Path(filename).stem[:24]}{suffix}").write_bytes(payload)
+        count += 1
+    if count == 0:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise ValueError("图标包里没有 png / jpg / webp / gif")
+    return _add_asset("icons", {
+        "id": asset_id,
+        "name": (name or "图标包")[:40],
+        "system": False,
+        "path": f"icons/{asset_id}",
+        "media": "pack",
+        "count": count,
+    })
+
+
 def store_upload(asset_type: str, filename: str, payload: bytes, name: str = "") -> dict:
     if asset_type not in ASSET_TYPES:
         raise ValueError("没有这种素材")
@@ -448,12 +472,14 @@ def apply_preset(preset_id: str, resolution: str = "", save_name: str = "") -> d
     current = load_settings()
     if current.get("dirty") and resolution not in {"save", "save_as", "discard"}:
         active = get_preset(current.get("current_preset") or "")
-        raise DirtyPreset(bool(active and active["system"]))
+        raise DirtyPreset(bool(active and not active["system"]))
     if current.get("dirty") and resolution == "save":
         active = get_preset(current.get("current_preset") or "")
         if active is None or active["system"]:
             raise ValueError("系统预设不能覆盖，请另存为")
-        update_preset(active["id"], {"slots": current["slots"], "slot_config": current["slot_config"]})
+        saved = update_preset(active["id"], {"slots": current["slots"], "slot_config": current["slot_config"]})
+        if saved["id"] == preset["id"]:
+            preset = saved
     if current.get("dirty") and resolution == "save_as":
         create_preset(save_name or "未命名预设", current["slots"], current["slot_config"], current.get("current_preset") or None)
     warnings = _missing_slot_assets(preset["slots"])
@@ -480,9 +506,9 @@ def _missing_slot_assets(slots: dict) -> list[str]:
 
 
 class DirtyPreset(ValueError):
-    def __init__(self, system: bool) -> None:
+    def __init__(self, can_save: bool) -> None:
         super().__init__("当前配置有未保存修改")
-        self.system = system
+        self.can_save = can_save
 
 
 def export_preset(preset_id: str) -> tuple[bytes, str]:

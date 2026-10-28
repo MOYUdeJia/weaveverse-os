@@ -3,7 +3,7 @@ import lottie from 'lottie-web'
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import splashImage from '../assets/splash/splash.png'
-import { packFileUrl, splashUrl } from '../api/client'
+import { assetFileUrl, packFileUrl, splashUrl } from '../api/client'
 
 const props = defineProps({
   appearance: {
@@ -26,8 +26,9 @@ const durationMs = Math.max(2, Number(props.appearance?.splash_duration) || 2) *
 const file = props.appearance?.splash_file || ''
 const loopVideo = props.appearance?.splash_loop !== false
 const fromPack = props.appearance?.splash_owner === 'pack' && props.appearance?.active_pack
+const fromSlot = props.appearance?.splash_owner === 'slot' && file
 const mediaSrc = file && mode !== 'default'
-  ? (fromPack ? packFileUrl(props.appearance.active_pack, file) : splashUrl(file))
+  ? (fromSlot ? assetFileUrl('splashes', file) : fromPack ? packFileUrl(props.appearance.active_pack, file) : splashUrl(file))
   : ''
 const caption = (fromPack && props.appearance?.pack_caption) || props.appearance?.splash_caption || '正在编织你的宇宙'
 

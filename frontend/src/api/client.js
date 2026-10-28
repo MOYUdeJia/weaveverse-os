@@ -235,6 +235,97 @@ export function splashUrl(filename) {
   return `${API_PREFIX}/appearance/splash/${encodeURIComponent(filename)}`
 }
 
+export function assetFileUrl(type, id) {
+  return `${API_PREFIX}/assets/${encodeURIComponent(type)}/${encodeURIComponent(id)}/file`
+}
+
+export function iconEntryUrl(packId, filename) {
+  return `${API_PREFIX}/assets/icons/${encodeURIComponent(packId)}/entries/${encodeURIComponent(filename)}`
+}
+
+export function getAssets(type) {
+  const query = type ? `?type=${encodeURIComponent(type)}` : ''
+  return request(`/assets${query}`)
+}
+
+export function uploadAssets(type, files) {
+  const body = new FormData()
+  body.append('type', type)
+  for (const file of files) {
+    body.append('files', file)
+  }
+  return request('/assets/upload', { method: 'POST', body })
+}
+
+export function deleteAsset(type, id) {
+  return request(`/assets/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export function getPresets() {
+  return request('/presets')
+}
+
+export function createPreset(name) {
+  return request('/presets', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  })
+}
+
+export function deletePreset(id) {
+  return request(`/presets/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export async function applyPreset(id, body) {
+  const response = await fetch(`${API_PREFIX}/presets/apply/${encodeURIComponent(id)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (response.status === 409) {
+    return { conflict: data.detail || { can_save: false, choices: ['save_as', 'discard', 'cancel'] } }
+  }
+  if (!response.ok) {
+    throw new Error(data.detail?.message || '切换预设失败')
+  }
+  return data
+}
+
+export function patchSlots(data) {
+  return request('/slots', {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+export function importPresetFile(file) {
+  const body = new FormData()
+  body.append('file', file)
+  return request('/presets/import', { method: 'POST', body })
+}
+
+export function getIconEntries(packId) {
+  return request(`/assets/icons/${encodeURIComponent(packId)}/entries`)
+}
+
+export async function exportPresetFile(id) {
+  const response = await fetch(`${API_PREFIX}/presets/export/${encodeURIComponent(id)}`, { method: 'POST' })
+  if (!response.ok) {
+    throw new Error('导出预设失败')
+  }
+  const buffer = await response.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  const size = 0x8000
+  for (let index = 0; index < bytes.length; index += size) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + size))
+  }
+  const header = response.headers.get('Content-Disposition') || ''
+  const matched = header.match(/filename="([^"]+)"/)
+  return { base64: btoa(binary), filename: matched?.[1] || 'preset.wvpack' }
+}
+
 export function packFileUrl(packId, relative) {
   const path = String(relative || '')
     .split('/')

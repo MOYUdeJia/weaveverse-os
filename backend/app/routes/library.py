@@ -23,6 +23,7 @@ from app.library import (
     list_presets,
     patch_slots,
     slot_state,
+    store_icon_images,
     store_upload,
     update_preset,
 )
@@ -41,10 +42,15 @@ def get_assets(type: str | None = None) -> dict:
 
 @router.post("/assets/upload")
 async def post_assets(type: str = Form(...), files: list[UploadFile] = File(...)) -> dict:
+    payloads = [(item.filename or "", await item.read()) for item in files]
     stored = []
     try:
-        for item in files:
-            stored.append(store_upload(type, item.filename or "", await item.read(), item.filename or ""))
+        images = type == "icons" and not (len(payloads) == 1 and payloads[0][0].lower().endswith(".zip"))
+        if images:
+            stored.append(store_icon_images(payloads, Path(payloads[0][0]).stem))
+        else:
+            for filename, payload in payloads:
+                stored.append(store_upload(type, filename, payload, Path(filename).stem))
     except ValueError as exc:
         raise_api_error(400, "file", str(exc))
     return {"assets": stored}
@@ -127,8 +133,8 @@ def use_preset(preset_id: str, data: dict | None = Body(default=None)) -> dict:
         raise HTTPException(status_code=409, detail={
             "field": "dirty",
             "message": "当前配置有未保存修改",
-            "system": exc.system,
-            "choices": ["save_as", "discard", "cancel"] if exc.system else ["save", "save_as", "discard", "cancel"],
+            "can_save": exc.can_save,
+            "choices": ["save", "save_as", "discard", "cancel"] if exc.can_save else ["save_as", "discard", "cancel"],
         })
     except ValueError as exc:
         raise_api_error(400, "preset", str(exc))

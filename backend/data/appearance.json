@@ -1,5 +1,5 @@
 {
-  "theme": "sakura",
+  "theme": "mint",
   "bar": "overlay",
   "player": "corner",
   "player_x": null,
@@ -49,9 +49,9 @@
   "group_names": {
     "1": "26_04_27_19_37_29.png"
   },
-  "current_preset": "",
+  "current_preset": "warm",
   "slots": {
-    "colors": "sakura",
+    "colors": "mint",
     "background": "u-c90f95e189",
     "splash": null,
     "icons": null
@@ -62,7 +62,8 @@
       "slogan": ""
     }
   },
-  "dirty": false,
+  "dirty": true,
   "library_ready": true,
-  "slot_background": "u-c90f95e189"
+  "slot_background": "u-c90f95e189",
+  "slot_background_media": "video"
 }

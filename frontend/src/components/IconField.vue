@@ -3,7 +3,7 @@ import Cropper from 'cropperjs'
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import 'cropperjs/dist/cropper.css'
 
-import { deleteIcon, uploadIcon } from '../api/client'
+import { deleteIcon, getIconEntries, iconEntryUrl, uploadIcon } from '../api/client'
 import NavIcon from './NavIcon.vue'
 
 const ICONS = [
@@ -13,6 +13,10 @@ const ICONS = [
 ]
 const props = defineProps({
   modelValue: {
+    type: String,
+    default: '',
+  },
+  packId: {
     type: String,
     default: '',
   },
@@ -28,6 +32,7 @@ const zoomLevel = ref(0)
 const imageUrl = ref('')
 const uploaded = ref('')
 const initial = ref(props.modelValue)
+const packFiles = ref([])
 const keepUpload = ref(false)
 let cropper = null
 let minRatio = 1
@@ -36,6 +41,32 @@ let maxRatio = 1
 function choose(icon) {
   emit('update:modelValue', icon)
 }
+
+async function loadPack(packId) {
+  packFiles.value = []
+  if (!packId) {
+    return
+  }
+  try {
+    const data = await getIconEntries(packId)
+    packFiles.value = data.files || []
+  } catch (error) {
+    console.error('Failed to load icon pack:', error)
+  }
+}
+
+async function usePackIcon(name) {
+  const response = await fetch(iconEntryUrl(props.packId, name))
+  if (!response.ok) {
+    return
+  }
+  const blob = await response.blob()
+  const result = await uploadIcon(new File([blob], name, { type: blob.type || 'image/png' }))
+  uploaded.value = result.icon
+  emit('update:modelValue', result.icon)
+}
+
+watch(() => props.packId, loadPack, { immediate: true })
 
 function saved() {
   keepUpload.value = true
@@ -240,6 +271,20 @@ onBeforeUnmount(() => {
       >
         {{ icon }}
       </button>
+    </div>
+    <div v-if="packId && packFiles.length" class="mt-3">
+      <p class="text-sm text-ink/70">从图标包选</p>
+      <div class="mt-2 flex gap-2 overflow-x-auto">
+        <button
+          v-for="name in packFiles"
+          :key="name"
+          type="button"
+          class="h-12 w-12 shrink-0 overflow-hidden bg-white"
+          @click="usePackIcon(name)"
+        >
+          <img :src="iconEntryUrl(packId, name)" alt="" class="h-full w-full object-cover" />
+        </button>
+      </div>
     </div>
     <button type="button" class="mt-3 h-9 rounded-md px-3 text-sm font-medium text-moss hover:bg-moss/10" @click="fileInput?.click()">
       上传图片

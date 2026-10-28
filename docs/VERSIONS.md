@@ -1167,3 +1167,25 @@
   - 修改 `backend/app/api.py`、`appearance.py`、`config.py`、`backup_file.py`
   - 修改 `.gitignore`、`docs/VERSIONS.md`
 
+## M11 阶段 2 · 2026-10-16
+- **任务**：设置里的主题改成预设、素材库、槽位三个页，并接上未保存提示、导入导出和图标包选择。
+- **实现**：
+  - 三个页用文字页签，选中的一条下划线，不再套一层卡片。
+  - 点另一套预设时，如果有未保存改动，弹出保存、另存为、放弃、取消。没有可覆盖的用户预设时，不显示保存。
+  - 添加素材可以一次选多个文件。JSON 会建议用作颜色，视频建议用作背景，放进库之前仍可以改成颜色、背景、开屏或图标。多张图片选图标时合成一个图标包。
+  - 导出当前预设走系统另存为。没有桌面桥时改为下载。导入 `.wvpack` 后出现在预设列表。
+  - 导航编辑里，如果当前图标槽选了图标包，会多一排缩略图。点一张会复制成这一个导航项的图标，不会改掉其他导航。
+- **技术架构**：界面调用阶段 1 的接口。槽位换背景后，窗口用素材地址显示，不再只认旧的全局背景字段。
+- **与阶段 1 相比的变化**：
+  - 主题设置可以实际操作
+  - 保存到当前预设时，不会把刚改的槽位写回旧快照
+- **已知问题**：
+  - 阶段 3 的雾紫、异环、赛尔号预设还没做。
+  - 分组编辑里还没有「从图标包选」，目前只加在导航项编辑。
+- **文件变更**：
+  - 新增 `frontend/src/components/ThemePanel.vue`
+  - 修改 `frontend/src/components/AppearanceDialog.vue`、`IconField.vue`、`NavEditDialog.vue`、`SplashScreen.vue`
+  - 修改 `frontend/src/App.vue`、`frontend/src/api/client.js`
+  - 修改 `backend/app/library.py`、`backend/app/routes/library.py`、`backend/main.py`
+  - 修改 `docs/VERSIONS.md`
+

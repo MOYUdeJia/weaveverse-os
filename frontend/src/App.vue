@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import { backgroundUrl, createGroup, createNav, deleteGroup, deleteNav, getAppearance, getGroups, getHealth, getNav, lockGroup, lockNav, packFileUrl, patchNav, pinNav, reorderGroups, reorderNav, updateAppearance, updateGroup, updateNav, vaultEntryCount } from './api/client'
+import { assetFileUrl, backgroundUrl, createGroup, createNav, deleteGroup, deleteNav, getAppearance, getGroups, getHealth, getNav, lockGroup, lockNav, packFileUrl, patchNav, pinNav, reorderGroups, reorderNav, updateAppearance, updateGroup, updateNav, vaultEntryCount } from './api/client'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import GroupBar from './components/GroupBar.vue'
 import GroupEditDialog from './components/GroupEditDialog.vue'
@@ -564,6 +564,20 @@ const groupMedia = computed(() => {
   return appearance.value.groups?.[String(activeGroupId.value)] || ''
 })
 
+const slotVideo = computed(() => {
+  if (appearance.value.low_power || appearance.value.slot_background_media !== 'video' || !appearance.value.slots?.background) {
+    return ''
+  }
+  return assetFileUrl('backgrounds', appearance.value.slots.background)
+})
+
+const slotStill = computed(() => {
+  if (appearance.value.slot_background_media !== 'image' || !appearance.value.slots?.background) {
+    return ''
+  }
+  return assetFileUrl('backgrounds', appearance.value.slots.background)
+})
+
 const packVideo = computed(() => {
   if (appearance.value.low_power || appearance.value.pack_background_kind !== 'video' || !appearance.value.pack_background) {
     return ''
@@ -574,7 +588,15 @@ const packVideo = computed(() => {
   return packFileUrl(appearance.value.active_pack, appearance.value.pack_background)
 })
 
-const videoSrc = computed(() => packVideo.value || (appearance.value.global_video && !appearance.value.low_power ? backgroundUrl(appearance.value.global_video) : ''))
+const videoSrc = computed(() => {
+  if (slotVideo.value) {
+    return slotVideo.value
+  }
+  if (appearance.value.library_ready && !appearance.value.slots?.background) {
+    return packVideo.value
+  }
+  return packVideo.value || (appearance.value.global_video && !appearance.value.low_power ? backgroundUrl(appearance.value.global_video) : '')
+})
 
 const packStill = computed(() => {
   if (appearance.value.pack_background_kind !== 'image' || !appearance.value.pack_background || !appearance.value.active_pack) {
@@ -583,7 +605,18 @@ const packStill = computed(() => {
   return packFileUrl(appearance.value.active_pack, appearance.value.pack_background)
 })
 
-const stillMedia = computed(() => groupMedia.value || packStill.value || appearance.value.global_image || '')
+const stillMedia = computed(() => {
+  if (videoSrc.value) {
+    return ''
+  }
+  if (slotStill.value) {
+    return slotStill.value
+  }
+  if (appearance.value.library_ready && !appearance.value.slots?.background) {
+    return groupMedia.value || packStill.value
+  }
+  return groupMedia.value || packStill.value || appearance.value.global_image || ''
+})
 
 async function closeGuide(hideNext) {
   guideOpen.value = false
@@ -712,6 +745,7 @@ async function onNoteSaved(saved) {
       :mode="dialogMode"
       :item="editingItem"
       :nav-items="navItems"
+      :icon-pack="appearance.slots?.icons || ''"
       @close="isDialogOpen = false"
       @save="saveNavItem"
     />

@@ -17,6 +17,7 @@ import {
   uploadSplash,
 } from '../api/client'
 import AiSettings from './AiSettings.vue'
+import ThemePanel from './ThemePanel.vue'
 import BackupPanel from './BackupPanel.vue'
 import PrivacyPanel from './PrivacyPanel.vue'
 import RemotePanel from './RemotePanel.vue'
@@ -387,72 +388,7 @@ async function clear(kind, groupId) {
       <AiSettings v-if="page === 'ai'" />
       <RemotePanel v-else-if="page === 'remote'" />
       <BackupPanel v-else-if="page === 'backup'" @need-privacy="page = 'privacy'" />
-      <PrivacyPanel v-else-if="page === 'privacy'" />
-      <template v-else-if="page === 'theme'">
-        <p class="text-sm text-ink">正在使用 {{ currentThemeName }}</p>
-        <div class="mt-4 space-y-1" @click="closeThemeMenu">
-          <button
-            v-for="theme in THEMES"
-            :key="theme.id"
-            type="button"
-            class="wv-theme-row"
-            :class="appearance.theme === theme.id && !appearance.active_pack ? 'is-on' : ''"
-            @click="setTheme(theme.id)"
-          >
-            <span class="wv-theme-swatch" :style="{ background: theme.swatch }" />
-            <span class="min-w-0">
-              <span class="block truncate text-sm text-ink">{{ theme.label }}</span>
-              <span class="block text-xs text-ink/45">预设配色</span>
-            </span>
-          </button>
-          <button
-            v-for="theme in colorThemes"
-            :key="theme.id"
-            type="button"
-            class="wv-theme-row"
-            :class="appearance.theme === theme.id ? 'is-on' : ''"
-            @click="setTheme(theme.id)"
-            @contextmenu="openThemeMenu($event, { id: theme.id, kind: 'color' })"
-          >
-            <span class="wv-theme-swatch" :style="{ background: theme.vars?.dawn || '#efeae1' }" />
-            <span class="min-w-0">
-              <span class="block truncate text-sm text-ink">{{ theme.name || theme.id }}</span>
-              <span class="block truncate text-xs text-ink/45">{{ theme.author || '只换颜色' }}</span>
-            </span>
-          </button>
-          <button
-            v-for="pack in appearance.packs || []"
-            :key="pack.id"
-            type="button"
-            class="wv-theme-row"
-            :class="appearance.active_pack === pack.id ? 'is-on' : ''"
-            @click="usePack(pack.id)"
-            @contextmenu="openThemeMenu($event, { id: pack.id, kind: 'pack' })"
-          >
-            <img v-if="pack.preview" :src="packFileUrl(pack.id, pack.preview)" alt="" class="wv-theme-preview" />
-            <span v-else class="wv-theme-swatch" style="background: #e4dced" />
-            <span class="min-w-0">
-              <span class="block truncate text-sm text-ink">{{ pack.name }}</span>
-              <span class="block truncate text-xs text-ink/45">{{ pack.author || '主题包' }}</span>
-            </span>
-          </button>
-        </div>
-        <p v-if="!(appearance.packs || []).length && !colorThemes.length" class="mt-3 text-xs text-ink/45">还没有导入的主题。可以选 .wvtheme、.json 或 .wvpack。</p>
-        <div class="mt-4 flex flex-wrap gap-2">
-          <button type="button" class="h-8 rounded bg-white px-3 text-xs" :disabled="busy === 'theme'" @click="themeInput.click()">导入主题</button>
-          <button type="button" class="h-8 rounded bg-white px-3 text-xs" @click="exportTheme">导出当前主题</button>
-        </div>
-        <p v-if="busy === 'theme'" class="mt-2 text-xs text-moss">正在导入 {{ busyName }}…</p>
-        <p v-else-if="statusMessage" class="mt-2 text-xs text-moss">{{ statusMessage }}</p>
-        <p v-if="errorMessage" class="mt-2 text-xs text-ember">{{ errorMessage }}</p>
-        <div
-          v-if="themeMenu"
-          class="fixed z-[80] min-w-28 bg-white py-1 text-sm shadow-lg"
-          :style="{ left: `${themeMenu.x}px`, top: `${themeMenu.y}px` }"
-        >
-          <button type="button" class="block w-full px-3 py-1.5 text-left hover:bg-black/5" @click="themeMenu.kind === 'pack' ? dropPack(themeMenu.id) : dropTheme(themeMenu.id)">删除</button>
-        </div>
-      </template>
+      <ThemePanel v-else-if="page === 'theme'" :appearance="appearance" @change="emit('change', $event)" />
       <template v-else>
       <p class="text-xs text-ink/45">背景不透明度</p>
       <div class="mt-2 flex items-center gap-3">
