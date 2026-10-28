@@ -2,6 +2,7 @@
   "theme": "seer-colors",
   "bar": "overlay",
   "player": "free",
+  "player_hidden": false,
   "player_x": 0.9554030874785592,
   "player_y": 0.9280774550484094,
   "player_spread": "auto",

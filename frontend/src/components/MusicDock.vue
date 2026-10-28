@@ -34,7 +34,7 @@ const props = defineProps({
   moving: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['move-done', 'move-cancel'])
+const emit = defineEmits(['move-done', 'move-cancel', 'hide'])
 
 const tracks = ref([])
 const listId = ref('playlist')
@@ -45,6 +45,7 @@ const fileInput = ref(null)
 const dockEl = ref(null)
 const stageEl = ref(null)
 const menuEl = ref(null)
+const subEl = ref(null)
 const stemEl = ref(null)
 const prevEl = ref(null)
 const nextEl = ref(null)
@@ -686,29 +687,70 @@ function switchList(id) {
 
 function onMenu(event) {
   event.preventDefault()
-  if (props.moving || (!controlsOpen.value && !panelOpen.value)) {
+  event.stopPropagation()
+  if (props.moving) {
     return
   }
-  menu.value = { x: 8, y: 8, modes: false, flip: false }
+  const pad = 8
+  menu.value = { x: event.clientX, y: event.clientY, modes: false, flip: false, subShift: 0 }
   nextTick(() => {
-    const el = menuEl.value
-    const width = el?.offsetWidth || 220
-    const height = el?.offsetHeight || 220
+    const width = menuEl.value?.offsetWidth || 168
+    const height = menuEl.value?.offsetHeight || 180
     let x = event.clientX
     let y = event.clientY
-    if (x + width > window.innerWidth - 8) {
-      x = window.innerWidth - width - 8
+    if (x + width > window.innerWidth - pad) {
+      x = window.innerWidth - width - pad
     }
-    if (y + height > window.innerHeight - 8) {
-      y = window.innerHeight - height - 8
+    if (y + height > window.innerHeight - pad) {
+      y = window.innerHeight - height - pad
     }
     menu.value = {
-      x: Math.max(8, x),
-      y: Math.max(8, y),
+      x: Math.max(pad, x),
+      y: Math.max(pad, y),
       modes: false,
-      flip: x + width + 128 > window.innerWidth,
+      flip: false,
+      subShift: 0,
     }
   })
+}
+
+function openModes() {
+  if (!menu.value || !menuEl.value) {
+    return
+  }
+  const pad = 8
+  const subWidth = 112
+  const subHeight = MODES.length * 30 + 12
+  const menuRect = menuEl.value.getBoundingClientRect()
+  const spaceRight = window.innerWidth - menuRect.right
+  const spaceLeft = menuRect.left
+  const flip = spaceRight < subWidth + pad && spaceLeft >= spaceRight
+  const rowTop = menuRect.bottom - 32
+  const overflow = rowTop + subHeight - (window.innerHeight - pad)
+  menu.value = { ...menu.value, modes: true, flip, subShift: overflow > 0 ? overflow : 0 }
+  nextTick(() => {
+    const box = subEl.value?.getBoundingClientRect()
+    if (!box || !menu.value) {
+      return
+    }
+    let nextFlip = menu.value.flip
+    if (box.right > window.innerWidth - pad && spaceLeft >= subWidth) {
+      nextFlip = true
+    }
+    if (box.left < pad && spaceRight >= subWidth) {
+      nextFlip = false
+    }
+    const extra = box.bottom - (window.innerHeight - pad)
+    const subShift = extra > 0 ? menu.value.subShift + extra : menu.value.subShift
+    if (nextFlip !== menu.value.flip || subShift !== menu.value.subShift) {
+      menu.value = { ...menu.value, flip: nextFlip, subShift: Math.max(0, subShift) }
+    }
+  })
+}
+
+function hideOrb() {
+  menu.value = null
+  emit('hide')
 }
 
 function setMode(id) {
@@ -1032,30 +1074,30 @@ onBeforeUnmount(() => {
       />
       <input ref="fileInput" class="wv-file-input" type="file" accept="audio/mpeg,audio/ogg,audio/wav,audio/mp4,audio/flac,.mp3,.ogg,.wav,.m4a,.flac" @change="onFile" />
     </div>
-    <div v-if="menu" ref="menuEl" class="wv-orb-menu" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }" @mouseleave="menu = null">
-      <button type="button" class="wv-menu-main" @click="togglePanel(!panelOpen)">
-        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8h14" /><path d="M5 12h14" /><path d="M5 16h10" /></svg>
-        <span>{{ panelOpen ? '关闭面板' : '打开面板' }}</span>
-      </button>
-      <p class="wv-menu-title"><span>{{ current?.title || '还没有音频' }}</span></p>
-      <div class="wv-menu-row">
-        <button type="button" title="上一首" @click="step(-1)">‹</button>
-        <button type="button" title="播放" @click="togglePlay">
-          <svg v-if="playing" viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
-          <svg v-else viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor"><path d="M8 5.2v13.6c0 .7.8 1.1 1.4.7l10.2-6.8c.6-.4.6-1.3 0-1.7L9.4 4.5C8.8 4.1 8 4.5 8 5.2z" /></svg>
+    <Teleport to="body">
+      <div v-if="menu" ref="menuEl" class="wv-orb-menu" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }" @mouseleave="menu = null" @contextmenu.prevent>
+        <button type="button" class="wv-menu-main" @click="togglePanel(!panelOpen)">
+          <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8h14" /><path d="M5 12h14" /><path d="M5 16h10" /></svg>
+          <span>{{ panelOpen ? '关闭面板' : '打开面板' }}</span>
         </button>
-        <button type="button" title="下一首" @click="step(1)">›</button>
-      </div>
-      <div class="wv-menu-row">
-        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10h3l4-3v10l-4-3H4z" /><path d="M15 9a4 4 0 010 6" /></svg>
-        <input type="range" min="0" max="1" step="0.05" :value="volume" @input="volume = Number($event.target.value)" />
-      </div>
-      <div class="wv-menu-mode" @mouseenter="menu = { ...menu, modes: true }">
-        <span>播放方式 · {{ modeLabel }}</span>
-        <div v-if="menu.modes" class="wv-menu-sub" :class="menu.flip ? 'is-flip' : ''">
-          <button v-for="item in MODES" :key="item.id" type="button" @click="setMode(item.id)">{{ item.label }}</button>
+        <p class="wv-menu-title" :title="current?.title || ''">{{ current?.title || '还没有音频' }}</p>
+        <div class="wv-menu-row">
+          <button type="button" title="上一首" @click="step(-1)">⏮</button>
+          <button type="button" title="播放" @click="togglePlay">{{ playing ? '⏸' : '▶' }}</button>
+          <button type="button" title="下一首" @click="step(1)">⏭</button>
         </div>
+        <div class="wv-menu-row">
+          <span class="text-xs">音量</span>
+          <input type="range" min="0" max="1" step="0.05" :value="volume" @input="volume = Number($event.target.value)" />
+        </div>
+        <div class="wv-menu-mode" @mouseenter="openModes">
+          <span>播放方式 · {{ modeLabel }}</span>
+          <div v-if="menu.modes" ref="subEl" class="wv-menu-sub" :class="menu.flip ? 'is-flip' : ''" :style="{ top: `${-(menu.subShift || 0)}px` }">
+            <button v-for="item in MODES" :key="item.id" type="button" @click="setMode(item.id)">{{ item.label }}</button>
+          </div>
+        </div>
+        <button type="button" class="wv-menu-main" @click="hideOrb">隐藏悬浮球</button>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>

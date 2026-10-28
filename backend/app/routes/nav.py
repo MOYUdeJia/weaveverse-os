@@ -28,15 +28,15 @@ from app.templates import get_template
 router = APIRouter(prefix="/nav", tags=["nav"])
 
 
-# 单实例页面类型已经有一条时，拒绝再创建。
-# Reject a second navigation item for a single-instance page type.
+# 单实例类型在全部导航里只能有一条，不看它现在在哪个分组。
+# A single-instance type may exist once in the whole nav table, in any group.
 def _ensure_single_instance(session: Session, page_type: str) -> None:
     spec = PAGE_TYPES.get(page_type)
-    if spec is None or spec["multi_instance"]:
+    if spec is None or spec["multi_instance"] or page_type == OVERVIEW_PAGE_TYPE:
         return
     existing = session.exec(select(NavItem.id).where(NavItem.page_type == page_type)).first()
     if existing is not None:
-        raise_api_error(409, "page_type", "这个页面类型只能创建一个")
+        raise_api_error(409, "page_type", "这个页面类型全局只能有一个")
 
 
 # 分组导览不走普通导航接口改删。
@@ -46,15 +46,13 @@ def _reject_overview(item: NavItem) -> None:
         raise_api_error(409, "id", "分组导览不能在这里修改")
 
 
-# 单实例类型固定放进系统分组；其他类型缺省也进系统分组。
-# Single-instance types always land in the system group. Others default there too.
+# 没指定分组时放进系统分组。指定了就用那个分组，单实例页面也一样。
+# Default to the system group. An explicit group id is kept, including for single-instance pages.
 def _resolve_group_id(session: Session, page_type: str, requested: int | None) -> int:
+    del page_type
     system = group_crud.get_system_group(session)
     if system is None or system.id is None:
         raise_api_error(500, "group_id", "缺少系统分组")
-    spec = PAGE_TYPES.get(page_type)
-    if spec is not None and not spec["multi_instance"]:
-        return system.id
     if requested is None:
         return system.id
     if group_crud.get_group(session, requested) is None:
@@ -73,15 +71,12 @@ def _apply_default_icon(data: NavItemCreate, page_type: str) -> None:
     data.icon = icon
 
 
-# 单实例类型不能移出系统分组。
-# Single-instance types cannot leave the system group.
+# 只要目标分组存在，系统页也可以移进去。导览页在调用前已经被拒绝。
+# Any existing group can receive the item. Overview pages are rejected before this.
 def _ensure_can_move(session: Session, item: NavItem, group_id: int) -> None:
+    del item
     if group_crud.get_group(session, group_id) is None:
         raise_api_error(400, "group_id", "分组不存在")
-    spec = PAGE_TYPES.get(item.page_type)
-    system = group_crud.get_system_group(session)
-    if spec is not None and not spec["multi_instance"] and (system is None or group_id != system.id):
-        raise_api_error(409, "group_id", "这个页面类型只能放在系统分组")
 
 
 @router.get("", response_model=list[NavItemRead])

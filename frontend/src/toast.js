@@ -3,10 +3,10 @@ import { ref } from 'vue'
 export const toastText = ref('')
 let timer = null
 
-export function showToast(text) {
+export function showToast(text, duration = 2000) {
   toastText.value = text
   clearTimeout(timer)
   timer = setTimeout(() => {
     toastText.value = ''
-  }, 2000)
+  }, duration)
 }

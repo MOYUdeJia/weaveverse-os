@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import draggable from 'vuedraggable'
 
 import { showMenu } from '../contextMenu'
+import { beginNavDrag, endNavDrag, navDrag } from '../navDrag'
 import NavIcon from './NavIcon.vue'
 
 const props = defineProps({
@@ -48,7 +49,21 @@ watch(
   { immediate: true },
 )
 
+function onItemDrag(event, item) {
+  beginNavDrag(item.id)
+  event.dataTransfer?.setData('text/plain', String(item.id))
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+  }
+}
+
 function onDragEnd() {
+  if (navDrag.dropped) {
+    navDrag.dropped = false
+    endNavDrag()
+    return
+  }
+  endNavDrag()
   const ids = localItems.value.map((item) => item.id)
   const previous = props.items.map((item) => item.id)
   if (ids.length === previous.length && ids.every((id, index) => id === previous[index])) {
@@ -127,6 +142,8 @@ function onItemMenu(event, item) {
               ? 'bg-moss text-white shadow-sm'
               : 'text-ink/72 hover:bg-white/70 hover:text-ink'
           "
+          draggable="true"
+          @dragstart="onItemDrag($event, element)"
           @contextmenu="onItemMenu($event, element)"
         >
           <button type="button" class="flex min-w-0 flex-1 items-center gap-3 text-left" @click="emit('select', element.id)">

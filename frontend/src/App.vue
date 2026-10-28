@@ -15,7 +15,7 @@ import QuickNoteDialog from './components/QuickNoteDialog.vue'
 import SplashScreen from './components/SplashScreen.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import WorkspacePanel from './components/WorkspacePanel.vue'
-import { toastText } from './toast'
+import { showToast, toastText } from './toast'
 
 const splashVisible = ref(true)
 const splashArmed = ref(false)
@@ -71,6 +71,7 @@ const appearance = ref({
   global_image: '',
   global_video: '',
   player: 'corner',
+  player_hidden: false,
   groups: {},
 })
 let confirmAction = null
@@ -337,6 +338,23 @@ async function togglePin(item) {
   } catch (error) {
     console.error('Failed to pin nav:', error)
     alert(error.message || '置顶失败')
+  }
+}
+
+async function receiveNav(navId, groupId) {
+  const item = navItems.value.find((navItem) => navItem.id === navId)
+  if (!item) {
+    return
+  }
+  await moveNavItem(item, groupId)
+}
+
+async function hideOrb() {
+  try {
+    applyAppearance(await updateAppearance({ player_hidden: true }))
+    showToast('悬浮球已隐藏，可在设置→外观中重新显示。', 3600)
+  } catch (error) {
+    showToast(error.message || '没有隐藏')
   }
 }
 
@@ -700,6 +718,7 @@ async function onNoteSaved(saved) {
         @remove="removeGroup"
         @lock="toggleGroupLock"
         @reorder="persistGroupOrder"
+        @receive="receiveNav"
       />
       <SidebarNav
         :items="navItems"
@@ -779,6 +798,7 @@ async function onNoteSaved(saved) {
     />
     <ChatPanel :open="chatOpen" @close="chatOpen = false" @open-nav="openSearchNav" />
     <MusicDock
+      v-if="!appearance.player_hidden"
       :place="appearance.player || 'corner'"
       :origin-x="appearance.player_x"
       :origin-y="appearance.player_y"
@@ -788,6 +808,7 @@ async function onNoteSaved(saved) {
       :moving="orbMoving"
       @move-done="finishOrbMove"
       @move-cancel="cancelOrbMove"
+      @hide="hideOrb"
     />
     <div v-if="appearance.active_pack && appearance.decorations?.length" class="pointer-events-none fixed inset-0 z-30">
       <img

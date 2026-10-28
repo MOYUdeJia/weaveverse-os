@@ -13,6 +13,7 @@ import {
   getPresets,
   importPresetFile,
   patchSlots,
+  updatePreset,
   uploadAssets,
 } from '../api/client'
 
@@ -28,7 +29,6 @@ const emit = defineEmits(['change'])
 const TAB_LABELS = [
   { id: 'presets', label: '预设' },
   { id: 'library', label: '素材库' },
-  { id: 'slots', label: '槽位' },
 ]
 const TYPE_LABELS = [
   { id: 'colors', label: '颜色' },
@@ -43,24 +43,41 @@ const SLOT_LABELS = [
   { id: 'icons', label: '图标', type: 'icons', empty: '不更换' },
 ]
 const DURATIONS = [2, 3, 5, 10, 14]
+const ACCEPT = {
+  colors: '.wvtheme,.json,application/json',
+  backgrounds: 'image/*,video/mp4,video/webm,.png,.jpg,.jpeg,.webp,.gif,.mp4,.webm',
+  splashes: 'image/*,video/mp4,video/webm,.json,.lottie,.png,.jpg,.jpeg,.webp,.gif,.mp4,.webm',
+  icons: 'image/*,.zip,.png,.jpg,.jpeg,.webp,.gif',
+}
 
 const tab = ref('presets')
 const libraryType = ref('colors')
 const presets = ref([])
 const assets = ref({ colors: [], backgrounds: [], splashes: [], icons: [] })
-const openSlot = ref('')
 const message = ref('')
 const errorMessage = ref('')
 const busy = ref(false)
 const fileInput = ref(null)
 const importInput = ref(null)
-const staged = ref([])
-const stagedType = ref('backgrounds')
 const pendingId = ref('')
 const pendingConflict = ref(null)
 const saveName = ref('')
 const creating = ref(false)
+const saveAs = ref(false)
 const newName = ref('')
+const editingId = ref('')
+const draftSlots = ref(null)
+const draftConfig = ref(null)
+const picked = ref([])
+const uploadTarget = ref(null)
+
+const orderedPresets = computed(() => {
+  const system = presets.value.filter((item) => item.system)
+  const custom = presets.value.filter((item) => !item.system)
+  return [...system, ...custom]
+})
+
+const editing = computed(() => orderedPresets.value.find((item) => item.id === editingId.value) || null)
 
 const currentName = computed(() => {
   const found = presets.value.find((item) => item.id === props.appearance.current_preset)
@@ -72,11 +89,22 @@ const canSave = computed(() => {
   return Boolean(props.appearance.dirty && found && !found.system)
 })
 
+const selectableIds = computed(() => (assets.value[libraryType.value] || []).filter((item) => !item.system).map((item) => item.id))
+
 function assetName(type, id) {
   if (!id) {
     return ''
   }
   return assets.value[type]?.find((item) => item.id === id)?.name || id
+}
+
+function emptyDraft() {
+  return {
+    colors: 'warm',
+    background: null,
+    splash: null,
+    icons: null,
+  }
 }
 
 async function reload() {
@@ -88,6 +116,7 @@ async function reload() {
     splashes: assetData.splashes || [],
     icons: assetData.icons || [],
   }
+  picked.value = picked.value.filter((id) => selectableIds.value.includes(id))
 }
 
 async function refreshAppearance() {
@@ -160,6 +189,89 @@ async function saveCurrent() {
   }
 }
 
+function startEdit(item) {
+  editingId.value = item.id
+  draftSlots.value = { ...emptyDraft(), ...(item.slots || {}) }
+  draftConfig.value = {
+    splash: {
+      duration: item.slot_config?.splash?.duration || 2,
+      slogan: item.slot_config?.splash?.slogan || '',
+    },
+  }
+  message.value = ''
+  errorMessage.value = ''
+}
+
+function closeEdit() {
+  editingId.value = ''
+  draftSlots.value = null
+}
+
+async function previewIfCurrent(slotId) {
+  if (!editing.value || editing.value.id !== props.appearance.current_preset || editing.value.system) {
+    return
+  }
+  await patchSlots({
+    [slotId]: draftSlots.value[slotId],
+    slot_config: draftConfig.value,
+  })
+  await refreshAppearance()
+}
+
+async function assignDraft(slot, id) {
+  draftSlots.value = { ...draftSlots.value, [slot]: id }
+  try {
+    await previewIfCurrent(slot)
+    message.value = editing.value?.system ? '系统预设要另存为才会留下' : '槽位已改，还没写入这套预设'
+  } catch (error) {
+    errorMessage.value = error.message || '没有换上'
+  }
+}
+
+async function setDraftDuration(duration) {
+  draftConfig.value = { splash: { ...draftConfig.value.splash, duration } }
+  try {
+    await previewIfCurrent('splash')
+  } catch (error) {
+    errorMessage.value = error.message || '没有换上'
+  }
+}
+
+async function setDraftSlogan(event) {
+  draftConfig.value = { splash: { ...draftConfig.value.splash, slogan: event.target.value } }
+  try {
+    await previewIfCurrent('splash')
+  } catch (error) {
+    errorMessage.value = error.message || '没有换上'
+  }
+}
+
+async function saveEdited() {
+  if (!editing.value || !draftSlots.value) {
+    return
+  }
+  if (editing.value.system) {
+    creating.value = true
+    saveAs.value = true
+    newName.value = `${editing.value.name} 副本`
+    return
+  }
+  busy.value = true
+  try {
+    await updatePreset(editing.value.id, { slots: draftSlots.value, slot_config: draftConfig.value })
+    if (editing.value.id === props.appearance.current_preset) {
+      await patchSlots({ ...draftSlots.value, slot_config: draftConfig.value })
+      await refreshAppearance()
+    }
+    message.value = `已保存到${editing.value.name}`
+    await reload()
+  } catch (error) {
+    errorMessage.value = error.message || '保存失败'
+  } finally {
+    busy.value = false
+  }
+}
+
 async function makePreset() {
   const name = newName.value.trim()
   if (!name) {
@@ -167,10 +279,13 @@ async function makePreset() {
   }
   busy.value = true
   try {
-    const created = await createPreset(name)
+    const extra = saveAs.value && draftSlots.value ? { slots: draftSlots.value, slot_config: draftConfig.value } : {}
+    saveAs.value = false
+    const created = await createPreset(name, extra)
     creating.value = false
     newName.value = ''
-    await finishApply(created.id, { resolution: 'discard' })
+    await finishApply(created.id, { resolution: props.appearance.dirty ? 'discard' : '' })
+    editingId.value = created.id
     message.value = `已另存为${name}`
   } catch (error) {
     errorMessage.value = error.message || '没有建成预设'
@@ -182,6 +297,9 @@ async function makePreset() {
 async function removePreset(id) {
   try {
     await deletePreset(id)
+    if (editingId.value === id) {
+      closeEdit()
+    }
     message.value = '已删除预设'
     await reload()
     await refreshAppearance()
@@ -241,43 +359,35 @@ async function onImport(event) {
   }
 }
 
-function guessType(files) {
-  const names = files.map((file) => file.name.toLowerCase())
-  if (names.every((name) => name.endsWith('.json') || name.endsWith('.wvtheme'))) {
-    return 'colors'
+function openUpload(type, slotId = '') {
+  uploadTarget.value = { type, slotId }
+  if (fileInput.value) {
+    fileInput.value.accept = ACCEPT[type] || ''
+    fileInput.value.click()
   }
-  if (names.every((name) => name.endsWith('.zip'))) {
-    return 'icons'
-  }
-  if (names.some((name) => name.endsWith('.mp4') || name.endsWith('.webm'))) {
-    return 'backgrounds'
-  }
-  return 'backgrounds'
 }
 
-function stageFiles(event) {
+async function onUpload(event) {
   const files = [...(event.target.files || [])]
   event.target.value = ''
-  if (!files.length) {
-    return
-  }
-  staged.value = files
-  stagedType.value = guessType(files)
-  message.value = ''
-}
-
-async function commitUpload() {
-  if (!staged.value.length) {
+  const target = uploadTarget.value
+  uploadTarget.value = null
+  if (!files.length || !target) {
     return
   }
   busy.value = true
   errorMessage.value = ''
   try {
-    await uploadAssets(stagedType.value, staged.value)
-    message.value = `已添加 ${staged.value.length} 个素材`
-    staged.value = []
-    libraryType.value = stagedType.value
+    const result = await uploadAssets(target.type, files)
+    message.value = `已添加 ${result.assets?.length || files.length} 个素材`
+    if (result.errors?.length) {
+      errorMessage.value = result.errors.join('；')
+    }
     await reload()
+    const created = result.assets?.[0]
+    if (target.slotId && created && draftSlots.value) {
+      await assignDraft(target.slotId, created.id)
+    }
   } catch (error) {
     errorMessage.value = error.message || '上传失败'
   } finally {
@@ -285,47 +395,56 @@ async function commitUpload() {
   }
 }
 
+function toggleCreate() {
+  creating.value = !creating.value
+  if (!creating.value) {
+    saveAs.value = false
+  }
+}
+
+function showLibrary(id) {
+  libraryType.value = id
+  picked.value = []
+}
+
+function togglePicked(id) {
+  picked.value = picked.value.includes(id) ? picked.value.filter((item) => item !== id) : [...picked.value, id]
+}
+
+function selectAll() {
+  picked.value = [...selectableIds.value]
+}
+
+function clearPicked() {
+  picked.value = []
+}
+
+async function removePicked() {
+  if (!picked.value.length) {
+    return
+  }
+  const ids = [...picked.value]
+  try {
+    for (const id of ids) {
+      await deleteAsset(libraryType.value, id)
+    }
+    picked.value = []
+    message.value = `已删除 ${ids.length} 个素材`
+    await reload()
+  } catch (error) {
+    errorMessage.value = error.message || '系统素材不能删除'
+    await reload()
+  }
+}
+
 async function removeAsset(type, id) {
   try {
     await deleteAsset(type, id)
+    picked.value = picked.value.filter((item) => item !== id)
     await reload()
   } catch (error) {
     errorMessage.value = error.message || '系统素材不能删除'
   }
-}
-
-async function assignSlot(slot, id) {
-  const payload = { [slot]: id }
-  try {
-    await patchSlots(payload)
-    openSlot.value = ''
-    message.value = '这个槽已换上，还没有写进预设'
-    await refreshAppearance()
-  } catch (error) {
-    errorMessage.value = error.message || '没有换上'
-  }
-}
-
-async function setDuration(duration) {
-  const config = {
-    splash: {
-      duration,
-      slogan: props.appearance.slot_config?.splash?.slogan || '',
-    },
-  }
-  await patchSlots({ slot_config: config })
-  await refreshAppearance()
-}
-
-async function setSlogan(event) {
-  const config = {
-    splash: {
-      duration: props.appearance.slot_config?.splash?.duration || props.appearance.splash_duration || 2,
-      slogan: event.target.value,
-    },
-  }
-  await patchSlots({ slot_config: config })
-  await refreshAppearance()
 }
 </script>
 
@@ -354,7 +473,7 @@ async function setSlogan(event) {
     </div>
 
     <div v-if="tab === 'presets'" class="mt-3 space-y-1">
-      <div v-for="item in presets" :key="item.id" class="flex items-center gap-2">
+      <div v-for="item in orderedPresets" :key="item.id" class="flex items-center gap-2">
         <button
           type="button"
           class="wv-theme-row"
@@ -367,20 +486,72 @@ async function setSlogan(event) {
             <span class="block text-xs text-ink/45">{{ item.system ? '系统预设' : '我的预设' }}</span>
           </span>
         </button>
+        <button type="button" class="px-2 text-xs text-ink/55" @click="startEdit(item)">编辑</button>
         <button v-if="!item.system" type="button" class="px-2 text-xs text-ink/40" @click="removePreset(item.id)">删除</button>
       </div>
+
+      <div v-if="editing && draftSlots && draftConfig" class="mt-3 border-t border-black/10 pt-3">
+        <div class="flex items-center justify-between">
+          <p class="text-sm text-ink">编辑「{{ editing.name }}」</p>
+          <button type="button" class="text-xs text-ink/40" @click="closeEdit">收起</button>
+        </div>
+        <section v-for="slot in SLOT_LABELS" :key="slot.id" class="mt-3">
+          <p class="text-sm text-ink">{{ slot.label }}</p>
+          <p class="text-xs text-ink/45">{{ assetName(slot.type, draftSlots[slot.id]) || slot.empty }}</p>
+          <div class="mt-1 max-h-36 space-y-1 overflow-y-auto">
+            <button v-if="slot.id !== 'colors'" type="button" class="block h-7 text-sm text-ink/60" @click="assignDraft(slot.id, null)">{{ slot.empty }}</button>
+            <button
+              v-for="item in assets[slot.type]"
+              :key="item.id"
+              type="button"
+              class="block h-7 max-w-full truncate text-left text-sm"
+              :class="draftSlots[slot.id] === item.id ? 'text-ink' : 'text-ink/70'"
+              @click="assignDraft(slot.id, item.id)"
+            >
+              {{ item.name }}
+            </button>
+          </div>
+          <button type="button" class="mt-1 h-7 text-xs text-moss" @click="openUpload(slot.type, slot.id)">+ 上传新素材</button>
+        </section>
+        <div class="mt-3">
+          <p class="text-sm text-ink/60">开屏时长</p>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <button
+              v-for="seconds in DURATIONS"
+              :key="seconds"
+              type="button"
+              class="h-8 rounded px-2 text-xs"
+              :class="draftConfig.splash.duration === seconds ? 'bg-ink text-white' : 'bg-white'"
+              @click="setDraftDuration(seconds)"
+            >
+              {{ seconds }} 秒
+            </button>
+          </div>
+          <input
+            class="mt-2 h-9 w-full bg-white px-2 text-sm outline-none"
+            :value="draftConfig.splash.slogan"
+            maxlength="40"
+            placeholder="开屏底部的一句话"
+            @change="setDraftSlogan"
+          />
+        </div>
+        <button type="button" class="mt-3 h-8 rounded bg-ink px-3 text-xs text-white" :disabled="busy" @click="saveEdited">
+          {{ editing.system ? '另存为' : '保存' }}
+        </button>
+      </div>
+
       <div v-if="creating" class="mt-3 flex gap-2">
         <input v-model="newName" class="h-9 min-w-0 flex-1 bg-white px-2 text-sm outline-none" placeholder="新预设的名字" @keyup.enter="makePreset" />
         <button type="button" class="h-9 rounded bg-ink px-3 text-xs text-white" :disabled="busy" @click="makePreset">保存</button>
       </div>
       <div class="mt-3 flex flex-wrap gap-2">
-        <button type="button" class="h-8 rounded bg-white px-3 text-xs" @click="creating = !creating">新建预设</button>
+        <button type="button" class="h-8 rounded bg-white px-3 text-xs" @click="toggleCreate">新建预设</button>
         <button type="button" class="h-8 rounded bg-white px-3 text-xs" @click="importInput.click()">导入</button>
         <button type="button" class="h-8 rounded bg-white px-3 text-xs" @click="exportCurrent">导出当前</button>
       </div>
     </div>
 
-    <div v-else-if="tab === 'library'" class="mt-3">
+    <div v-else class="mt-3">
       <div class="flex gap-3">
         <button
           v-for="item in TYPE_LABELS"
@@ -388,13 +559,21 @@ async function setSlogan(event) {
           type="button"
           class="text-sm"
           :class="libraryType === item.id ? 'text-ink' : 'text-ink/40'"
-          @click="libraryType = item.id"
+          @click="showLibrary(item.id)"
         >
           {{ item.label }}
         </button>
       </div>
+      <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+        <button type="button" class="h-7 rounded bg-white px-2" @click="selectAll">全选</button>
+        <button type="button" class="h-7 rounded bg-white px-2" @click="clearPicked">取消选择</button>
+        <button type="button" class="h-7 rounded bg-ink px-2 text-white" :disabled="!picked.length" @click="removePicked">批量删除</button>
+        <span class="text-ink/40">已选 {{ picked.length }}</span>
+      </div>
       <div class="mt-3 space-y-2">
         <div v-for="item in assets[libraryType]" :key="item.id" class="flex items-center gap-3">
+          <input v-if="!item.system" type="checkbox" :checked="picked.includes(item.id)" @change="togglePicked(item.id)" />
+          <span v-else class="w-4 text-center text-[10px] text-ink/30">锁</span>
           <img
             v-if="item.media === 'image'"
             :src="assetFileUrl(libraryType, item.id)"
@@ -409,58 +588,7 @@ async function setSlogan(event) {
           <button v-if="!item.system" type="button" class="text-xs text-ink/40" @click="removeAsset(libraryType, item.id)">删除</button>
         </div>
       </div>
-      <button type="button" class="mt-3 h-8 rounded bg-white px-3 text-xs" @click="fileInput.click()">添加素材</button>
-      <div v-if="staged.length" class="mt-3">
-        <p class="text-sm text-ink">这 {{ staged.length }} 个文件用作</p>
-        <div class="mt-2 flex flex-wrap gap-2">
-          <button v-for="item in TYPE_LABELS" :key="item.id" type="button" class="h-8 rounded px-3 text-xs" :class="stagedType === item.id ? 'bg-ink text-white' : 'bg-white'" @click="stagedType = item.id">{{ item.label }}</button>
-        </div>
-        <button type="button" class="mt-2 h-8 rounded bg-ink px-3 text-xs text-white" :disabled="busy" @click="commitUpload">放入素材库</button>
-      </div>
-    </div>
-
-    <div v-else class="mt-3 space-y-3">
-      <section v-for="slot in SLOT_LABELS" :key="slot.id">
-        <button type="button" class="flex w-full items-center justify-between text-left" @click="openSlot = openSlot === slot.id ? '' : slot.id">
-          <span class="text-sm text-ink">{{ slot.label }}</span>
-          <span class="text-sm text-ink/50">{{ assetName(slot.type, appearance.slots?.[slot.id]) || slot.empty }}</span>
-        </button>
-        <div v-if="openSlot === slot.id" class="mt-2 space-y-1">
-          <button v-if="slot.id !== 'colors'" type="button" class="block h-8 text-sm text-ink/60" @click="assignSlot(slot.id, null)">{{ slot.empty }}</button>
-          <button
-            v-for="item in assets[slot.type]"
-            :key="item.id"
-            type="button"
-            class="block h-8 max-w-full truncate text-left text-sm"
-            :class="appearance.slots?.[slot.id] === item.id ? 'text-ink' : 'text-ink/70'"
-            @click="assignSlot(slot.id, item.id)"
-          >
-            {{ item.name }}
-          </button>
-        </div>
-      </section>
-      <div>
-        <p class="text-sm text-ink/60">开屏时长</p>
-        <div class="mt-2 flex gap-2">
-          <button
-            v-for="seconds in DURATIONS"
-            :key="seconds"
-            type="button"
-            class="h-8 rounded px-2 text-xs"
-            :class="(appearance.slot_config?.splash?.duration || appearance.splash_duration) === seconds ? 'bg-ink text-white' : 'bg-white'"
-            @click="setDuration(seconds)"
-          >
-            {{ seconds }} 秒
-          </button>
-        </div>
-        <input
-          class="mt-2 h-9 w-full bg-white px-2 text-sm outline-none"
-          :value="appearance.slot_config?.splash?.slogan || appearance.splash_caption || ''"
-          maxlength="40"
-          placeholder="开屏底部的一句话"
-          @change="setSlogan"
-        />
-      </div>
+      <button type="button" class="mt-3 h-8 rounded bg-white px-3 text-xs" @click="openUpload(libraryType)">添加素材</button>
     </div>
 
     <p v-if="message" class="mt-3 text-xs text-moss">{{ message }}</p>
@@ -479,7 +607,7 @@ async function setSlogan(event) {
       </div>
     </div>
 
-    <input ref="fileInput" class="wv-file-input" type="file" multiple accept=".wvtheme,.json,.png,.jpg,.jpeg,.webp,.gif,.mp4,.webm,.lottie,.zip,video/*,image/*" @change="stageFiles" />
+    <input ref="fileInput" class="wv-file-input" type="file" multiple @change="onUpload" />
     <input ref="importInput" class="wv-file-input" type="file" accept=".wvpack,.wvtheme,.json" @change="onImport" />
   </div>
 </template>

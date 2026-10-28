@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
@@ -42,18 +44,31 @@ def get_assets(type: str | None = None) -> dict:
 
 @router.post("/assets/upload")
 async def post_assets(type: str = Form(...), files: list[UploadFile] = File(...)) -> dict:
-    payloads = [(item.filename or "", await item.read()) for item in files]
+    if not files:
+        raise_api_error(400, "file", "没有读到文件")
+    payloads = [(item.filename or "未命名", await item.read()) for item in files]
     stored = []
+    errors: list[str] = []
     try:
         images = type == "icons" and not (len(payloads) == 1 and payloads[0][0].lower().endswith(".zip"))
         if images:
-            stored.append(store_icon_images(payloads, Path(payloads[0][0]).stem))
+            stored.append(store_icon_images(payloads, Path(payloads[0][0]).stem or "图标"))
         else:
             for filename, payload in payloads:
-                stored.append(store_upload(type, filename, payload, Path(filename).stem))
+                label = Path(filename).name or "未命名"
+                try:
+                    stored.append(store_upload(type, filename, payload, Path(filename).stem or label))
+                except ValueError as exc:
+                    errors.append(f"{label}：{exc}")
     except ValueError as exc:
         raise_api_error(400, "file", str(exc))
-    return {"assets": stored}
+    except OSError:
+        raise_api_error(400, "file", "素材没有写进磁盘，请检查空间和权限")
+    except Exception as exc:
+        raise_api_error(400, "file", f"这个文件没法放入素材库（{exc.__class__.__name__}）")
+    if errors and not stored:
+        raise_api_error(400, "file", "；".join(errors))
+    return {"assets": stored, "errors": errors}
 
 
 @router.delete("/assets/{asset_type}/{asset_id}")

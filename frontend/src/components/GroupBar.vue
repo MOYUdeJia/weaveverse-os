@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import draggable from 'vuedraggable'
 
 import { showMenu } from '../contextMenu'
+import { endNavDrag, navDrag } from '../navDrag'
 import NavIcon from './NavIcon.vue'
 
 const props = defineProps({
@@ -20,7 +21,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select', 'create', 'edit', 'remove', 'reorder', 'lock'])
+const emit = defineEmits(['select', 'create', 'edit', 'remove', 'reorder', 'lock', 'receive'])
 
 const narrow = ref(false)
 const holding = ref(false)
@@ -30,6 +31,28 @@ let media = null
 let onMediaChange = null
 
 const floated = ref(null)
+const dropId = ref(null)
+
+function onNavOver(event, group) {
+  if (!navDrag.id || group.id === props.activeId) {
+    return
+  }
+  event.preventDefault()
+  dropId.value = group.id
+}
+
+function onNavDrop(event, group) {
+  event.preventDefault()
+  const id = navDrag.id
+  dropId.value = null
+  if (!id || group.id === props.activeId) {
+    endNavDrag()
+    return
+  }
+  navDrag.dropped = true
+  endNavDrag()
+  emit('receive', id, group.id)
+}
 const systemGroup = computed(() => localGroups.value.find((group) => group.is_system) || null)
 
 const asideClass = computed(() => {
@@ -154,9 +177,11 @@ onUnmounted(() => {
       v-if="systemGroup"
       type="button"
       class="flex w-full items-center text-left hover:bg-black/5"
-      :class="bar === 'stack' ? 'h-auto flex-col gap-1 py-2' : 'h-12'"
+      :class="[bar === 'stack' ? 'h-auto flex-col gap-1 py-2' : 'h-12', dropId === systemGroup.id ? 'bg-moss/15' : '']"
       :title="systemGroup.name"
       @click="emit('select', systemGroup.id)"
+      @dragover="onNavOver($event, systemGroup)"
+      @drop="onNavDrop($event, systemGroup)"
       @contextmenu="onGroupMenu($event, systemGroup)"
       @mouseenter="floatName($event, systemGroup)"
       @mouseleave="clearFloat"
@@ -187,9 +212,11 @@ onUnmounted(() => {
       <template #item="{ element }">
         <div
           class="flex w-full cursor-grab items-center text-left hover:bg-black/5 active:cursor-grabbing"
-          :class="bar === 'stack' ? 'h-auto flex-col gap-1 py-2' : 'h-12'"
+          :class="[bar === 'stack' ? 'h-auto flex-col gap-1 py-2' : 'h-12', dropId === element.id ? 'bg-moss/15' : '']"
           :title="element.name"
           @click="emit('select', element.id)"
+          @dragover="onNavOver($event, element)"
+          @drop="onNavDrop($event, element)"
           @contextmenu="onGroupMenu($event, element)"
           @mouseenter="floatName($event, element)"
           @mouseleave="clearFloat"

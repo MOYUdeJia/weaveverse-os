@@ -12,6 +12,8 @@ import {
   importThemeFile,
   packFileUrl,
   splashUrl,
+  getAutostart,
+  setAutostart,
   updateAppearance,
   uploadBackground,
   uploadSplash,
@@ -67,6 +69,8 @@ const themeInput = ref(null)
 const themeMenu = ref(null)
 const opacityPercent = ref(85)
 const captionDraft = ref('正在编织你的宇宙')
+const autostart = ref(false)
+const autostartNote = ref('')
 let opacityTimer
 
 const groupFile = computed(() => {
@@ -359,6 +363,36 @@ async function dropPack(packId) {
   }
 }
 
+async function setOrbHidden(event) {
+  try {
+    emit('change', await updateAppearance({ player_hidden: event.target.checked }))
+  } catch (error) {
+    errorMessage.value = error.message || '没有保存'
+  }
+}
+
+async function loadAutostart() {
+  try {
+    const data = await getAutostart()
+    autostart.value = Boolean(data.enabled)
+    autostartNote.value = ''
+  } catch (error) {
+    autostartNote.value = error.message || '读不到开机自启'
+  }
+}
+
+async function toggleAutostart(event) {
+  const next = event.target.checked
+  try {
+    const data = await setAutostart(next)
+    autostart.value = Boolean(data.enabled)
+    autostartNote.value = data.enabled ? '下次登录会自动打开' : '已取消开机自启'
+  } catch (error) {
+    event.target.checked = autostart.value
+    autostartNote.value = error.message || '没有写上启动项'
+  }
+}
+
 async function clear(kind, groupId) {
   errorMessage.value = ''
   statusMessage.value = ''
@@ -378,6 +412,7 @@ async function clear(kind, groupId) {
         <button type="button" class="text-ink/50" @click="emit('close')">×</button>
       </div>
       <div class="mb-4 flex flex-wrap gap-2">
+        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'general' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'general'; loadAutostart()">通用</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'look' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'look'">外观</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'theme' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'theme'">主题</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'ai' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'ai'">AI</button>
@@ -385,7 +420,15 @@ async function clear(kind, groupId) {
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'backup' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'backup'">备份</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'privacy' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'privacy'">隐私</button>
       </div>
-      <AiSettings v-if="page === 'ai'" />
+      <div v-if="page === 'general'" class="space-y-3">
+        <label class="flex items-center gap-2 text-sm text-ink/80">
+          <input type="checkbox" :checked="autostart" @change="toggleAutostart" />
+          开机自启
+        </label>
+        <p class="text-xs text-ink/45">Windows 会在当前用户登录时打开 Weaveverse。打包后的程序和现在这个开发目录会写成不同的启动命令。</p>
+        <p v-if="autostartNote" class="text-xs text-moss">{{ autostartNote }}</p>
+      </div>
+      <AiSettings v-else-if="page === 'ai'" />
       <RemotePanel v-else-if="page === 'remote'" />
       <BackupPanel v-else-if="page === 'backup'" @need-privacy="page = 'privacy'" />
       <ThemePanel v-else-if="page === 'theme'" :appearance="appearance" @change="emit('change', $event)" />
@@ -402,6 +445,10 @@ async function clear(kind, groupId) {
         <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.bar === 'overlay' ? 'bg-ink text-white' : 'bg-white'" @click="setBar('overlay')">名字浮出</button>
         <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.bar === 'stack' ? 'bg-ink text-white' : 'bg-white'" @click="setBar('stack')">图标在上</button>
       </div>
+      <label class="mt-4 flex items-center gap-2 text-sm text-ink/80">
+        <input type="checkbox" :checked="appearance.player_hidden" @change="setOrbHidden" />
+        隐藏悬浮球
+      </label>
       <p class="mt-4 text-xs text-ink/45">悬浮球位置</p>
       <div class="mt-2 flex gap-2">
         <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'corner' || !appearance.player ? 'bg-ink text-white' : 'bg-white'" @click="setPlayer('corner')">右下角</button>

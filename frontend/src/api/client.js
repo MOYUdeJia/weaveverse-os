@@ -265,10 +265,17 @@ export function getPresets() {
   return request('/presets')
 }
 
-export function createPreset(name) {
+export function createPreset(name, extra = {}) {
   return request('/presets', {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, ...extra }),
+  })
+}
+
+export function updatePreset(id, data) {
+  return request(`/presets/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
   })
 }
 
@@ -555,6 +562,32 @@ export function listBooks(sort = 'recent', format = '') {
 
 export function getBook(id) {
   return request(`/books/${id}`)
+}
+
+export function listBookNotes(id) {
+  return request(`/books/${id}/notes`)
+}
+
+export function createBookNote(id, data) {
+  return request(`/books/${id}/notes`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export function deleteBookNote(id, noteId) {
+  return request(`/books/${id}/notes/${noteId}`, { method: 'DELETE' })
+}
+
+export function getAutostart() {
+  return request('/system/autostart')
+}
+
+export function setAutostart(enabled) {
+  return request('/system/autostart', {
+    method: 'PUT',
+    body: JSON.stringify({ enabled }),
+  })
 }
 
 export function uploadBook(file) {

@@ -1127,10 +1127,10 @@ html[data-theme='custom'] {
 .wv-orb-menu {
   position: fixed;
   z-index: 80;
-  width: 232px;
-  padding: 8px;
+  width: 168px;
+  padding: 6px;
   overflow: visible;
-  border-radius: 12px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--wv-work, #fcfaf5) 96%, transparent);
   box-shadow: 0 12px 28px rgba(22, 32, 29, 0.18);
 }
@@ -1163,9 +1163,11 @@ html[data-theme='custom'] {
 
 .wv-menu-title {
   overflow: hidden;
-  height: 18px;
+  padding: 2px 4px 4px;
   font-size: 12px;
+  line-height: 16px;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .wv-menu-row {
@@ -1189,16 +1191,16 @@ html[data-theme='custom'] {
 .wv-menu-sub {
   position: absolute;
   top: 0;
-  left: 100%;
-  width: 120px;
-  padding: 6px;
+  left: calc(100% + 4px);
+  width: 104px;
+  padding: 4px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--wv-work, #fcfaf5) 96%, transparent);
   box-shadow: 0 8px 20px rgba(22, 32, 29, 0.16);
 }
 
 .wv-menu-sub.is-flip {
-  right: 100%;
+  right: calc(100% + 4px);
   left: auto;
 }
 

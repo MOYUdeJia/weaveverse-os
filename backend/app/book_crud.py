@@ -18,6 +18,7 @@ from app.book_files import (
     remove_book_dir,
     store_book_files,
 )
+from app.book_notes import delete_notes_for_book
 from app.models import Book, utc_now
 from app.schemas import BookUpdate
 
@@ -105,7 +106,11 @@ def get_book(session: Session, book_id: int) -> Book | None:
 # 更新书名、作者或阅读位置。只改进度时才刷新 last_read_at。
 # Update title, author, or reading position. last_read_at changes only when progress changes.
 def update_book(session: Session, book: Book, data: BookUpdate) -> Book:
-    progress_sent = data.progress_chapter is not None or data.progress_offset is not None
+    progress_sent = (
+        data.progress_chapter is not None
+        or data.progress_offset is not None
+        or data.progress_cfi is not None
+    )
     if progress_sent:
         _apply_progress(book, data)
 
@@ -125,6 +130,7 @@ def update_book(session: Session, book: Book, data: BookUpdate) -> Book:
 # Remove the directory first, then the row. If the directory remains, keep the row so delete can be retried.
 def delete_book(session: Session, book: Book) -> None:
     remove_book_dir(book.id)
+    delete_notes_for_book(session, book.id)
     session.delete(book)
     session.commit()
 
@@ -167,6 +173,7 @@ def book_to_summary(book: Book) -> dict:
         "progress_chapter": book.progress_chapter,
         "progress_offset": book.progress_offset,
         "progress_ratio": book.progress_ratio,
+        "progress_cfi": book.progress_cfi or "",
         "last_read_at": book.last_read_at,
         "created_at": book.created_at,
         "updated_at": book.updated_at,
@@ -205,6 +212,11 @@ def _new_book(original_name: str, book_format: str, file_size: int, parsed: Pars
 def _apply_progress(book: Book, data: BookUpdate) -> None:
     if book.format == "pdf":
         raise ValueError("PDF 不记录阅读位置")
+    if data.progress_cfi is not None:
+        book.progress_cfi = data.progress_cfi[:4000]
+    if data.progress_chapter is None and data.progress_offset is None:
+        book.last_read_at = utc_now()
+        return
 
     chapter = book.progress_chapter if data.progress_chapter is None else data.progress_chapter
     if data.progress_chapter is not None and data.progress_offset is None:

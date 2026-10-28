@@ -115,9 +115,40 @@ class Book(SQLModel, table=True):
     progress_chapter: int = Field(default=0, nullable=False)
     progress_offset: float = Field(default=0.0, nullable=False)
     progress_ratio: float = Field(default=0.0, nullable=False)
+    progress_cfi: str = Field(
+        default="",
+        sa_column=Column(Text, nullable=False, server_default=""),
+    )
     last_read_at: datetime | None = Field(default=None, nullable=True, index=True)
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
     updated_at: datetime = Field(default_factory=utc_now, nullable=False)
+
+
+class BookNote(SQLModel, table=True):
+    """A highlight, underline, note, or bookmark anchored in one book.
+
+    EPUB stores an epubcfi string. TXT stores a character index in the chapter text.
+    """
+
+    __tablename__ = "book_notes"
+
+    id: int | None = Field(default=None, primary_key=True)
+    book_id: int = Field(foreign_key="books.id", nullable=False, index=True)
+    position: str = Field(
+        default="",
+        sa_column=Column(Text, nullable=False, server_default=""),
+    )
+    type: str = Field(max_length=16, nullable=False)
+    color: str = Field(default="", max_length=16, nullable=False)
+    text: str = Field(
+        default="",
+        sa_column=Column(Text, nullable=False, server_default=""),
+    )
+    note_content: str = Field(
+        default="",
+        sa_column=Column(Text, nullable=False, server_default=""),
+    )
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class PhotoAlbum(SQLModel, table=True):

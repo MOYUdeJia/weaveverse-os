@@ -3,7 +3,8 @@ import Cropper from 'cropperjs'
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import 'cropperjs/dist/cropper.css'
 
-import { deleteIcon, getIconEntries, iconEntryUrl, uploadIcon } from '../api/client'
+import { deleteIcon, getIconEntries, iconEntryUrl, uploadAssets, uploadIcon } from '../api/client'
+import { showToast } from '../toast'
 import NavIcon from './NavIcon.vue'
 
 const ICONS = [
@@ -226,6 +227,10 @@ async function confirmCrop() {
     const previous = uploaded.value
     uploaded.value = result.icon
     emit('update:modelValue', result.icon)
+    const file = new File([blob], `icon-${Date.now()}.png`, { type: 'image/png' })
+    uploadAssets('icons', [file])
+      .then(() => showToast('图标已放入素材库'))
+      .catch((error) => showToast(error.message || '图标已换上，但没有进素材库'))
     closeCrop()
     if (previous && previous !== result.icon && previous !== initial.value) {
       await deleteIcon(previous)

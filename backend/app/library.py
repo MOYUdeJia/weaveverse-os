@@ -80,7 +80,9 @@ def list_presets() -> list[dict]:
                 found[data["id"]] = _clean_preset(data)
     items = [found[item] for item in order if item in found]
     items.extend(found[item] for item in found if item not in order)
-    return items
+    system = [item for item in items if item.get("system")]
+    custom = [item for item in items if not item.get("system")]
+    return system + custom
 
 
 def get_preset(preset_id: str) -> dict | None:

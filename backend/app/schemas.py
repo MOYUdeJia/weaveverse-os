@@ -470,6 +470,7 @@ class BookSummary(BaseModel):
 class BookDetail(BookSummary):
     description: str
     toc: list[BookTocItem] = Field(default_factory=list)
+    progress_cfi: str = ""
 
 
 class BookUpdate(BaseModel):
@@ -477,6 +478,7 @@ class BookUpdate(BaseModel):
     author: str | None = Field(default=None, max_length=500)
     progress_chapter: int | None = Field(default=None, ge=0)
     progress_offset: float | None = Field(default=None, ge=0, le=1)
+    progress_cfi: str | None = Field(default=None, max_length=4000)
 
     @field_validator("title")
     @classmethod
@@ -702,3 +704,16 @@ class QuickNoteCreate(BaseModel):
             if text and text not in cleaned:
                 cleaned.append(text[:24])
         return cleaned[:3]
+
+
+class BookNoteCreate(BaseModel):
+    position: str = Field(min_length=1, max_length=4000)
+    type: str = Field(min_length=1, max_length=16)
+    color: str = Field(default="", max_length=16)
+    text: str = Field(default="", max_length=4000)
+    note_content: str = Field(default="", max_length=4000)
+
+    @field_validator("position", "text", "note_content", "color", "type")
+    @classmethod
+    def strip_note_field(cls, value: str) -> str:
+        return value.strip()

@@ -6,11 +6,11 @@ from fastapi import APIRouter, Depends, UploadFile
 from fastapi.responses import FileResponse
 from sqlmodel import Session
 
-from app import book_crud
+from app import book_crud, book_notes
 from app.book_files import COVER_MEDIA_BY_EXT, MAX_UPLOAD_BYTES, cover_path
 from app.db import get_session
 from app.errors import raise_api_error
-from app.schemas import BookContent, BookDetail, BookSummary, BookUpdate
+from app.schemas import BookContent, BookDetail, BookNoteCreate, BookSummary, BookUpdate
 
 
 router = APIRouter(prefix="/books", tags=["books"])
@@ -54,7 +54,13 @@ def get_book(book_id: int, session: Session = Depends(get_session)):
 # 修改书名、作者或阅读进度。
 # Update the title, author, or reading progress.
 def patch_book(book_id: int, data: BookUpdate, session: Session = Depends(get_session)):
-    if data.title is None and data.author is None and data.progress_chapter is None and data.progress_offset is None:
+    if (
+        data.title is None
+        and data.author is None
+        and data.progress_chapter is None
+        and data.progress_offset is None
+        and data.progress_cfi is None
+    ):
         raise_api_error(400, "body", "至少提供一个字段")
     book = _require_book(session, book_id)
     try:
@@ -106,6 +112,37 @@ def get_content(book_id: int, chapter: int = 0, session: Session = Depends(get_s
         raise_api_error(400, "chapter", "章节不存在")
     except ValueError as exc:
         raise_api_error(400, "chapter", str(exc))
+
+
+@router.get("/{book_id}/notes")
+def get_notes(book_id: int, session: Session = Depends(get_session)) -> dict:
+    _require_book(session, book_id)
+    return {"notes": [book_notes.note_to_dict(note) for note in book_notes.list_notes(session, book_id)]}
+
+
+@router.post("/{book_id}/notes", status_code=201)
+def post_note(book_id: int, data: BookNoteCreate, session: Session = Depends(get_session)) -> dict:
+    book = _require_book(session, book_id)
+    if book.format == "pdf":
+        raise_api_error(400, "format", "PDF 不在阅读器里做标记")
+    if data.type not in book_notes.NOTE_TYPES:
+        raise_api_error(400, "type", "笔记类型不对")
+    if data.type in {"highlight", "underline"} and data.color not in book_notes.NOTE_COLORS:
+        raise_api_error(400, "color", "没有这个颜色")
+    if data.type in {"highlight", "underline", "note"} and not data.text:
+        raise_api_error(400, "text", "先选中一段文字")
+    if data.type == "note" and not data.note_content:
+        raise_api_error(400, "note_content", "请写笔记")
+    note = book_notes.create_note(session, book_id, data.model_dump())
+    return book_notes.note_to_dict(note)
+
+
+@router.delete("/{book_id}/notes/{note_id}")
+def remove_note(book_id: int, note_id: int, session: Session = Depends(get_session)) -> dict:
+    _require_book(session, book_id)
+    if not book_notes.delete_note(session, book_id, note_id):
+        raise_api_error(404, "id", "笔记不存在")
+    return {"status": "ok"}
 
 
 # 分块读取后仍拼成完整字节，不是流式落盘。超过 100MB 立即拒绝。

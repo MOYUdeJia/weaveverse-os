@@ -125,8 +125,8 @@ PAGE_TYPES = {
     },
     "future_plan": {"label": "未来规划", "multi_instance": False, "default_blocks": []},
     "habit_tracker": {"label": "习惯追踪", "multi_instance": False, "default_blocks": []},
-    # multi_instance 为 False 只表示新建菜单不能选它。
-    # 每个分组仍有自己的一条导览页，不走全局「只能有一个」校验。
+    # multi_instance 为 False：全表只能有一条，可以放在任意分组。
+    # 分组导览例外，每个分组自己一条，不走这条全局校验。
     "group_overview": {
         "layer": "core",
         "label": "分组导览",

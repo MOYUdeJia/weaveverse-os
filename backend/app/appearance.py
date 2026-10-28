@@ -32,6 +32,7 @@ DEFAULT = {
     "theme": "warm",
     "bar": "push",
     "player": "corner",
+    "player_hidden": False,
     "player_x": None,
     "player_y": None,
     "player_spread": "auto",
@@ -124,6 +125,7 @@ def load_settings() -> dict:
     if player not in PLAYERS:
         player = "corner"
     merged["player"] = player
+    merged["player_hidden"] = bool(merged.get("player_hidden"))
     merged["player_x"] = _ratio(merged.get("player_x"))
     merged["player_y"] = _ratio(merged.get("player_y"))
     if merged["player"] == "free" and (merged["player_x"] is None or merged["player_y"] is None):
@@ -216,6 +218,8 @@ def save_settings(data: dict) -> dict:
         current["player_y"] = _ratio(data.get("player_y"))
     if data.get("player_spread") in SPREADS:
         current["player_spread"] = data["player_spread"]
+    if "player_hidden" in data:
+        current["player_hidden"] = bool(data.get("player_hidden"))
     if data.get("progress_style") in PROGRESS_STYLES:
         current["progress_style"] = data["progress_style"]
     if "progress_color" in data:
