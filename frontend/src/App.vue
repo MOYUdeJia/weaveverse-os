@@ -752,6 +752,7 @@ async function onNoteSaved(saved) {
     <GroupEditDialog
       :open="groupDialogOpen"
       :group="editingGroup"
+      :icon-pack="appearance.slots?.icons || ''"
       @close="groupDialogOpen = false"
       @save="saveGroup"
     />

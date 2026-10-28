@@ -670,8 +670,10 @@ def ensure_library() -> None:
     _ensuring = True
     try:
         _ensure_system_colors()
+        _ensure_phase3_presets()
         _migrate_appearance_once()
         legacy_pack_colors()
+        _keep_dragon_colors_only()
         _ready = True
     finally:
         _ensuring = False
@@ -698,6 +700,96 @@ def _ensure_system_colors() -> None:
                 "slots": {"colors": color["id"], "background": None, "splash": None, "icons": None},
                 "slot_config": {"splash": {"duration": 2, "slogan": ""}},
             })
+
+
+def _empty_preset(preset_id: str, name: str, color_id: str, system: bool) -> dict:
+    return {
+        "id": preset_id,
+        "name": name,
+        "author": "Weaveverse" if system else "用户",
+        "system": system,
+        "based_on": None,
+        "slots": {"colors": color_id, "background": None, "splash": None, "icons": None},
+        "slot_config": {"splash": {"duration": 2, "slogan": ""}},
+    }
+
+
+def _put_color(theme_id: str, name: str, vars_: dict, system: bool) -> None:
+    if _find_asset("colors", theme_id):
+        return
+    _store_color({
+        "id": theme_id,
+        "name": name,
+        "author": "Weaveverse",
+        "version": "1.0.0",
+        "vars": vars_,
+    }, system=system, name=name)
+
+
+def _put_preset(preset: dict) -> None:
+    if get_preset(preset["id"]) is None:
+        _save_preset(preset)
+
+
+def _ensure_phase3_presets() -> None:
+    """Mist purple is a system palette. The two game shells are user presets with empty media slots."""
+    mist = {
+        "dawn": "#efe6f3",
+        "group": "#e2d6ea",
+        "nav": "rgba(243, 236, 247, 0.92)",
+        "work": "rgba(249, 246, 251, 0.94)",
+        "orb": "#6a5b96",
+        "progress": "#9a8bc4",
+    }
+    _put_color("mist-purple", "雾紫", mist, True)
+    _put_preset(_empty_preset("mist-purple", "雾紫", "mist-purple", True))
+    for preset_id in ("warm", "sakura", "mist-purple"):
+        current = get_preset(preset_id)
+        if current and current["system"] and (current["slots"]["background"] or current["slots"]["splash"] or current["slots"]["icons"]):
+            current["slots"]["background"] = None
+            current["slots"]["splash"] = None
+            current["slots"]["icons"] = None
+            _save_preset(current)
+    yihuan = {
+        "dawn": "#e4edf4",
+        "group": "#d0dee9",
+        "nav": "rgba(233, 241, 247, 0.92)",
+        "work": "rgba(245, 248, 251, 0.94)",
+        "orb": "#3a679f",
+        "progress": "#6a8fbe",
+    }
+    seer = {
+        "dawn": "#e6f3df",
+        "group": "#d2e6c8",
+        "nav": "rgba(236, 245, 232, 0.92)",
+        "work": "rgba(246, 250, 242, 0.94)",
+        "orb": "#2e8644",
+        "progress": "#62a86a",
+    }
+    _put_color("yihuan-colors", "异环冷钢", yihuan, False)
+    _put_color("seer-colors", "赛尔叶绿", seer, False)
+    _put_preset(_empty_preset("yihuan-personal", "异环（我的）", "yihuan-colors", False))
+    _put_preset(_empty_preset("seer-peak-personal", "赛尔号巅峰之战（我的）", "seer-colors", False))
+
+
+def _keep_dragon_colors_only() -> None:
+    preset = get_preset("dragon-girl")
+    if preset is None:
+        return
+    slots = dict(preset["slots"])
+    changed = False
+    for key, asset_type in (("background", "backgrounds"), ("splash", "splashes"), ("icons", "icons")):
+        asset_id = slots.get(key)
+        if not asset_id:
+            continue
+        record = _find_asset(asset_type, asset_id)
+        name = Path(record["path"]).name.lower() if record else ""
+        if name in SKIP_MEDIA_NAMES:
+            slots[key] = None
+            changed = True
+    if changed:
+        preset["slots"] = slots
+        _save_preset(preset)
 
 
 def _migrate_appearance_once() -> None:

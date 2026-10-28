@@ -1,9 +1,9 @@
 {
-  "theme": "mint",
+  "theme": "seer-colors",
   "bar": "overlay",
-  "player": "corner",
-  "player_x": null,
-  "player_y": null,
+  "player": "free",
+  "player_x": 0.9554030874785592,
+  "player_y": 0.9280774550484094,
   "player_spread": "auto",
   "progress_style": "gradient",
   "progress_color": "#b5175c",
@@ -37,6 +37,48 @@
         "orb": "#f7f4fc",
         "progress": "#6f6a9e"
       }
+    },
+    {
+      "id": "mist-purple",
+      "name": "雾紫",
+      "author": "Weaveverse",
+      "version": "1.0.0",
+      "vars": {
+        "dawn": "#efe6f3",
+        "group": "#e2d6ea",
+        "nav": "rgba(243, 236, 247, 0.92)",
+        "work": "rgba(249, 246, 251, 0.94)",
+        "orb": "#6a5b96",
+        "progress": "#9a8bc4"
+      }
+    },
+    {
+      "id": "yihuan-colors",
+      "name": "异环冷钢",
+      "author": "Weaveverse",
+      "version": "1.0.0",
+      "vars": {
+        "dawn": "#e4edf4",
+        "group": "#d0dee9",
+        "nav": "rgba(233, 241, 247, 0.92)",
+        "work": "rgba(245, 248, 251, 0.94)",
+        "orb": "#3a679f",
+        "progress": "#6a8fbe"
+      }
+    },
+    {
+      "id": "seer-colors",
+      "name": "赛尔叶绿",
+      "author": "Weaveverse",
+      "version": "1.0.0",
+      "vars": {
+        "dawn": "#e6f3df",
+        "group": "#d2e6c8",
+        "nav": "rgba(236, 245, 232, 0.92)",
+        "work": "rgba(246, 250, 242, 0.94)",
+        "orb": "#2e8644",
+        "progress": "#62a86a"
+      }
     }
   ],
   "global_image": "35612905ecfc4302b003d2d70c92b40f.png",
@@ -49,10 +91,10 @@
   "group_names": {
     "1": "26_04_27_19_37_29.png"
   },
-  "current_preset": "warm",
+  "current_preset": "seer-peak-personal",
   "slots": {
-    "colors": "mint",
-    "background": "u-c90f95e189",
+    "colors": "seer-colors",
+    "background": null,
     "splash": null,
     "icons": null
   },
@@ -62,8 +104,8 @@
       "slogan": ""
     }
   },
-  "dirty": true,
+  "dirty": false,
   "library_ready": true,
-  "slot_background": "u-c90f95e189",
-  "slot_background_media": "video"
+  "slot_background": "",
+  "slot_background_media": ""
 }

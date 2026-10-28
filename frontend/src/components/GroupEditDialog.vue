@@ -4,6 +4,10 @@ import { computed, ref, watch } from 'vue'
 import IconField from './IconField.vue'
 
 const props = defineProps({
+  iconPack: {
+    type: String,
+    default: '',
+  },
   open: {
     type: Boolean,
     default: false,
@@ -84,7 +88,7 @@ function save() {
       />
 
       <label class="mt-5 block text-sm font-medium text-ink/75" for="group-icon">图标</label>
-      <IconField ref="iconField" v-model="icon" />
+      <IconField ref="iconField" v-model="icon" :pack-id="iconPack" />
 
       <label class="mt-5 block text-sm font-medium text-ink/75" for="group-description">简介</label>
       <textarea
