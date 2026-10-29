@@ -376,6 +376,7 @@ def main() -> None:
         min_size=(MIN_WIDTH, MIN_HEIGHT),
         width=1180,
         height=760,
+        text_select=True,
         js_api=DesktopBridge(),
     )
     window.events.closed += shutdown_backend

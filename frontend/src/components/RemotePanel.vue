@@ -34,7 +34,7 @@ onMounted(() => {
     <p>状态：{{ label[status?.state] || '正在检查' }}</p>
     <p v-if="status?.ip">本机地址：{{ status.ip }}</p>
     <p v-if="status?.url">手机打开：{{ status.url }}</p>
-    <button v-if="status?.url" type="button" class="h-9 w-fit rounded bg-moss px-3 text-xs text-white" @click="copy">复制地址</button>
+    <button v-if="status?.url" type="button" class="wv-btn wv-btn-primary" @click="copy">复制地址</button>
     <div v-if="status?.qr" class="w-40 bg-white p-2" v-html="status.qr" />
     <ol class="list-decimal space-y-1 pl-5 text-xs leading-5 text-ink/70">
       <li>打开 tailscale.com 注册账号。</li>

@@ -129,13 +129,43 @@ def _safe_asset_path(relative: str) -> Path:
     return path
 
 
+def _palette_swatch(item: dict) -> str:
+    from app.themes import BUILTIN
+
+    asset_id = str(item.get("id") or "")
+    vars_ = BUILTIN[asset_id]["vars"] if asset_id in BUILTIN else {}
+    if not vars_:
+        try:
+            payload = json.loads(_safe_asset_path(item["path"]).read_text(encoding="utf-8"))
+            vars_ = payload.get("vars") or {}
+        except (OSError, json.JSONDecodeError, ValueError, KeyError):
+            vars_ = {}
+    swatch = str(vars_.get("progress") or vars_.get("dawn") or "")
+    return swatch if swatch.startswith("#") else "#3f6f57"
+
+
+def _present_asset(asset_type: str, item: dict) -> dict:
+    shown = dict(item)
+    if shown.get("media") == "palette":
+        shown["swatch"] = _palette_swatch(shown)
+    if asset_type == "icons":
+        try:
+            names = list_icon_entries(shown["id"])
+        except (ValueError, OSError):
+            names = []
+        if names:
+            shown["preview"] = names[0]
+    return shown
+
+
 def list_assets(asset_type: str | None = None) -> dict:
     index = load_index()
+    shown = {key: [_present_asset(key, item) for item in index.get(key, [])] for key in ASSET_TYPES}
     if asset_type is None:
-        return index
+        return {"version": index.get("version", 1), **shown}
     if asset_type not in ASSET_TYPES:
         raise ValueError("没有这种素材")
-    return {asset_type: index[asset_type]}
+    return {asset_type: shown[asset_type]}
 
 
 def icon_entry(asset_id: str, name: str) -> Path:

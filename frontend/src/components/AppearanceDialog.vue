@@ -115,10 +115,13 @@ const splashPreview = computed(() => {
 
 watch(
   () => props.open,
-  () => {
+  (open) => {
     errorMessage.value = ''
     statusMessage.value = ''
     busyName.value = ''
+    if (open) {
+      loadAutostart()
+    }
   },
 )
 
@@ -406,77 +409,91 @@ async function clear(kind, groupId) {
 
 <template>
   <div v-if="open" class="fixed inset-0 z-[70] grid place-items-center bg-black/40 px-4" @pointerdown="onMaskDown" @pointerup="onMaskUp">
-    <div class="wv-surface max-h-[86vh] w-full max-w-lg overflow-y-auto rounded-md p-5 shadow-2xl">
-      <div class="mb-4 flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-ink">设置</h2>
-        <button type="button" class="text-ink/50" @click="emit('close')">×</button>
+    <div class="wv-settings shadow-2xl" @pointerdown.stop>
+      <nav class="wv-settings-nav">
+        <button type="button" :class="page === 'general' ? 'is-on' : ''" @click="page = 'general'">通用</button>
+        <button type="button" :class="page === 'look' ? 'is-on' : ''" @click="page = 'look'">外观</button>
+        <button type="button" :class="page === 'theme' ? 'is-on' : ''" @click="page = 'theme'">主题</button>
+        <button type="button" :class="page === 'ai' ? 'is-on' : ''" @click="page = 'ai'">AI</button>
+        <button type="button" :class="page === 'remote' ? 'is-on' : ''" @click="page = 'remote'">远程</button>
+        <button type="button" :class="page === 'backup' ? 'is-on' : ''" @click="page = 'backup'">备份</button>
+        <button type="button" :class="page === 'privacy' ? 'is-on' : ''" @click="page = 'privacy'">隐私</button>
+      </nav>
+      <div class="wv-settings-main">
+      <div class="mb-6 flex items-start justify-between gap-4">
+        <h2 class="wv-settings-title">设置</h2>
+        <button type="button" class="wv-btn-ghost" @click="emit('close')">关闭</button>
       </div>
-      <div class="mb-4 flex flex-wrap gap-2">
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'general' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'general'; loadAutostart()">通用</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'look' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'look'">外观</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'theme' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'theme'">主题</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'ai' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'ai'">AI</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'remote' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'remote'">远程</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'backup' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'backup'">备份</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="page === 'privacy' ? 'bg-moss text-white' : 'wv-chip'" @click="page = 'privacy'">隐私</button>
-      </div>
-      <div v-if="page === 'general'" class="space-y-3">
-        <label class="flex items-center gap-2 text-sm text-ink/80">
+      <div v-if="page === 'general'" class="wv-card">
+        <h3>开机自启</h3>
+        <p class="wv-quiet">登录 Windows 时打开 Weaveverse。打包后的程序和这个开发目录会写成不同的启动命令。</p>
+        <label class="mt-4 flex items-center gap-3 text-base font-semibold">
           <input type="checkbox" :checked="autostart" @change="toggleAutostart" />
-          开机自启
+          登录后自动打开
         </label>
-        <p class="text-xs text-ink/45">Windows 会在当前用户登录时打开 Weaveverse。打包后的程序和现在这个开发目录会写成不同的启动命令。</p>
-        <p v-if="autostartNote" class="text-xs text-moss">{{ autostartNote }}</p>
+        <p v-if="autostartNote" class="mt-3 text-sm text-moss">{{ autostartNote }}</p>
       </div>
-      <AiSettings v-else-if="page === 'ai'" />
-      <RemotePanel v-else-if="page === 'remote'" />
-      <BackupPanel v-else-if="page === 'backup'" @need-privacy="page = 'privacy'" />
+      <div v-else-if="page === 'ai'" class="wv-card"><AiSettings /></div>
+      <div v-else-if="page === 'remote'" class="wv-card"><RemotePanel /></div>
+      <div v-else-if="page === 'backup'" class="wv-card"><BackupPanel @need-privacy="page = 'privacy'" /></div>
+      <div v-else-if="page === 'privacy'" class="wv-card"><PrivacyPanel /></div>
       <ThemePanel v-else-if="page === 'theme'" :appearance="appearance" @change="emit('change', $event)" />
       <template v-else>
-      <p class="text-xs text-ink/45">背景不透明度</p>
-      <div class="mt-2 flex items-center gap-3">
+      <section class="wv-card">
+      <h3>背景不透明度</h3>
+      <p class="wv-quiet">100% 时界面盖住背景，0% 只留界面底色。</p>
+      <div class="mt-4 flex items-center gap-3">
         <input type="range" min="0" max="100" :value="opacityPercent" class="flex-1" @input="onOpacityInput" />
-        <span class="w-10 text-right text-xs text-ink/70">{{ opacityPercent }}%</span>
+        <span class="w-12 text-right text-sm font-semibold">{{ opacityPercent }}%</span>
       </div>
-      <p class="mt-1 text-xs text-ink/40">100% 时界面盖住背景，0% 只留界面底色。</p>
-      <p class="mt-4 text-xs text-ink/45">分组栏</p>
-      <div class="mt-2 flex gap-2">
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.bar === 'push' ? 'bg-ink text-white' : 'bg-white'" @click="setBar('push')">推栏</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.bar === 'overlay' ? 'bg-ink text-white' : 'bg-white'" @click="setBar('overlay')">名字浮出</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.bar === 'stack' ? 'bg-ink text-white' : 'bg-white'" @click="setBar('stack')">图标在上</button>
+      </section>
+      <section class="wv-card">
+      <h3>分组栏</h3>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button type="button" class="wv-choice" :class="appearance.bar === 'push' ? 'is-on' : ''" @click="setBar('push')">推栏</button>
+        <button type="button" class="wv-choice" :class="appearance.bar === 'overlay' ? 'is-on' : ''" @click="setBar('overlay')">名字浮出</button>
+        <button type="button" class="wv-choice" :class="appearance.bar === 'stack' ? 'is-on' : ''" @click="setBar('stack')">图标在上</button>
       </div>
-      <label class="mt-4 flex items-center gap-2 text-sm text-ink/80">
+      </section>
+      <section class="wv-card">
+      <h3>悬浮球</h3>
+      <label class="mt-3 flex items-center gap-3 text-base font-semibold">
         <input type="checkbox" :checked="appearance.player_hidden" @change="setOrbHidden" />
         隐藏悬浮球
       </label>
-      <p class="mt-4 text-xs text-ink/45">悬浮球位置</p>
-      <div class="mt-2 flex gap-2">
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'corner' || !appearance.player ? 'bg-ink text-white' : 'bg-white'" @click="setPlayer('corner')">右下角</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'bottom' ? 'bg-ink text-white' : 'bg-white'" @click="setPlayer('bottom')">正下方</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'side' ? 'bg-ink text-white' : 'bg-white'" @click="setPlayer('side')">右侧中间</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player === 'free' ? 'bg-ink text-white' : 'bg-white'" @click="emit('move-orb')">移动悬浮球</button>
+      <p class="mt-4 text-sm font-semibold">位置</p>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <button type="button" class="wv-choice" :class="appearance.player === 'corner' || !appearance.player ? 'is-on' : ''" @click="setPlayer('corner')">右下角</button>
+        <button type="button" class="wv-choice" :class="appearance.player === 'bottom' ? 'is-on' : ''" @click="setPlayer('bottom')">正下方</button>
+        <button type="button" class="wv-choice" :class="appearance.player === 'side' ? 'is-on' : ''" @click="setPlayer('side')">右侧中间</button>
+        <button type="button" class="wv-choice" :class="appearance.player === 'free' ? 'is-on' : ''" @click="emit('move-orb')">移动悬浮球</button>
       </div>
-      <p class="mt-4 text-xs text-ink/45">面板展开</p>
-      <div class="mt-2 flex gap-2">
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="!appearance.player_spread || appearance.player_spread === 'auto' ? 'bg-ink text-white' : 'bg-white'" @click="setSpread('auto')">自动</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player_spread === 'center' ? 'bg-ink text-white' : 'bg-white'" @click="setSpread('center')">强制从中间</button>
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.player_spread === 'side' ? 'bg-ink text-white' : 'bg-white'" @click="setSpread('side')">强制从一侧</button>
+      <p class="mt-4 text-sm font-semibold">面板展开</p>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <button type="button" class="wv-choice" :class="!appearance.player_spread || appearance.player_spread === 'auto' ? 'is-on' : ''" @click="setSpread('auto')">自动</button>
+        <button type="button" class="wv-choice" :class="appearance.player_spread === 'center' ? 'is-on' : ''" @click="setSpread('center')">强制从中间</button>
+        <button type="button" class="wv-choice" :class="appearance.player_spread === 'side' ? 'is-on' : ''" @click="setSpread('side')">强制从一侧</button>
       </div>
-      <p class="mt-4 text-xs text-ink/45">进度条</p>
-      <div class="mt-2 flex items-center gap-2">
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.progress_style !== 'gradient' ? 'bg-ink text-white' : 'bg-white'" @click="setProgressStyle('solid')">单色</button>
+      </section>
+      <section class="wv-card">
+      <h3>进度条</h3>
+      <div class="mt-3 flex items-center gap-2">
+        <button type="button" class="wv-choice" :class="appearance.progress_style !== 'gradient' ? 'is-on' : ''" @click="setProgressStyle('solid')">单色</button>
         <input type="color" :value="appearance.progress_color || '#3f6f57'" title="进度颜色" @change="setProgressColor" />
-        <button type="button" class="h-8 rounded px-3 text-xs" :class="appearance.progress_style === 'gradient' ? 'bg-ink text-white' : 'bg-white'" @click="setProgressStyle('gradient')">彩色</button>
+        <button type="button" class="wv-choice" :class="appearance.progress_style === 'gradient' ? 'is-on' : ''" @click="setProgressStyle('gradient')">彩色</button>
       </div>
-      <label class="mt-4 flex items-center gap-2 text-sm text-ink/80">
+      <label class="mt-4 flex items-center gap-3 text-base font-semibold">
         <input type="checkbox" :checked="appearance.low_power" @change="setLowPower" />
-        低性能模式（不播视频背景）
+        低性能模式，不播视频背景
       </label>
-      <div class="mt-4 flex flex-wrap gap-2">
-        <button type="button" class="h-8 rounded bg-white px-3 text-xs" :disabled="busy === 'image'" @click="imageInput.click()">上传全局背景图</button>
-        <button type="button" class="h-8 rounded px-3 text-xs text-ink/50" @click="clear('image', null)">清除</button>
-        <button type="button" class="h-8 rounded bg-white px-3 text-xs" :disabled="busy === 'video'" @click="videoInput.click()">上传 MP4 背景</button>
-        <button type="button" class="h-8 rounded px-3 text-xs text-ink/50" @click="clear('video', null)">清除视频</button>
+      </section>
+      <section class="wv-card">
+      <h3>桌面背景</h3>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button type="button" class="wv-btn wv-btn-quiet" :disabled="busy === 'image'" @click="imageInput.click()">上传全局背景图</button>
+        <button type="button" class="wv-btn-ghost" @click="clear('image', null)">清除</button>
+        <button type="button" class="wv-btn wv-btn-quiet" :disabled="busy === 'video'" @click="videoInput.click()">上传 MP4 背景</button>
+        <button type="button" class="wv-btn-ghost" @click="clear('video', null)">清除视频</button>
       </div>
       <p v-if="busy" class="mt-2 text-xs text-moss">正在上传 {{ busyName }}…</p>
       <p v-else-if="statusMessage" class="mt-2 text-xs text-moss">{{ statusMessage }}</p>
@@ -491,13 +508,15 @@ async function clear(kind, groupId) {
         playsinline
       />
       <div v-if="groupId != null" class="mt-4">
-        <button type="button" class="h-8 rounded bg-white px-3 text-xs" :disabled="busy === 'image'" @click="groupInput.click()">上传「{{ groupName || '当前分组' }}」背景</button>
-        <button type="button" class="ml-2 h-8 rounded px-3 text-xs text-ink/50" @click="clear('image', groupId)">清除分组背景</button>
+        <button type="button" class="wv-btn wv-btn-quiet" :disabled="busy === 'image'" @click="groupInput.click()">上传「{{ groupName || '当前分组' }}」背景</button>
+        <button type="button" class="wv-btn-ghost" @click="clear('image', groupId)">清除分组背景</button>
         <p v-if="groupFile" class="mt-2 text-xs text-ink/70">分组背景 {{ groupLabel }}</p>
         <img v-if="groupFile" :src="backgroundUrl(groupFile)" alt="" class="mt-2 h-20 w-full rounded object-cover" />
       </div>
-      <p class="mt-5 text-xs text-ink/45">欢迎封面</p>
-      <p class="mt-1 text-xs text-ink/70">
+      </section>
+      <section class="wv-card">
+      <h3>欢迎封面</h3>
+      <p class="wv-quiet">
         {{ appearance.splash_mode === 'default' ? '默认封面' : `当前：${appearance.splash_name || appearance.splash_file}（${appearance.splash_mode}）` }}
       </p>
       <img v-if="appearance.splash_mode === 'image' && splashPreview" :src="splashPreview" alt="" class="mt-2 h-20 w-full rounded object-cover" />
@@ -509,39 +528,41 @@ async function clear(kind, groupId) {
         playsinline
       />
       <p v-else-if="appearance.splash_mode === 'lottie'" class="mt-2 text-xs text-ink/50">Lottie 动画已保存，下次启动播放。</p>
-      <div class="mt-2 flex flex-wrap gap-2">
-        <button type="button" class="h-8 rounded bg-white px-3 text-xs" :disabled="busy === 'splash'" @click="splashInput.click()">替换封面</button>
-        <button type="button" class="h-8 rounded px-3 text-xs text-ink/50" @click="resetSplash">恢复默认</button>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button type="button" class="wv-btn wv-btn-quiet" :disabled="busy === 'splash'" @click="splashInput.click()">替换封面</button>
+        <button type="button" class="wv-btn-ghost" @click="resetSplash">恢复默认</button>
       </div>
-      <p class="mt-3 text-xs text-ink/45">播放时长</p>
-      <div class="mt-2 flex gap-2">
+      <p class="mt-4 text-sm font-semibold">播放时长</p>
+      <div class="mt-2 flex flex-wrap gap-2">
         <button
           v-for="seconds in SPLASH_SECONDS"
           :key="seconds"
           type="button"
-          class="h-8 rounded px-3 text-xs"
-          :class="(appearance.splash_duration || 2) === seconds ? 'bg-ink text-white' : 'bg-white'"
+          class="wv-choice"
+          :class="(appearance.splash_duration || 2) === seconds ? 'is-on' : ''"
           @click="setSplashDuration(seconds)"
         >
           {{ seconds }} 秒
         </button>
       </div>
-      <label class="mt-3 block text-xs text-ink/45">
+      <label class="mt-4 block text-sm font-semibold">
         底部标语
-        <input v-model="captionDraft" class="mt-1 h-9 w-full bg-white px-2 text-sm text-ink outline-none" maxlength="40" @change="saveCaption" />
+        <input v-model="captionDraft" class="wv-field mt-2" maxlength="40" @change="saveCaption" />
       </label>
       <label class="mt-3 flex items-center gap-2 text-sm text-ink/80">
         <input type="checkbox" :checked="appearance.splash_loop !== false" @change="setSplashLoop" />
         视频循环到时长结束
       </label>
       <p v-if="errorMessage" class="mt-3 text-xs text-ember">{{ errorMessage }}</p>
-      <button type="button" class="mt-5 text-sm text-moss" @click="emit('open-guide')">再次显示使用说明</button>
+      <button type="button" class="wv-btn-ghost mt-4" @click="emit('open-guide')">再次显示使用说明</button>
+      </section>
       </template>
       <input ref="imageInput" class="wv-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" @change="onImage" />
       <input ref="videoInput" class="wv-file-input" type="file" accept="video/mp4,.mp4" @change="onVideo" />
       <input ref="groupInput" class="wv-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" @change="onGroupImage" />
       <input ref="splashInput" class="wv-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/webm,video/mp4,application/json,.png,.jpg,.jpeg,.webp,.gif,.webm,.mp4,.json,.lottie" @change="onSplash" />
       <input ref="themeInput" class="wv-file-input" type="file" accept=".wvtheme,.wvpack,.json,application/json,application/zip" @change="onThemeFile" />
+      </div>
     </div>
   </div>
 </template>

@@ -173,7 +173,7 @@ onMounted(() => {
     <p class="text-xs text-ink/50">上次备份：{{ last || '还没有' }}</p>
     <template v-if="loaded && !backupSet">
       <p class="text-xs text-ember">请先设置安全密码</p>
-      <button type="button" class="h-8 w-fit rounded bg-moss px-3 text-xs text-white" @click="emit('need-privacy')">去设置安全密码</button>
+      <button type="button" class="wv-btn wv-btn-primary" @click="emit('need-privacy')">去设置安全密码</button>
     </template>
     <template v-else-if="loaded && !backupUnlocked">
       <p class="text-xs text-ink/50">输入安全密码后，这次运行里备份和恢复不用再输。</p>
@@ -184,7 +184,7 @@ onMounted(() => {
     </template>
     <template v-else-if="loaded">
       <input v-model="label" type="text" class="wv-surface h-10 rounded border border-black/10 px-3 outline-none" placeholder="可选命名" />
-      <button type="button" class="h-9 w-fit rounded bg-moss px-3 text-xs text-white" :disabled="busy" @click="download">立即备份</button>
+      <button type="button" class="wv-btn wv-btn-primary" :disabled="busy" @click="download">立即备份</button>
       <p class="mt-2 text-xs font-semibold text-ink">历史备份</p>
       <p v-if="!items.length" class="text-xs text-ink/40">还没有备份文件</p>
       <div v-for="item in items" :key="item.filename" class="flex items-center gap-2 text-xs">

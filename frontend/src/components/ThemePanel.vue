@@ -11,6 +11,7 @@ import {
   getAppearance,
   getAssets,
   getPresets,
+  iconEntryUrl,
   importPresetFile,
   patchSlots,
   updatePreset,
@@ -68,7 +69,10 @@ const newName = ref('')
 const editingId = ref('')
 const draftSlots = ref(null)
 const draftConfig = ref(null)
+const openSlot = ref('')
 const picked = ref([])
+const selecting = ref(false)
+const deleteAsk = ref(0)
 const uploadTarget = ref(null)
 
 const orderedPresets = computed(() => {
@@ -189,14 +193,26 @@ async function saveCurrent() {
   }
 }
 
+function bindingSnapshot(item) {
+  const source = item.id === props.appearance.current_preset
+    ? props.appearance.slot_config?.icon_bindings
+    : item.slot_config?.icon_bindings
+  return {
+    nav: { ...(source?.nav || {}) },
+    group: { ...(source?.group || {}) },
+  }
+}
+
 function startEdit(item) {
   editingId.value = item.id
+  openSlot.value = ''
   draftSlots.value = { ...emptyDraft(), ...(item.slots || {}) }
   draftConfig.value = {
     splash: {
       duration: item.slot_config?.splash?.duration || 2,
       slogan: item.slot_config?.splash?.slogan || '',
     },
+    icon_bindings: bindingSnapshot(item),
   }
   message.value = ''
   errorMessage.value = ''
@@ -205,6 +221,19 @@ function startEdit(item) {
 function closeEdit() {
   editingId.value = ''
   draftSlots.value = null
+  openSlot.value = ''
+  saveAs.value = false
+}
+
+function toggleSlot(id) {
+  openSlot.value = openSlot.value === id ? '' : id
+}
+
+function assetRecord(type, id) {
+  if (!id) {
+    return null
+  }
+  return assets.value[type]?.find((item) => item.id === id) || null
 }
 
 async function previewIfCurrent(slotId) {
@@ -229,7 +258,7 @@ async function assignDraft(slot, id) {
 }
 
 async function setDraftDuration(duration) {
-  draftConfig.value = { splash: { ...draftConfig.value.splash, duration } }
+  draftConfig.value = { ...draftConfig.value, splash: { ...draftConfig.value.splash, duration } }
   try {
     await previewIfCurrent('splash')
   } catch (error) {
@@ -238,7 +267,7 @@ async function setDraftDuration(duration) {
 }
 
 async function setDraftSlogan(event) {
-  draftConfig.value = { splash: { ...draftConfig.value.splash, slogan: event.target.value } }
+  draftConfig.value = { ...draftConfig.value, splash: { ...draftConfig.value.splash, slogan: event.target.value } }
   try {
     await previewIfCurrent('splash')
   } catch (error) {
@@ -264,6 +293,7 @@ async function saveEdited() {
       await refreshAppearance()
     }
     message.value = `已保存到${editing.value.name}`
+    closeEdit()
     await reload()
   } catch (error) {
     errorMessage.value = error.message || '保存失败'
@@ -285,7 +315,7 @@ async function makePreset() {
     creating.value = false
     newName.value = ''
     await finishApply(created.id, { resolution: props.appearance.dirty ? 'discard' : '' })
-    editingId.value = created.id
+    closeEdit()
     message.value = `已另存为${name}`
   } catch (error) {
     errorMessage.value = error.message || '没有建成预设'
@@ -405,6 +435,21 @@ function toggleCreate() {
 function showLibrary(id) {
   libraryType.value = id
   picked.value = []
+  selecting.value = false
+}
+
+function toggleSelecting() {
+  selecting.value = !selecting.value
+  if (!selecting.value) {
+    picked.value = []
+  }
+}
+
+function askDelete() {
+  if (!picked.value.length) {
+    return
+  }
+  deleteAsk.value = picked.value.length
 }
 
 function togglePicked(id) {
@@ -421,8 +466,10 @@ function clearPicked() {
 
 async function removePicked() {
   if (!picked.value.length) {
+    deleteAsk.value = 0
     return
   }
+  deleteAsk.value = 0
   const ids = [...picked.value]
   try {
     for (const id of ids) {
@@ -450,145 +497,187 @@ async function removeAsset(type, id) {
 
 <template>
   <div>
-    <div class="flex items-end justify-between gap-3">
-      <p class="text-sm text-ink">
-        {{ currentName }}
-        <span v-if="appearance.dirty">，还有未保存的改动</span>
-      </p>
-      <button v-if="appearance.dirty" type="button" class="h-8 rounded bg-ink px-3 text-xs text-white" @click="saveCurrent">
+    <div class="flex items-end justify-between gap-4">
+      <div>
+        <p class="text-base font-semibold text-ink">{{ currentName }}</p>
+        <p v-if="appearance.dirty" class="wv-quiet">这套搭配还有没写进预设的改动</p>
+      </div>
+      <button v-if="appearance.dirty" type="button" class="wv-btn wv-btn-primary" @click="saveCurrent">
         {{ canSave ? '保存' : '另存为' }}
       </button>
     </div>
-    <div class="mt-3 flex gap-4 border-b border-black/10">
+    <div class="mt-5 flex gap-2">
       <button
         v-for="item in TAB_LABELS"
         :key="item.id"
         type="button"
-        class="h-8 text-sm"
-        :class="tab === item.id ? 'border-b-2 border-ink text-ink' : 'text-ink/45'"
+        class="wv-choice"
+        :class="tab === item.id ? 'is-on' : ''"
         @click="tab = item.id"
       >
         {{ item.label }}
       </button>
     </div>
 
-    <div v-if="tab === 'presets'" class="mt-3 space-y-1">
-      <div v-for="item in orderedPresets" :key="item.id" class="flex items-center gap-2">
+    <div v-if="tab === 'presets'" class="mt-5">
+      <div v-for="item in orderedPresets" :key="item.id" class="grid grid-cols-[minmax(0,1fr)_132px] items-center gap-2 py-1.5">
         <button
           type="button"
-          class="wv-theme-row"
-          :class="appearance.current_preset === item.id ? 'is-on' : ''"
+          class="flex min-w-0 items-center gap-3 rounded-lg px-2 py-2 text-left"
+          :class="appearance.current_preset === item.id ? 'bg-[#e7e1d6]' : ''"
           @click="choosePreset(item.id)"
         >
-          <span class="wv-theme-swatch" :style="{ background: item.system ? 'var(--wv-dawn)' : '#e6e0f2' }" />
+          <span class="h-10 w-10 shrink-0 rounded-md" :style="{ background: item.system ? 'var(--wv-dawn, #f4efe7)' : '#d7e4dc' }" />
           <span class="min-w-0">
-            <span class="block truncate text-sm text-ink">{{ item.name }}</span>
-            <span class="block text-xs text-ink/45">{{ item.system ? '系统预设' : '我的预设' }}</span>
+            <span class="block truncate text-base font-semibold text-ink">{{ item.name }}</span>
+            <span class="block text-sm text-ink/55">{{ item.system ? '系统预设' : '我的预设' }}</span>
           </span>
         </button>
-        <button type="button" class="px-2 text-xs text-ink/55" @click="startEdit(item)">编辑</button>
-        <button v-if="!item.system" type="button" class="px-2 text-xs text-ink/40" @click="removePreset(item.id)">删除</button>
+        <div class="flex justify-end">
+          <button type="button" class="wv-btn-ghost" @click="startEdit(item)">编辑</button>
+          <button v-if="!item.system" type="button" class="wv-btn-ghost is-danger" @click="removePreset(item.id)">删除</button>
+          <span v-else class="inline-block w-[52px]" />
+        </div>
       </div>
 
-      <div v-if="editing && draftSlots && draftConfig" class="mt-3 border-t border-black/10 pt-3">
-        <div class="flex items-center justify-between">
-          <p class="text-sm text-ink">编辑「{{ editing.name }}」</p>
-          <button type="button" class="text-xs text-ink/40" @click="closeEdit">收起</button>
-        </div>
-        <section v-for="slot in SLOT_LABELS" :key="slot.id" class="mt-3">
-          <p class="text-sm text-ink">{{ slot.label }}</p>
-          <p class="text-xs text-ink/45">{{ assetName(slot.type, draftSlots[slot.id]) || slot.empty }}</p>
-          <div class="mt-1 max-h-36 space-y-1 overflow-y-auto">
-            <button v-if="slot.id !== 'colors'" type="button" class="block h-7 text-sm text-ink/60" @click="assignDraft(slot.id, null)">{{ slot.empty }}</button>
-            <button
-              v-for="item in assets[slot.type]"
-              :key="item.id"
-              type="button"
-              class="block h-7 max-w-full truncate text-left text-sm"
-              :class="draftSlots[slot.id] === item.id ? 'text-ink' : 'text-ink/70'"
-              @click="assignDraft(slot.id, item.id)"
-            >
-              {{ item.name }}
-            </button>
-          </div>
-          <button type="button" class="mt-1 h-7 text-xs text-moss" @click="openUpload(slot.type, slot.id)">+ 上传新素材</button>
-        </section>
-        <div class="mt-3">
-          <p class="text-sm text-ink/60">开屏时长</p>
-          <div class="mt-2 flex flex-wrap gap-2">
-            <button
-              v-for="seconds in DURATIONS"
-              :key="seconds"
-              type="button"
-              class="h-8 rounded px-2 text-xs"
-              :class="draftConfig.splash.duration === seconds ? 'bg-ink text-white' : 'bg-white'"
-              @click="setDraftDuration(seconds)"
-            >
-              {{ seconds }} 秒
-            </button>
-          </div>
-          <input
-            class="mt-2 h-9 w-full bg-white px-2 text-sm outline-none"
-            :value="draftConfig.splash.slogan"
-            maxlength="40"
-            placeholder="开屏底部的一句话"
-            @change="setDraftSlogan"
-          />
-        </div>
-        <button type="button" class="mt-3 h-8 rounded bg-ink px-3 text-xs text-white" :disabled="busy" @click="saveEdited">
-          {{ editing.system ? '另存为' : '保存' }}
-        </button>
+      <div v-if="creating && !editing" class="mt-4 flex gap-2">
+        <input v-model="newName" class="wv-field min-w-0 flex-1" placeholder="新预设的名字" @keyup.enter="makePreset" />
+        <button type="button" class="wv-btn wv-btn-primary" :disabled="busy" @click="makePreset">保存</button>
       </div>
-
-      <div v-if="creating" class="mt-3 flex gap-2">
-        <input v-model="newName" class="h-9 min-w-0 flex-1 bg-white px-2 text-sm outline-none" placeholder="新预设的名字" @keyup.enter="makePreset" />
-        <button type="button" class="h-9 rounded bg-ink px-3 text-xs text-white" :disabled="busy" @click="makePreset">保存</button>
-      </div>
-      <div class="mt-3 flex flex-wrap gap-2">
-        <button type="button" class="h-8 rounded bg-white px-3 text-xs" @click="toggleCreate">新建预设</button>
-        <button type="button" class="h-8 rounded bg-white px-3 text-xs" @click="importInput.click()">导入</button>
-        <button type="button" class="h-8 rounded bg-white px-3 text-xs" @click="exportCurrent">导出当前</button>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <button type="button" class="wv-btn wv-btn-quiet" @click="toggleCreate">新建预设</button>
+        <button type="button" class="wv-btn wv-btn-quiet" @click="importInput.click()">导入</button>
+        <button type="button" class="wv-btn wv-btn-quiet" @click="exportCurrent">导出当前</button>
       </div>
     </div>
 
-    <div v-else class="mt-3">
-      <div class="flex gap-3">
+    <div v-else class="mt-5">
+      <div class="flex flex-wrap gap-2">
         <button
           v-for="item in TYPE_LABELS"
           :key="item.id"
           type="button"
-          class="text-sm"
-          :class="libraryType === item.id ? 'text-ink' : 'text-ink/40'"
+          class="wv-choice"
+          :class="libraryType === item.id ? 'is-on' : ''"
           @click="showLibrary(item.id)"
         >
           {{ item.label }}
         </button>
       </div>
-      <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
-        <button type="button" class="h-7 rounded bg-white px-2" @click="selectAll">全选</button>
-        <button type="button" class="h-7 rounded bg-white px-2" @click="clearPicked">取消选择</button>
-        <button type="button" class="h-7 rounded bg-ink px-2 text-white" :disabled="!picked.length" @click="removePicked">批量删除</button>
-        <span class="text-ink/40">已选 {{ picked.length }}</span>
+      <div class="mt-4 flex flex-wrap items-center gap-2">
+        <button type="button" class="wv-btn wv-btn-quiet" @click="toggleSelecting">{{ selecting ? '完成' : '选择' }}</button>
+        <template v-if="selecting">
+          <button type="button" class="wv-btn wv-btn-quiet" @click="selectAll">全选</button>
+          <button type="button" class="wv-btn wv-btn-quiet" @click="clearPicked">取消选择</button>
+          <button type="button" class="wv-btn wv-btn-danger" :disabled="!picked.length" @click="askDelete">删除</button>
+          <span class="text-sm text-ink/55">已选 {{ picked.length }}</span>
+        </template>
+        <button type="button" class="wv-btn wv-btn-primary" @click="openUpload(libraryType)">添加素材</button>
       </div>
-      <div class="mt-3 space-y-2">
-        <div v-for="item in assets[libraryType]" :key="item.id" class="flex items-center gap-3">
-          <input v-if="!item.system" type="checkbox" :checked="picked.includes(item.id)" @change="togglePicked(item.id)" />
-          <span v-else class="w-4 text-center text-[10px] text-ink/30">锁</span>
-          <img
-            v-if="item.media === 'image'"
+      <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <button
+          v-for="item in assets[libraryType]"
+          :key="item.id"
+          type="button"
+          class="rounded-lg bg-[#fffcf7] p-2 text-left"
+          :class="selecting && picked.includes(item.id) ? 'bg-[#d7e4dc]' : ''"
+          @click="selecting && !item.system && togglePicked(item.id)"
+        >
+          <img v-if="item.media === 'image'" :src="assetFileUrl(libraryType, item.id)" alt="" class="h-24 w-full object-cover" />
+          <video
+            v-else-if="item.media === 'video'"
             :src="assetFileUrl(libraryType, item.id)"
-            alt=""
-            class="h-12 w-16 object-cover"
+            class="h-24 w-full object-cover"
+            muted
+            playsinline
+            preload="metadata"
+            @loadedmetadata="(event) => { event.target.currentTime = 0.1 }"
           />
-          <span v-else class="grid h-12 w-16 place-items-center bg-white text-xs text-ink/50">{{ item.media === 'palette' ? '颜色' : item.media === 'video' ? '视频' : item.media === 'pack' ? '图标' : '动画' }}</span>
-          <span class="min-w-0 flex-1">
-            <span class="block truncate text-sm">{{ item.name }}</span>
-            <span class="block text-xs text-ink/40">{{ item.system ? '系统' : '我的' }}</span>
-          </span>
-          <button v-if="!item.system" type="button" class="text-xs text-ink/40" @click="removeAsset(libraryType, item.id)">删除</button>
+          <span v-else-if="item.media === 'palette'" class="block h-24 w-full" :style="{ background: item.swatch || '#f4efe7' }" />
+          <img v-else-if="item.preview" :src="iconEntryUrl(item.id, item.preview)" alt="" class="h-24 w-full object-cover" />
+          <span v-else class="grid h-24 w-full place-items-center bg-[#e7e1d6] text-sm font-semibold">{{ item.media === 'lottie' ? '动画' : '图标包' }}</span>
+          <span class="mt-2 block truncate text-sm font-semibold">{{ item.name }}</span>
+          <span class="block text-sm text-ink/55">{{ item.system ? '系统素材' : '我的素材' }}</span>
+        </button>
+      </div>
+    </div>
+
+    <div v-if="editing && draftSlots && draftConfig" class="fixed inset-0 z-[80] grid place-items-center bg-black/45 px-4" @click.self="closeEdit">
+      <div class="max-h-[86vh] w-full max-w-lg overflow-y-auto bg-[#fffcf7] p-6">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-2xl font-semibold tracking-tight">编辑「{{ editing.name }}」</h3>
+            <p class="wv-quiet">四个槽先收着。点一行再挑素材。</p>
+          </div>
+          <button type="button" class="wv-btn-ghost" @click="closeEdit">关闭</button>
+        </div>
+        <div v-for="slot in SLOT_LABELS" :key="slot.id" class="mt-4">
+          <button type="button" class="flex w-full items-center gap-3 rounded-lg bg-[#f3efe6] p-2 text-left" @click="toggleSlot(slot.id)">
+            <img v-if="assetRecord(slot.type, draftSlots[slot.id])?.media === 'image'" :src="assetFileUrl(slot.type, draftSlots[slot.id])" alt="" class="h-14 w-14 object-cover" />
+            <span v-else-if="assetRecord(slot.type, draftSlots[slot.id])?.media === 'palette'" class="h-14 w-14" :style="{ background: assetRecord(slot.type, draftSlots[slot.id])?.swatch || '#f4efe7' }" />
+            <img v-else-if="assetRecord(slot.type, draftSlots[slot.id])?.preview" :src="iconEntryUrl(draftSlots[slot.id], assetRecord(slot.type, draftSlots[slot.id]).preview)" alt="" class="h-14 w-14 object-cover" />
+            <span v-else class="grid h-14 w-14 place-items-center bg-[#e7e1d6] text-xs font-semibold">{{ slot.empty }}</span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-base font-semibold">{{ slot.label }}</span>
+              <span class="block truncate text-sm text-ink/55">{{ assetName(slot.type, draftSlots[slot.id]) || slot.empty }}</span>
+            </span>
+          </button>
+          <div v-if="openSlot === slot.id" class="mt-2 grid max-h-52 grid-cols-4 gap-2 overflow-y-auto">
+            <button v-if="slot.id !== 'colors'" type="button" class="bg-[#f3efe6] p-2 text-left text-sm font-semibold" @click="assignDraft(slot.id, null)">{{ slot.empty }}</button>
+            <button
+              v-for="item in assets[slot.type]"
+              :key="item.id"
+              type="button"
+              class="bg-[#f3efe6] p-1 text-left"
+              :class="draftSlots[slot.id] === item.id ? 'bg-[#d7e4dc]' : ''"
+              @click="assignDraft(slot.id, item.id)"
+            >
+              <img v-if="item.media === 'image'" :src="assetFileUrl(slot.type, item.id)" alt="" class="h-12 w-full object-cover" />
+              <span v-else-if="item.media === 'palette'" class="block h-12 w-full" :style="{ background: item.swatch || '#f4efe7' }" />
+              <img v-else-if="item.preview" :src="iconEntryUrl(item.id, item.preview)" alt="" class="h-12 w-full object-cover" />
+              <span v-else class="grid h-12 place-items-center text-xs">{{ item.media === 'video' ? '视频' : '素材' }}</span>
+              <span class="mt-1 block truncate text-xs font-semibold">{{ item.name }}</span>
+            </button>
+          </div>
+          <button v-if="openSlot === slot.id" type="button" class="wv-btn-ghost mt-1" @click="openUpload(slot.type, slot.id)">上传新素材</button>
+          <div v-if="slot.id === 'splash' && openSlot === 'splash'" class="mt-3">
+            <p class="text-sm font-semibold">开屏停留</p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <button
+                v-for="seconds in DURATIONS"
+                :key="seconds"
+                type="button"
+                class="wv-choice"
+                :class="draftConfig.splash.duration === seconds ? 'is-on' : ''"
+                @click="setDraftDuration(seconds)"
+              >
+                {{ seconds }} 秒
+              </button>
+            </div>
+            <input class="wv-field mt-2" :value="draftConfig.splash.slogan" maxlength="40" placeholder="开屏底部的一句话" @change="setDraftSlogan" />
+          </div>
+        </div>
+        <div v-if="saveAs" class="mt-4">
+          <p class="text-sm font-semibold">另存为的名字</p>
+          <input v-model="newName" class="wv-field mt-2" placeholder="新预设的名字" @keyup.enter="makePreset" />
+        </div>
+        <div class="mt-6 flex justify-end gap-2">
+          <button type="button" class="wv-btn wv-btn-quiet" @click="closeEdit">取消</button>
+          <button v-if="saveAs" type="button" class="wv-btn wv-btn-primary" :disabled="busy" @click="makePreset">另存为</button>
+          <button v-else type="button" class="wv-btn wv-btn-primary" :disabled="busy" @click="saveEdited">{{ editing.system ? '另存为' : '保存' }}</button>
         </div>
       </div>
-      <button type="button" class="mt-3 h-8 rounded bg-white px-3 text-xs" @click="openUpload(libraryType)">添加素材</button>
+    </div>
+
+    <div v-if="deleteAsk" class="fixed inset-0 z-[90] grid place-items-center bg-black/45 px-4">
+      <div class="w-full max-w-md bg-[#fffcf7] p-6">
+        <h3 class="text-xl font-semibold">删除素材</h3>
+        <p class="mt-3 text-base leading-7">确定删除选中的 {{ deleteAsk }} 个素材吗？系统素材不可删除。</p>
+        <div class="mt-6 flex justify-end gap-2">
+          <button type="button" class="wv-btn wv-btn-quiet" @click="deleteAsk = 0">取消</button>
+          <button type="button" class="wv-btn wv-btn-danger" @click="removePicked">删除</button>
+        </div>
+      </div>
     </div>
 
     <p v-if="message" class="mt-3 text-xs text-moss">{{ message }}</p>

@@ -43,15 +43,25 @@ const notes = ref([])
 const sideTab = ref('toc')
 const noteOpen = ref(false)
 const noteBody = ref('')
+const bookmarkOpen = ref(false)
+const bookmarkNote = ref('')
 const pendingSelection = ref(null)
+const activeBookmarkId = ref(null)
 let suspendScroll = false
 let pending = null
 let timer = 0
 let activeNoteId = null
+let capturedSelection = null
+let capturedAt = 0
 
 const toc = computed(() => detail.value?.toc ?? [])
 const markNotes = computed(() => notes.value.filter((item) => item.type === 'highlight' || item.type === 'underline' || item.type === 'note'))
-const bookmarks = computed(() => notes.value.filter((item) => item.type === 'bookmark'))
+const bookmarks = computed(() =>
+  notes.value
+    .filter((item) => item.type === 'bookmark')
+    .slice()
+    .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime()),
+)
 const textPieces = computed(() => pieces(content.value?.text || '', notes.value))
 
 function queueProgress(patch, immediate = false) {
@@ -156,7 +166,15 @@ function onScroll(event) {
 
 function pieces(text, list) {
   const marks = list
-    .filter((item) => (item.type === 'highlight' || item.type === 'underline') && item.text && !String(item.position).includes(':'))
+    .filter((item) => {
+      if (!item.text || String(item.position).includes(':')) {
+        return false
+      }
+      if (item.type === 'highlight' || item.type === 'underline') {
+        return true
+      }
+      return item.type === 'bookmark' && item.id === activeBookmarkId.value
+    })
     .map((item) => ({
       start: Number(item.position),
       end: Number(item.position) + item.text.length,
@@ -188,7 +206,8 @@ function pieces(text, list) {
 function pieceClass(marks) {
   const highlight = marks.find((item) => item.type === 'highlight')
   const line = marks.find((item) => item.type === 'underline')
-  return [highlight ? `is-${highlight.color}` : '', line ? `is-line is-line-${line.color}` : ''].filter(Boolean)
+  const bookmark = marks.find((item) => item.type === 'bookmark')
+  return [highlight ? `is-${highlight.color}` : '', line ? `is-line is-line-${line.color}` : '', bookmark ? 'is-bookmark' : ''].filter(Boolean)
 }
 
 function paintHtmlMarks() {
@@ -198,7 +217,7 @@ function paintHtmlMarks() {
   }
   root.innerHTML = DOMPurify.sanitize(content.value?.html || '')
   const ranges = notes.value
-    .filter((item) => (item.type === 'highlight' || item.type === 'underline') && item.text)
+    .filter((item) => item.text && (item.type === 'highlight' || item.type === 'underline' || (item.type === 'bookmark' && item.id === activeBookmarkId.value)))
     .map((item) => {
       const [chapterPart, startPart] = String(item.position).split(':')
       return {
@@ -246,7 +265,7 @@ function wrapHtml(root, start, end, note) {
     range.setEnd(endNode, endOffset)
     const mark = document.createElement('mark')
     mark.dataset.noteId = String(note.id)
-    mark.className = note.type === 'underline' ? `is-line is-line-${note.color}` : `is-${note.color}`
+    mark.className = note.type === 'underline' ? `is-line is-line-${note.color}` : note.type === 'bookmark' ? 'is-bookmark' : `is-${note.color}`
     range.surroundContents(mark)
   } catch (error) {
     console.error('Failed to wrap highlight:', error)
@@ -347,13 +366,26 @@ function openMarkMenu(selection) {
   ])
 }
 
+function readingRoot() {
+  return props.book.format === 'epub' ? htmlRoot.value : textRoot.value
+}
+
+function onMouseUp() {
+  capturedSelection = readSelection(readingRoot())
+  capturedAt = Date.now()
+}
+
 function onTextMenu(event) {
-  const root = props.book.format === 'epub' ? htmlRoot.value : textRoot.value
+  event.preventDefault()
+  const root = readingRoot()
   const mark = event.target?.closest?.('mark')
   if (mark?.dataset?.noteId) {
     activeNoteId = Number(mark.dataset.noteId)
   }
-  const selection = readSelection(root)
+  let selection = readSelection(root)
+  if (!selection && capturedSelection && Date.now() - capturedAt < 800) {
+    selection = capturedSelection
+  }
   if (!selection && !activeNoteId) {
     return
   }
@@ -469,20 +501,36 @@ function visibleIndex() {
   return Math.min(length - 1, Math.max(0, Math.round(ratio * length)))
 }
 
+function stamp(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+  const pad = (number) => String(number).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function askBookmark() {
+  bookmarkNote.value = ''
+  bookmarkOpen.value = true
+}
+
 async function addBookmark() {
   try {
     const index = visibleIndex()
     const position = props.book.format === 'epub' ? `${chapter.value}:${index}` : String(index)
     const source = props.book.format === 'epub' ? htmlRoot.value?.textContent || '' : content.value?.text || ''
-    await createBookNote(props.book.id, {
+    const created = await createBookNote(props.book.id, {
       type: 'bookmark',
       position,
-      text: source.slice(index, index + 24),
+      text: source.slice(index, index + 48),
       color: '',
-      note_content: '',
+      note_content: bookmarkNote.value.trim(),
     })
+    bookmarkOpen.value = false
     await loadNotes()
     sideTab.value = 'bookmarks'
+    activeBookmarkId.value = created.id
     showToast('已加书签')
   } catch (error) {
     showToast(error.message || '没有加书签')
@@ -529,7 +577,14 @@ const rendition = {
 }
 
 async function focusNote(note) {
+  activeBookmarkId.value = note.type === 'bookmark' ? note.id : activeBookmarkId.value
   await rendition.display(note.position)
+  if (props.book.format === 'epub') {
+    await nextTick()
+    paintHtmlMarks()
+    const span = noteSpan(note)
+    scrollToIndex(span.start, htmlRoot.value)
+  }
 }
 
 async function removeNote(note) {
@@ -564,6 +619,10 @@ function onKey(event) {
   if (event.key === 'Escape') {
     if (noteOpen.value) {
       noteOpen.value = false
+      return
+    }
+    if (bookmarkOpen.value) {
+      bookmarkOpen.value = false
       return
     }
     close()
@@ -619,7 +678,7 @@ onBeforeUnmount(() => {
         v-if="book.format !== 'pdf'"
         type="button"
         class="h-10 rounded-md px-3 text-sm font-medium text-moss hover:bg-black/5"
-        @click="addBookmark"
+        @click="askBookmark"
       >
         书签
       </button>
@@ -642,7 +701,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else class="flex min-h-0 flex-1">
-      <aside class="flex w-56 shrink-0 flex-col border-r border-black/10 bg-white/40">
+      <aside class="flex w-72 shrink-0 flex-col bg-[#efeae1]">
         <div class="flex border-b border-black/10 text-xs">
           <button type="button" class="h-9 flex-1" :class="sideTab === 'toc' ? 'text-ink' : 'text-ink/40'" @click="sideTab = 'toc'">目录</button>
           <button type="button" class="h-9 flex-1" :class="sideTab === 'notes' ? 'text-ink' : 'text-ink/40'" @click="sideTab = 'notes'">笔记</button>
@@ -673,18 +732,34 @@ onBeforeUnmount(() => {
             <p v-if="!markNotes.length" class="px-2 py-3 text-xs text-ink/40">选中文字后可以高亮或写笔记</p>
           </template>
           <template v-else>
-            <div v-for="item in bookmarks" :key="item.id" class="mb-2 bg-white/70 p-2">
-              <button type="button" class="block w-full text-left text-sm" @click="focusNote(item)">{{ item.text || '书签' }}</button>
-              <button type="button" class="mt-1 text-xs text-ink/35" @click="removeNote(item)">删除</button>
+            <div v-for="item in bookmarks" :key="item.id" class="mb-2 bg-[#fffcf7] p-3" :class="activeBookmarkId === item.id ? 'bg-[#fff1c9]' : ''">
+              <button type="button" class="block w-full text-left" @click="focusNote(item)">
+                <span class="block text-xs text-ink/50">{{ stamp(item.created_at) }}</span>
+                <span class="mt-1 block text-sm font-semibold leading-5">{{ item.text || '这一处' }}</span>
+                <span v-if="item.note_content" class="mt-1 block text-sm leading-5 text-ink/70">{{ item.note_content }}</span>
+              </button>
+              <button type="button" class="mt-2 text-sm text-[#9a4036]" @click="removeNote(item)">删除</button>
             </div>
-            <p v-if="!bookmarks.length" class="px-2 py-3 text-xs text-ink/40">还没有书签</p>
+            <p v-if="!bookmarks.length" class="px-2 py-3 text-sm text-ink/50">还没有书签。点右上角「书签」可以记下当前位置。</p>
           </template>
         </div>
       </aside>
 
-      <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto px-8 py-8" @scroll="onScroll" @contextmenu="onTextMenu">
+      <div ref="scroller" class="reader-column min-h-0 flex-1 overflow-y-auto px-8 py-8" @scroll="onScroll" @mouseup="onMouseUp" @contextmenu="onTextMenu">
         <article v-if="book.format === 'epub'" ref="htmlRoot" class="reader-html mx-auto max-w-3xl text-base leading-8" />
-        <div v-else ref="textRoot" class="mx-auto max-w-3xl whitespace-pre-wrap font-sans text-base leading-8"><span v-for="(piece, index) in textPieces" :key="index" :class="pieceClass(piece.marks)">{{ piece.text }}</span></div>
+        <div v-else ref="textRoot" class="mx-auto max-w-3xl whitespace-pre-wrap font-sans text-base leading-8"><span v-for="(piece, index) in textPieces" :key="`${index}-${piece.start}`" :class="pieceClass(piece.marks)">{{ piece.text }}</span></div>
+      </div>
+    </div>
+
+    <div v-if="bookmarkOpen" class="fixed inset-0 z-[80] grid place-items-center bg-black/45 px-4">
+      <div class="w-full max-w-md bg-[#fffcf7] p-6">
+        <h3 class="text-xl font-semibold text-ink">给这个位置写一句备注</h3>
+        <p class="mt-2 text-sm leading-6 text-ink/60">可以留空。书签会记下当前这一行，并按时间排在最上面。</p>
+        <textarea v-model="bookmarkNote" class="mt-4 h-24 w-full bg-[#f3efe6] p-3 text-sm outline-none" maxlength="4000" placeholder="备注，可选" />
+        <div class="mt-4 flex justify-end gap-2">
+          <button type="button" class="h-9 rounded-md px-3 text-sm text-ink/70" @click="bookmarkOpen = false">取消</button>
+          <button type="button" class="h-9 rounded-md bg-ink px-4 text-sm font-semibold text-white" @click="addBookmark">记下书签</button>
+        </div>
       </div>
     </div>
 
@@ -729,4 +804,11 @@ onBeforeUnmount(() => {
 .is-line-moss { text-decoration-color: #2f6a48; }
 .is-line-sky { text-decoration-color: #2d5eaa; }
 .is-line-rose { text-decoration-color: #b14b73; }
+.is-bookmark { background: #ffe08a; }
+.reader-column,
+.reader-column :deep(*) {
+  cursor: auto;
+  -webkit-user-select: text;
+  user-select: text;
+}
 </style>

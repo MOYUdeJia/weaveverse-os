@@ -86,6 +86,23 @@ def _slots(raw: object) -> dict:
     return slots
 
 
+def _icon_bindings(raw: object) -> dict:
+    """Per-preset map of nav and group ids to icons. Missing maps stay empty."""
+    source = raw if isinstance(raw, dict) else {}
+    cleaned = {"nav": {}, "group": {}}
+    for kind in ("nav", "group"):
+        bucket = source.get(kind)
+        if not isinstance(bucket, dict):
+            continue
+        for key, value in list(bucket.items())[:240]:
+            ident = str(key).strip()
+            text = str(value or "").strip()
+            if not ident.isdigit() or not text or len(text) > 20:
+                continue
+            cleaned[kind][ident] = text
+    return cleaned
+
+
 def _slot_config(raw: object) -> dict:
     source = raw if isinstance(raw, dict) else {}
     splash = source.get("splash") if isinstance(source.get("splash"), dict) else {}
@@ -95,7 +112,10 @@ def _slot_config(raw: object) -> dict:
         duration = 2
     if duration not in SPLASH_DURATIONS:
         duration = 2
-    return {"splash": {"duration": duration, "slogan": str(splash.get("slogan") or "")[:40]}}
+    return {
+        "splash": {"duration": duration, "slogan": str(splash.get("slogan") or "")[:40]},
+        "icon_bindings": _icon_bindings(source.get("icon_bindings")),
+    }
 
 
 def _ratio(value: object) -> float | None:

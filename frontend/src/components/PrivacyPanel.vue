@@ -138,7 +138,7 @@ onMounted(() => {
         <PasswordField v-model="form.next" autocomplete="new-password" placeholder="新安全密码，至少 8 位，建议 12 位" />
         <PasswordField v-model="form.again" autocomplete="new-password" placeholder="再输入一次" />
         <input v-model="form.hint" type="text" maxlength="80" class="h-8 rounded border border-black/10 px-2 text-xs outline-none" placeholder="提示（可选，不是密码）" />
-        <button type="button" class="h-8 w-fit rounded bg-moss px-3 text-xs text-white" @click="save">设置安全密码</button>
+        <button type="button" class="wv-btn wv-btn-primary" @click="save">设置安全密码</button>
       </div>
       <div v-else-if="loaded" class="mt-2">
         <button type="button" class="h-8 rounded border border-black/15 px-3 text-xs" @click="form.open = !form.open">修改安全密码</button>
@@ -148,7 +148,7 @@ onMounted(() => {
           <template v-if="form.verified">
             <PasswordField v-model="form.next" autocomplete="new-password" placeholder="新密码" />
             <PasswordField v-model="form.again" autocomplete="new-password" placeholder="确认新密码" />
-            <button type="button" class="h-8 w-fit rounded bg-moss px-3 text-xs text-white" @click="save">提交</button>
+            <button type="button" class="wv-btn wv-btn-primary" @click="save">保存新密码</button>
           </template>
         </div>
         <p class="mt-3 text-xs text-ink/50">忘记密码只能重置。重置会清掉安全密码和密码库条目，其他数据还在。</p>

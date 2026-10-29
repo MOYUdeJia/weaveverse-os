@@ -131,8 +131,8 @@ onMounted(() => {
       :placeholder="hasKey ? '留空表示继续用已保存的 Key' : '粘贴 Key，保存后才会写入'"
     />
     <div class="flex gap-2">
-      <button type="button" class="h-9 rounded bg-moss px-3 text-xs text-white" :disabled="busy" @click="save">保存</button>
-      <button type="button" class="wv-chip h-9 rounded px-3 text-xs" :disabled="busy || keyLabel !== '已保存' && !apiKey" @click="test">测试连接</button>
+      <button type="button" class="wv-btn wv-btn-primary" :disabled="busy" @click="save">保存</button>
+      <button type="button" class="wv-btn wv-btn-quiet" :disabled="busy || keyLabel !== '已保存' && !apiKey" @click="test">测试连接</button>
     </div>
     <p class="mt-2 text-xs text-ink/55">语音</p>
     <label class="text-xs text-ink/55">识别模型</label>
@@ -145,6 +145,6 @@ onMounted(() => {
     </select>
     <label class="text-xs text-ink/55">语速 {{ ttsRate }}</label>
     <input v-model="ttsRate" type="range" min="0.5" max="1.5" step="0.1" />
-    <button type="button" class="h-9 rounded bg-moss px-3 text-xs text-white" @click="saveVoice">保存语音</button>
+    <button type="button" class="wv-btn wv-btn-primary" @click="saveVoice">保存语音</button>
   </div>
 </template>

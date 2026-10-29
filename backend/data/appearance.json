@@ -103,6 +103,10 @@
     "splash": {
       "duration": 2,
       "slogan": ""
+    },
+    "icon_bindings": {
+      "nav": {},
+      "group": {}
     }
   },
   "dirty": false,

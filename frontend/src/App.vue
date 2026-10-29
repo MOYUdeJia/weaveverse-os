@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import { assetFileUrl, backgroundUrl, createGroup, createNav, deleteGroup, deleteNav, getAppearance, getGroups, getHealth, getNav, lockGroup, lockNav, packFileUrl, patchNav, pinNav, reorderGroups, reorderNav, updateAppearance, updateGroup, updateNav, vaultEntryCount } from './api/client'
+import { assetFileUrl, backgroundUrl, createGroup, createNav, deleteGroup, deleteNav, getAppearance, getGroups, getHealth, getNav, lockGroup, lockNav, packFileUrl, patchNav, patchSlots, pinNav, reorderGroups, reorderNav, updateAppearance, updateGroup, updateNav, vaultEntryCount } from './api/client'
+import { defaultIcon, isFileIcon, resolveIcon } from './icons'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import GroupBar from './components/GroupBar.vue'
 import GroupEditDialog from './components/GroupEditDialog.vue'
@@ -77,6 +78,18 @@ const appearance = ref({
 let confirmAction = null
 let navRequest = 0
 
+const iconBindings = computed(() => appearance.value.slot_config?.icon_bindings || {})
+
+function paintIcon(kind, record) {
+  if (!record) {
+    return null
+  }
+  return {
+    ...record,
+    icon: resolveIcon(iconBindings.value, kind, record.id, record.icon, kind === 'group' ? 'group' : record.page_type),
+  }
+}
+
 const activeItem = computed(() => {
   return navItems.value.find((item) => item.id === activeId.value) ?? null
 })
@@ -84,6 +97,11 @@ const activeItem = computed(() => {
 const activeGroup = computed(() => {
   return groups.value.find((group) => group.id === activeGroupId.value) ?? null
 })
+
+const viewNav = computed(() => navItems.value.map((item) => paintIcon('nav', item)))
+const viewGroups = computed(() => groups.value.map((group) => paintIcon('group', group)))
+const viewActive = computed(() => paintIcon('nav', activeItem.value))
+const viewGroup = computed(() => paintIcon('group', activeGroup.value))
 
 function replaceGroup(updated) {
   groups.value = groups.value.map((group) => (group.id === updated.id ? { ...group, ...updated } : group))
@@ -164,6 +182,11 @@ async function loadShellData() {
       return
     }
     await selectGroup(firstId, null, true)
+    try {
+      await adoptLooseIcons()
+    } catch (error) {
+      console.error('Failed to adopt loose icons:', error)
+    }
   } catch (error) {
     console.error('Weaveverse startup request failed:', error)
     errorMessage.value = '后端暂时没有回应，请确认 Weaveverse 服务已经启动。'
@@ -233,15 +256,74 @@ function cancelConfirm() {
   confirmAction = null
 }
 
+async function rememberIcon(kind, id, icon) {
+  const config = JSON.parse(JSON.stringify(appearance.value.slot_config || {}))
+  if (!config.splash) {
+    config.splash = { duration: appearance.value.splash_duration || 2, slogan: '' }
+  }
+  config.icon_bindings = {
+    nav: { ...(config.icon_bindings?.nav || {}) },
+    group: { ...(config.icon_bindings?.group || {}) },
+  }
+  const bucket = config.icon_bindings[kind]
+  if (isFileIcon(icon)) {
+    bucket[String(id)] = icon
+  } else {
+    delete bucket[String(id)]
+  }
+  await patchSlots({ slot_config: config })
+  applyAppearance(await getAppearance())
+}
+
+async function adoptLooseIcons() {
+  const config = JSON.parse(JSON.stringify(appearance.value.slot_config || {}))
+  config.icon_bindings = {
+    nav: { ...(config.icon_bindings?.nav || {}) },
+    group: { ...(config.icon_bindings?.group || {}) },
+  }
+  let changed = false
+  const allNav = await getNav()
+  for (const item of allNav) {
+    if (isFileIcon(item.icon) && !config.icon_bindings.nav[String(item.id)]) {
+      config.icon_bindings.nav[String(item.id)] = item.icon
+      await updateNav(item.id, { icon: defaultIcon(item.page_type) })
+      changed = true
+    }
+  }
+  for (const group of groups.value) {
+    if (isFileIcon(group.icon) && !config.icon_bindings.group[String(group.id)]) {
+      config.icon_bindings.group[String(group.id)] = group.icon
+      await updateGroup(group.id, { icon: '📁' })
+      changed = true
+    }
+  }
+  if (!changed) {
+    return
+  }
+  await patchSlots({ slot_config: config })
+  applyAppearance(await getAppearance())
+  groups.value = await getGroups()
+  if (activeGroupId.value != null) {
+    await selectGroup(activeGroupId.value, activeId.value, showingOverview.value)
+  }
+}
+
 async function saveNavItem(data, done) {
   try {
     noticeMessage.value = ''
     if (dialogMode.value === 'create') {
       const payload = { ...data }
+      const chosen = payload.icon
+      if (isFileIcon(chosen)) {
+        payload.icon = defaultIcon(payload.page_type)
+      }
       if (payload.group_id == null && activeGroupId.value != null) {
         payload.group_id = activeGroupId.value
       }
       const created = await createNav(payload)
+      if (isFileIcon(chosen)) {
+        await rememberIcon('nav', created.id, chosen)
+      }
       await reloadGroups()
       if (created.group_id !== activeGroupId.value) {
         await selectGroup(created.group_id, created.id)
@@ -252,7 +334,14 @@ async function saveNavItem(data, done) {
       }
       noticeMessage.value = '导航项已添加。'
     } else if (editingItem.value) {
-      const updated = await updateNav(editingItem.value.id, data)
+      const raw = navItems.value.find((item) => item.id === editingItem.value.id) || editingItem.value
+      const payload = { ...data }
+      const chosen = payload.icon
+      if (isFileIcon(chosen)) {
+        payload.icon = isFileIcon(raw.icon) ? defaultIcon(raw.page_type) : raw.icon
+      }
+      await rememberIcon('nav', raw.id, chosen)
+      const updated = await updateNav(editingItem.value.id, payload)
       navItems.value = navItems.value.map((item) => (item.id === updated.id ? { ...item, ...updated } : item))
       showingOverview.value = false
       activeId.value = updated.id
@@ -376,23 +465,29 @@ async function moveNavItem(item, groupId) {
 
 async function saveGroup(data, done) {
   try {
+    const chosen = data.icon
     if (!editingGroup.value) {
       const created = await createGroup({
         name: data.name,
-        icon: data.icon,
+        icon: isFileIcon(chosen) ? '📁' : chosen,
         description: data.description,
       })
+      if (isFileIcon(chosen)) {
+        await rememberIcon('group', created.id, chosen)
+      }
       await reloadGroups()
       await selectGroup(created.id, null, true)
       noticeMessage.value = '分组已创建。'
     } else {
+      const raw = groups.value.find((group) => group.id === editingGroup.value.id) || editingGroup.value
       const payload = {
-        icon: data.icon,
+        icon: isFileIcon(chosen) ? (isFileIcon(raw.icon) ? '📁' : raw.icon) : chosen,
         description: data.description,
       }
       if (!editingGroup.value.is_system) {
         payload.name = data.name
       }
+      await rememberIcon('group', raw.id, chosen)
       const updated = await updateGroup(editingGroup.value.id, payload)
       replaceGroup(updated)
       noticeMessage.value = '分组已更新。'
@@ -709,7 +804,7 @@ async function onNoteSaved(saved) {
         <img v-else-if="stillMedia" :src="stillMedia.startsWith('/api/') ? stillMedia : backgroundUrl(stillMedia)" alt="" class="h-full w-full object-cover" />
       </div>
       <GroupBar
-        :groups="groups"
+        :groups="viewGroups"
         :active-id="activeGroupId"
         :bar="appearance.bar || 'push'"
         @select="selectGroup($event, null, true)"
@@ -721,7 +816,7 @@ async function onNoteSaved(saved) {
         @receive="receiveNav"
       />
       <SidebarNav
-        :items="navItems"
+        :items="viewNav"
         :groups="groups"
         :group-id="activeGroupId"
         :group-name="activeGroup?.name || ''"
@@ -743,13 +838,13 @@ async function onNoteSaved(saved) {
         @ai="chatOpen = !chatOpen"
       />
       <WorkspacePanel
-        :item="activeItem"
+        :item="viewActive"
         :loading="isLoading"
         :error-message="errorMessage"
         :empty="!isLoading && !errorMessage && !showingOverview && navItems.length === 0"
         :notice-message="noticeMessage"
-        :overview-group="showingOverview ? activeGroup : null"
-        :overview-items="navItems"
+        :overview-group="showingOverview ? viewGroup : null"
+        :overview-items="viewNav"
         :note-revision="noteRevision"
         :inbox-pause="noteOpen"
         @open-nav="openNav"

@@ -685,6 +685,49 @@ function switchList(id) {
   }
 }
 
+let menuLeaveTimer = 0
+let modeLeaveTimer = 0
+
+function keepMenu() {
+  window.clearTimeout(menuLeaveTimer)
+  window.clearTimeout(modeLeaveTimer)
+}
+
+function closeMenuSoon() {
+  window.clearTimeout(menuLeaveTimer)
+  menuLeaveTimer = window.setTimeout(() => {
+    menu.value = null
+  }, 220)
+}
+
+function closeModesSoon() {
+  window.clearTimeout(modeLeaveTimer)
+  modeLeaveTimer = window.setTimeout(() => {
+    if (menu.value?.modes) {
+      menu.value = { ...menu.value, modes: false }
+    }
+  }, 180)
+}
+
+function openModesSoon() {
+  window.clearTimeout(modeLeaveTimer)
+  window.clearTimeout(menuLeaveTimer)
+  modeLeaveTimer = window.setTimeout(() => {
+    openModes()
+  }, 70)
+}
+
+function onDocPointer(event) {
+  if (!menu.value) {
+    return
+  }
+  const target = event.target
+  if (menuEl.value?.contains(target) || subEl.value?.contains(target)) {
+    return
+  }
+  menu.value = null
+}
+
 function onMenu(event) {
   event.preventDefault()
   event.stopPropagation()
@@ -900,6 +943,7 @@ function onResize() {
 
 onMounted(async () => {
   window.addEventListener('pointerup', releaseVolume)
+  window.addEventListener('pointerdown', onDocPointer, true)
   window.addEventListener('keydown', onKey)
   window.addEventListener('resize', onResize)
   try {
@@ -928,8 +972,11 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('pointerup', releaseVolume)
+  window.removeEventListener('pointerdown', onDocPointer, true)
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('resize', onResize)
+  window.clearTimeout(menuLeaveTimer)
+  window.clearTimeout(modeLeaveTimer)
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
   window.clearTimeout(closeTimer)
@@ -1075,7 +1122,7 @@ onBeforeUnmount(() => {
       <input ref="fileInput" class="wv-file-input" type="file" accept="audio/mpeg,audio/ogg,audio/wav,audio/mp4,audio/flac,.mp3,.ogg,.wav,.m4a,.flac" @change="onFile" />
     </div>
     <Teleport to="body">
-      <div v-if="menu" ref="menuEl" class="wv-orb-menu" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }" @mouseleave="menu = null" @contextmenu.prevent>
+      <div v-if="menu" ref="menuEl" class="wv-orb-menu" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }" @pointerenter="keepMenu" @pointerleave="closeMenuSoon" @contextmenu.prevent>
         <button type="button" class="wv-menu-main" @click="togglePanel(!panelOpen)">
           <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8h14" /><path d="M5 12h14" /><path d="M5 16h10" /></svg>
           <span>{{ panelOpen ? '关闭面板' : '打开面板' }}</span>
@@ -1090,9 +1137,9 @@ onBeforeUnmount(() => {
           <span class="text-xs">音量</span>
           <input type="range" min="0" max="1" step="0.05" :value="volume" @input="volume = Number($event.target.value)" />
         </div>
-        <div class="wv-menu-mode" @mouseenter="openModes">
+        <div class="wv-menu-mode" @pointerenter="openModesSoon" @pointerleave="closeModesSoon" @click="openModes">
           <span>播放方式 · {{ modeLabel }}</span>
-          <div v-if="menu.modes" ref="subEl" class="wv-menu-sub" :class="menu.flip ? 'is-flip' : ''" :style="{ top: `${-(menu.subShift || 0)}px` }">
+          <div v-if="menu.modes" ref="subEl" class="wv-menu-sub" :class="menu.flip ? 'is-flip' : ''" :style="{ top: `${-(menu.subShift || 0)}px` }" @pointerenter="keepMenu" @pointerleave="closeModesSoon" @click.stop>
             <button v-for="item in MODES" :key="item.id" type="button" @click="setMode(item.id)">{{ item.label }}</button>
           </div>
         </div>
