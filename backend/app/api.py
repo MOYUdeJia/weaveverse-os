@@ -26,6 +26,7 @@ from app.routes.photos import router as photos_router
 from app.routes.remote import router as remote_router
 from app.routes.speech import router as speech_router
 from app.routes.system import router as system_router
+from app.routes.timeline import router as timeline_router
 from app.routes.templates import router as templates_router
 
 
@@ -61,6 +62,7 @@ router.include_router(privacy_router)
 router.include_router(vault_router)
 router.include_router(cleanup_router)
 router.include_router(system_router)
+router.include_router(timeline_router)
 
 
 @router.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

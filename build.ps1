@@ -14,6 +14,10 @@ if (-not (Test-Path $Python)) {
 
 Write-Host "Building frontend..."
 Push-Location $Frontend
+$Dist = Join-Path $Frontend "dist"
+$ViteCache = Join-Path $Frontend "node_modules\.vite"
+if (Test-Path $Dist) { Remove-Item $Dist -Recurse -Force }
+if (Test-Path $ViteCache) { Remove-Item $ViteCache -Recurse -Force }
 npm run build
 if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
 Pop-Location

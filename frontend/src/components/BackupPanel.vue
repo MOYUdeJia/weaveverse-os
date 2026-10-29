@@ -145,6 +145,9 @@ async function restoreFile() {
 }
 
 async function removeItem(filename) {
+  if (!window.confirm('确定删除这份备份吗？')) {
+    return
+  }
   await deleteBackupFile(filename)
   if (restoreName.value === filename) {
     restoreName.value = ''

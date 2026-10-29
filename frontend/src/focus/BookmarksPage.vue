@@ -112,6 +112,9 @@ function removeSection(index) {
   if (sections.value.length <= 1) {
     return
   }
+  if (!window.confirm('确定删除这个分区吗？')) {
+    return
+  }
   sections.value.splice(index, 1)
   commit()
 }
@@ -124,6 +127,9 @@ function addItem(sectionIndex) {
 }
 
 function removeItem(sectionIndex, itemIndex) {
+  if (!window.confirm('确定删除这条网址吗？')) {
+    return
+  }
   sections.value[sectionIndex].items.splice(itemIndex, 1)
   editingKey.value = ''
   commit()

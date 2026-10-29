@@ -45,6 +45,17 @@ def create_note(session: Session, book_id: int, data: dict) -> BookNote:
     return note
 
 
+def update_note_content(session: Session, book_id: int, note_id: int, content: str) -> BookNote | None:
+    note = session.get(BookNote, note_id)
+    if note is None or note.book_id != book_id or note.type != "note":
+        return None
+    note.note_content = content[:4000]
+    session.add(note)
+    session.commit()
+    session.refresh(note)
+    return note
+
+
 def delete_note(session: Session, book_id: int, note_id: int) -> bool:
     note = session.get(BookNote, note_id)
     if note is None or note.book_id != book_id:

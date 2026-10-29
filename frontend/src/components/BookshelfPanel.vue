@@ -8,7 +8,7 @@ import NavIcon from './NavIcon.vue'
 
 const SLOW_UPLOAD_BYTES = 50 * 1024 * 1024
 
-defineProps({
+const props = defineProps({
   title: {
     type: String,
     default: '书架',
@@ -21,7 +21,17 @@ defineProps({
     type: String,
     default: '',
   },
+  openBookId: {
+    type: Number,
+    default: null,
+  },
+  openPosition: {
+    type: String,
+    default: '',
+  },
 })
+
+const emit = defineEmits(['opened'])
 
 const books = ref([])
 const sort = ref('recent')
@@ -66,7 +76,20 @@ async function loadBooks() {
     errorMessage.value = error.message || '无法加载书架'
   } finally {
     loading.value = false
+    tryOpenBook()
   }
+}
+
+function tryOpenBook() {
+  if (!props.openBookId) {
+    return
+  }
+  const book = books.value.find((item) => item.id === props.openBookId)
+  if (!book) {
+    return
+  }
+  activeBook.value = { ...book, focusPosition: props.openPosition || '' }
+  emit('opened')
 }
 
 function desktopApi() {
@@ -168,6 +191,7 @@ function applyProgress(updated) {
 }
 
 watch([sort, format], loadBooks, { immediate: true })
+watch(() => props.openBookId, tryOpenBook)
 </script>
 
 <template>

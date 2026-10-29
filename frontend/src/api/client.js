@@ -575,8 +575,41 @@ export function createBookNote(id, data) {
   })
 }
 
+export function updateBookNote(id, noteId, noteContent) {
+  return request(`/books/${id}/notes/${noteId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ note_content: noteContent }),
+  })
+}
+
 export function deleteBookNote(id, noteId) {
   return request(`/books/${id}/notes/${noteId}`, { method: 'DELETE' })
+}
+
+export function getTimeline() {
+  return request('/timeline')
+}
+
+export function saveFocusSession(minutes = 25) {
+  return request('/timeline/focus', {
+    method: 'POST',
+    body: JSON.stringify({ minutes }),
+  })
+}
+
+export function getDataDir() {
+  return request('/system/data-dir')
+}
+
+export function moveDataDir(path) {
+  return request('/system/data-dir', {
+    method: 'POST',
+    body: JSON.stringify({ path }),
+  })
+}
+
+export function getSystemStatus() {
+  return request('/system/status')
 }
 
 export function getAutostart() {

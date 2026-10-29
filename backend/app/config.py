@@ -23,16 +23,41 @@ def _resource_dir() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def _user_data_dir() -> Path:
-    override = os.getenv("WEAVEVERSE_DATA_DIR", "").strip()
-    if override:
-        return Path(override)
+def location_file() -> Path:
+    """Pointer kept outside the movable data folder, so a move does not lose it."""
+    if _frozen():
+        local = os.getenv("LOCALAPPDATA")
+        base = Path(local) if local else Path.home() / "AppData" / "Local"
+        return base / "WeaveverseOS" / "location.txt"
+    return Path(__file__).resolve().parents[1] / ".data-location"
+
+
+def pending_delete_file() -> Path:
+    return location_file().with_name(".pending-delete")
+
+
+def default_data_dir() -> Path:
     if _frozen():
         roaming = os.getenv("APPDATA")
         if roaming:
             return Path(roaming) / "WeaveverseOS"
         return Path.home() / "AppData" / "Roaming" / "WeaveverseOS"
     return Path(__file__).resolve().parents[1] / "data"
+
+
+def _user_data_dir() -> Path:
+    override = os.getenv("WEAVEVERSE_DATA_DIR", "").strip()
+    if override:
+        return Path(override)
+    try:
+        raw = location_file().read_text(encoding="utf-8").strip()
+    except OSError:
+        raw = ""
+    if raw:
+        chosen = Path(raw)
+        if chosen.is_dir():
+            return chosen
+    return default_data_dir()
 
 
 BACKEND_DIR = _resource_dir()

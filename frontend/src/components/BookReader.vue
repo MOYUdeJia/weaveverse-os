@@ -6,6 +6,7 @@ import {
   createBookNote,
   deleteBookNote,
   getBook,
+  updateBookNote,
   getBookContent,
   listBookNotes,
   saveQuickNote,
@@ -62,7 +63,11 @@ const bookmarkOpen = ref(false)
 const bookmarkNote = ref('')
 const pendingSelection = ref(null)
 const flashId = ref(null)
+const bubble = ref(null)
+const bubbleShown = ref(false)
+const bubbleEl = ref(null)
 let flashTimer = 0
+let bubbleTimer = 0
 let suspendScroll = false
 let pending = null
 let timer = 0
@@ -84,10 +89,12 @@ const visibleNotes = computed(() => {
     note_content: '',
   }]
 })
-const listed = computed(() => notes.value
-  .filter((item) => markFilter.value === 'all' || item.type === markFilter.value)
-  .slice()
-  .sort((left, right) => {
+const listed = computed(() => {
+  const items = notes.value.filter((item) => markFilter.value === 'all' || item.type === markFilter.value)
+  if (markFilter.value === 'bookmark') {
+    return items.slice().sort((left, right) => (Date.parse(right.created_at || '') || 0) - (Date.parse(left.created_at || '') || 0) || (right.id || 0) - (left.id || 0))
+  }
+  return items.slice().sort((left, right) => {
     const a = noteSpan(left)
     const b = noteSpan(right)
     const chapterA = Number.isFinite(a.chapter) ? a.chapter : 0
@@ -101,7 +108,8 @@ const listed = computed(() => notes.value
       return startA - startB
     }
     return (left.id || 0) - (right.id || 0)
-  }))
+  })
+})
 const textPieces = computed(() => pieces(content.value?.text || '', visibleNotes.value))
 
 function queueProgress(patch, immediate = false) {
@@ -210,7 +218,7 @@ function pieces(text, list) {
       if (!item.text || String(item.position).includes(':')) {
         return false
       }
-      if (item.type === 'highlight' || item.type === 'underline') {
+      if (item.type === 'highlight' || item.type === 'underline' || item.type === 'note') {
         return true
       }
       return item.type === 'bookmark' && item.id === flashId.value
@@ -241,23 +249,29 @@ function pieces(text, list) {
     if (end <= start) {
       continue
     }
+    const sliceMarks = marks.filter((mark) => mark.start <= start && mark.end >= end).map((mark) => mark.note)
     out.push({
       text: text.slice(start, end),
       start,
       pin: pins.includes(start),
-      marks: marks.filter((mark) => mark.start <= start && mark.end >= end).map((mark) => mark.note),
+      marks: sliceMarks,
+      noteEnds: marks
+        .filter((mark) => mark.note.type === 'note' && mark.end === end)
+        .map((mark) => mark.note),
     })
   }
-  return out.length ? out : [{ text, start: 0, pin: false, marks: [] }]
+  return out.length ? out : [{ text, start: 0, pin: false, marks: [], noteEnds: [] }]
 }
 
 function pieceClass(marks) {
   const highlight = marks.find((item) => item.type === 'highlight')
   const line = marks.find((item) => item.type === 'underline')
+  const note = marks.find((item) => item.type === 'note')
   const bookmark = marks.find((item) => item.type === 'bookmark')
   return [
     highlight ? `wv-hl wv-hl-${highlight.color}` : '',
     line ? `wv-ul wv-ul-${line.color}` : '',
+    note ? 'wv-note' : '',
     bookmark ? 'is-flash' : '',
   ].filter(Boolean)
 }
@@ -269,7 +283,7 @@ function paintHtmlMarks() {
   }
   root.innerHTML = DOMPurify.sanitize(content.value?.html || '')
   const ranges = visibleNotes.value
-    .filter((item) => item.text && item.type !== 'note')
+    .filter((item) => item.text)
     .map((item) => {
       const [chapterPart, startPart] = String(item.position).split(':')
       return {
@@ -286,53 +300,77 @@ function paintHtmlMarks() {
   }
 }
 
+function markClass(note) {
+  if (note.type === 'underline') {
+    return `wv-ul wv-ul-${note.color}`
+  }
+  if (note.type === 'bookmark') {
+    return note.id === flashId.value ? 'wv-anchor is-flash' : 'wv-anchor'
+  }
+  if (note.type === 'note') {
+    return 'wv-note'
+  }
+  return `wv-hl wv-hl-${note.color}`
+}
+
 function wrapHtml(root, start, end, note) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  const hits = []
   let count = 0
   let node = walker.nextNode()
-  let startNode = null
-  let startOffset = 0
-  let endNode = null
-  let endOffset = 0
   while (node) {
     const next = count + node.textContent.length
-    if (!startNode && start < next) {
-      startNode = node
-      startOffset = Math.max(0, start - count)
+    const from = Math.max(start, count)
+    const to = Math.min(end, next)
+    if (to > from) {
+      hits.push({ node, start: from - count, end: to - count })
     }
-    if (startNode && end <= next) {
-      endNode = node
-      endOffset = Math.max(0, end - count)
+    if (next >= end && hits.length) {
       break
     }
     count = next
     node = walker.nextNode()
   }
-  if (!startNode || !endNode) {
+  if (!hits.length) {
     return
   }
-  const range = document.createRange()
-  try {
-    range.setStart(startNode, startOffset)
-    range.setEnd(endNode, endOffset)
-    const mark = document.createElement('span')
-    mark.dataset.noteId = String(note.id)
-    if (note.type === 'underline') {
-      mark.className = `wv-ul wv-ul-${note.color}`
-    } else if (note.type === 'bookmark') {
-      mark.className = note.id === flashId.value ? 'wv-anchor is-flash' : 'wv-anchor'
-    } else {
-      mark.className = `wv-hl wv-hl-${note.color}`
+  const className = markClass(note)
+  let firstMark = null
+  let lastMark = null
+  for (let index = hits.length - 1; index >= 0; index -= 1) {
+    const hit = hits[index]
+    const range = document.createRange()
+    try {
+      range.setStart(hit.node, hit.start)
+      range.setEnd(hit.node, hit.end)
+      const mark = document.createElement('span')
+      mark.dataset.noteId = String(note.id)
+      mark.className = className
+      range.surroundContents(mark)
+      if (index === 0) {
+        firstMark = mark
+      }
+      if (!lastMark) {
+        lastMark = mark
+      }
+    } catch (error) {
+      console.error('Failed to wrap highlight:', error)
     }
-    range.surroundContents(mark)
-    if (note.type === 'bookmark') {
-      const pin = document.createElement('span')
-      pin.className = 'wv-pin'
-      pin.setAttribute('aria-hidden', 'true')
-      mark.before(pin)
-    }
-  } catch (error) {
-    console.error('Failed to wrap highlight:', error)
+  }
+  if (note.type === 'note' && note.id !== 'pending' && lastMark) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'wv-note-bubble'
+    button.dataset.noteId = String(note.id)
+    button.textContent = '💬'
+    button.setAttribute('aria-label', '打开笔记')
+    lastMark.after(button)
+  }
+  if (note.type === 'bookmark' && firstMark) {
+    const pin = document.createElement('span')
+    pin.className = 'wv-pin'
+    pin.setAttribute('aria-hidden', 'true')
+    firstMark.before(pin)
   }
 }
 
@@ -447,6 +485,55 @@ function readingRoot() {
   return props.book.format === 'epub' ? htmlRoot.value : textRoot.value
 }
 
+function expandPlain(text, start, end) {
+  const fromBreak = text.lastIndexOf('\n', Math.max(0, start - 1))
+  const from = fromBreak < 0 ? 0 : fromBreak + 1
+  const toBreak = text.indexOf('\n', end)
+  const to = toBreak < 0 ? text.length : toBreak
+  const slice = text.slice(from, to)
+  if (!slice.trim()) {
+    return null
+  }
+  return { start: from, end: to, text: slice.slice(0, 4000) }
+}
+
+function expandHtml(root) {
+  const selection = window.getSelection()
+  if (!root || !selection?.rangeCount) {
+    return null
+  }
+  const range = selection.getRangeAt(0)
+  if (!root.contains(range.startContainer)) {
+    return null
+  }
+  let el = range.commonAncestorContainer
+  if (el.nodeType !== 1) {
+    el = el.parentElement
+  }
+  let block = null
+  while (el && el !== root) {
+    if (el.tagName === 'P' || el.tagName === 'DIV') {
+      block = el
+      break
+    }
+    el = el.parentElement
+  }
+  if (!block) {
+    return null
+  }
+  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT)
+  const first = walker.nextNode()
+  if (!first) {
+    return null
+  }
+  const start = offsetIn(root, first, 0)
+  const text = (block.textContent || '').slice(0, 4000)
+  if (!text.trim()) {
+    return null
+  }
+  return { start, end: start + text.length, text }
+}
+
 function onMouseUp() {
   const selection = readSelection(readingRoot())
   capturedSelection = selection
@@ -454,11 +541,17 @@ function onMouseUp() {
   if (!marking.value || !selection?.text) {
     return
   }
+  const root = readingRoot()
+  const expanded = props.book.format === 'epub'
+    ? expandHtml(root)
+    : expandPlain(content.value?.text || '', Number(selection.position), selection.end)
+  const text = expanded?.text || selection.text
+  const rawStart = expanded ? String(expanded.start) : selection.position
   pendingSelection.value = {
-    text: selection.text,
-    position: props.book.format === 'epub' ? `${chapter.value}:${selection.position}` : selection.position,
-    end: selection.end,
-    rawStart: selection.position,
+    text,
+    position: props.book.format === 'epub' ? `${chapter.value}:${rawStart}` : rawStart,
+    end: expanded?.end ?? selection.end,
+    rawStart,
   }
   bookmarkNote.value = ''
   bookmarkOpen.value = true
@@ -688,8 +781,132 @@ async function focusNote(note) {
   }, 1000)
 }
 
+function stamp(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return String(value || '').slice(0, 16).replace('T', ' ')
+  }
+  const pad = (part) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function placeBubble() {
+  const el = bubbleEl.value
+  if (!el || !bubble.value?.anchor) {
+    return
+  }
+  const margin = 8
+  const width = el.offsetWidth || 280
+  const height = el.offsetHeight || 180
+  const anchor = bubble.value.anchor
+  let top = anchor.bottom + margin
+  if (top + height > window.innerHeight - margin) {
+    top = anchor.top - height - margin
+  }
+  top = Math.max(margin, Math.min(top, window.innerHeight - height - margin))
+  let left = anchor.right - width
+  left = Math.max(margin, Math.min(left, window.innerWidth - width - margin))
+  bubble.value = { ...bubble.value, top, left }
+}
+
+async function openBubble(note, anchorEl) {
+  const rect = anchorEl.getBoundingClientRect()
+  window.clearTimeout(bubbleTimer)
+  bubbleShown.value = false
+  bubble.value = {
+    id: note.id,
+    text: note.note_content || '',
+    draft: note.note_content || '',
+    editing: false,
+    top: -9999,
+    left: 8,
+    anchor: { top: rect.top, bottom: rect.bottom, right: rect.right },
+  }
+  await nextTick()
+  placeBubble()
+  requestAnimationFrame(() => {
+    bubbleShown.value = true
+  })
+}
+
+async function beginEdit() {
+  if (!bubble.value) {
+    return
+  }
+  bubble.value = { ...bubble.value, editing: true }
+  await nextTick()
+  placeBubble()
+}
+
+function closeBubble() {
+  bubbleShown.value = false
+  window.clearTimeout(bubbleTimer)
+  bubbleTimer = window.setTimeout(() => {
+    bubble.value = null
+  }, 180)
+}
+
+async function toggleBubble(note, anchorEl) {
+  if (bubble.value?.id === note.id) {
+    closeBubble()
+    return
+  }
+  await openBubble(note, anchorEl)
+}
+
+function onReaderClick(event) {
+  const button = event.target?.closest?.('.wv-note-bubble')
+  if (!button) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  const note = notes.value.find((item) => String(item.id) === button.dataset.noteId)
+  if (note) {
+    toggleBubble(note, button)
+  }
+}
+
+function onOutsideBubble(event) {
+  if (!bubble.value) {
+    return
+  }
+  if (bubbleEl.value?.contains(event.target) || event.target?.closest?.('.wv-note-bubble')) {
+    return
+  }
+  closeBubble()
+}
+
+async function copyBubble() {
+  await copyText(bubble.value?.text || '')
+}
+
+async function saveBubble() {
+  if (!bubble.value) {
+    return
+  }
+  const body = bubble.value.draft.trim()
+  try {
+    const saved = await updateBookNote(props.book.id, bubble.value.id, body)
+    notes.value = notes.value.map((item) => (item.id === saved.id ? saved : item))
+    bubble.value = { ...bubble.value, text: saved.note_content, draft: saved.note_content, editing: false }
+    await nextTick()
+    placeBubble()
+    showToast('已保存')
+  } catch (error) {
+    showToast(error.message || '没有保存')
+  }
+}
+
 async function removeNote(note) {
+  const label = typeLabel(note.type)
+  if (!window.confirm(`确定删除这条${label}吗？`)) {
+    return
+  }
   await deleteBookNote(props.book.id, note.id)
+  if (bubble.value?.id === note.id) {
+    bubble.value = null
+  }
   await loadNotes()
 }
 
@@ -718,6 +935,10 @@ async function close() {
 
 function onKey(event) {
   if (event.key === 'Escape') {
+    if (bubble.value) {
+      closeBubble()
+      return
+    }
     if (noteOpen.value) {
       noteOpen.value = false
       return
@@ -736,6 +957,7 @@ function onKey(event) {
 
 onMounted(async () => {
   window.addEventListener('keydown', onKey)
+  window.addEventListener('pointerdown', onOutsideBubble)
   try {
     detail.value = await getBook(props.book.id)
     if (props.book.format === 'pdf') {
@@ -743,6 +965,14 @@ onMounted(async () => {
       return
     }
     await loadNotes()
+    if (props.book.focusPosition) {
+      loading.value = false
+      if (props.book.format !== 'epub') {
+        await loadChapter(0, 0)
+      }
+      await rendition.display(props.book.focusPosition)
+      return
+    }
     const saved = detail.value.progress_cfi || ''
     if (props.book.format === 'epub' && saved.includes(':')) {
       loading.value = false
@@ -758,7 +988,9 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
+  window.removeEventListener('pointerdown', onOutsideBubble)
   window.clearTimeout(flashTimer)
+  window.clearTimeout(bubbleTimer)
   window.clearTimeout(timer)
   if (pending) {
     const body = pending
@@ -807,7 +1039,7 @@ onBeforeUnmount(() => {
       <p v-if="openError" class="text-sm text-ember">{{ openError }}</p>
     </div>
 
-    <div v-else class="flex min-h-0 flex-1">
+    <div v-else class="reader-shell flex min-h-0 flex-1">
       <aside class="flex w-72 shrink-0 flex-col bg-[#efeae1] text-ink">
         <div class="flex gap-1 p-2">
           <button type="button" class="h-9 flex-1 rounded-md text-sm font-semibold" :class="sideTab === 'toc' ? 'bg-ink text-white' : 'bg-[#fffcf7]'" @click="sideTab = 'toc'">目录</button>
@@ -826,6 +1058,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+          <p v-if="sideTab === 'marks' && markFilter === 'bookmark'" class="wv-latest">📍 这里是最新的（最近阅读进度）</p>
           <template v-if="sideTab === 'toc'">
             <button
               v-for="item in toc"
@@ -848,6 +1081,7 @@ onBeforeUnmount(() => {
                     <span v-if="item.color" class="inline-block h-3 w-3" :style="{ background: COLORS.find((color) => color.id === item.color)?.fill || '#f3d36b' }" />
                   </span>
                   <span class="mt-1 block text-sm leading-5">{{ item.text || '这一处' }}</span>
+                  <span v-if="item.type === 'bookmark' || item.created_at" class="wv-stamp">{{ item.created_at ? stamp(item.created_at) : '没有时间' }}</span>
                   <span v-if="item.note_content" class="mt-1 block text-sm leading-5 text-ink/70">{{ item.note_content }}</span>
                 </button>
                 <button type="button" class="mt-2 text-sm text-[#9a4036]" @click="removeNote(item)">删除</button>
@@ -858,9 +1092,9 @@ onBeforeUnmount(() => {
         </div>
       </aside>
 
-      <div ref="scroller" class="reader-column min-h-0 flex-1 overflow-y-auto px-8 py-8" :class="marking ? 'is-marking' : ''" @scroll="onScroll" @mouseup="onMouseUp" @contextmenu="onTextMenu">
+      <div ref="scroller" class="reader-column min-h-0 flex-1 overflow-y-auto px-8 py-8" :class="marking ? 'is-marking' : ''" @scroll="onScroll" @mouseup="onMouseUp" @click="onReaderClick" @contextmenu="onTextMenu">
         <article v-if="book.format === 'epub'" ref="htmlRoot" class="reader-html mx-auto max-w-3xl text-base leading-8 text-[#16201d]" />
-        <div v-else ref="textRoot" class="mx-auto max-w-3xl whitespace-pre-wrap font-sans text-base leading-8 text-[#16201d]"><template v-for="(piece, index) in textPieces" :key="`${index}-${piece.start}`"><span v-if="piece.pin" class="wv-pin" aria-hidden="true" /><span :class="pieceClass(piece.marks)">{{ piece.text }}</span></template></div>
+        <div v-else ref="textRoot" class="mx-auto max-w-3xl whitespace-pre-wrap font-sans text-base leading-8 text-[#16201d]"><template v-for="(piece, index) in textPieces" :key="`${index}-${piece.start}`"><span v-if="piece.pin" class="wv-pin" aria-hidden="true" /><span :class="pieceClass(piece.marks)">{{ piece.text }}</span><button v-for="note in piece.noteEnds" :key="note.id" type="button" class="wv-note-bubble" :data-note-id="note.id" aria-label="打开笔记" @click.stop="toggleBubble(note, $event.currentTarget)">💬</button></template></div>
       </div>
     </div>
 
@@ -875,6 +1109,27 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="bubble"
+        ref="bubbleEl"
+        class="wv-bubble"
+        :class="bubbleShown ? 'is-in' : ''"
+        :style="{ top: `${bubble.top}px`, left: `${bubble.left}px` }"
+        role="dialog"
+        aria-label="笔记"
+      >
+        <p v-if="!bubble.editing" class="wv-bubble-text">{{ bubble.text || '这条笔记还没有正文。' }}</p>
+        <textarea v-else v-model="bubble.draft" class="wv-bubble-edit" maxlength="4000" />
+        <div class="wv-bubble-actions">
+          <button type="button" @click="copyBubble">复制</button>
+          <button v-if="!bubble.editing" type="button" @click="beginEdit">编辑</button>
+          <button v-else type="button" @click="saveBubble">保存</button>
+          <button type="button" @click="closeBubble">关闭</button>
+        </div>
+      </div>
+    </Teleport>
 
     <div v-if="noteOpen" class="fixed inset-0 z-[80] grid place-items-center bg-black/45 px-4">
       <div class="w-full max-w-md bg-[#fcfaf5] p-5">
@@ -932,7 +1187,97 @@ onBeforeUnmount(() => {
 .reader-html :deep(.wv-anchor),
 .wv-anchor { background-color: transparent; }
 .reader-html :deep(.is-flash),
-.is-flash { background-color: #ffe08a !important; }
+.is-flash {
+  background-color: #ffe08a !important;
+  animation: wv-bookmark-flash 1s ease;
+}
+.reader-html :deep(.wv-note),
+.wv-note {
+  background: #d7e7f8 !important;
+  text-decoration-line: underline !important;
+  text-decoration-style: wavy !important;
+  text-decoration-color: #3c6eae !important;
+  text-underline-offset: 3px;
+}
+.wv-stamp {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.wv-latest {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin-bottom: 8px;
+  padding: 12px;
+  background: #fffcf7;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 650;
+}
+.reader-html :deep(.wv-note-bubble),
+.wv-note-bubble {
+  display: inline-grid;
+  min-width: 44px;
+  min-height: 44px;
+  place-items: center;
+  margin-left: 2px;
+  background: transparent;
+  font-size: 16px;
+  vertical-align: text-bottom;
+}
+.wv-bubble {
+  position: fixed;
+  z-index: 90;
+  width: min(280px, calc(100vw - 16px));
+  padding: 14px;
+  background: #fffcf7;
+  color: #16201d;
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+  transform-origin: top right;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.wv-bubble.is-in {
+  opacity: 1;
+  transform: none;
+}
+.wv-bubble-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.wv-bubble-edit {
+  width: 100%;
+  min-height: 96px;
+  background: #f3efe6;
+  padding: 8px;
+  font: inherit;
+  font-size: 15px;
+}
+.wv-bubble-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.wv-bubble-actions button {
+  min-height: 44px;
+  padding: 0 10px;
+  background: #e7e1d6;
+  font-size: 14px;
+  font-weight: 650;
+}
+.wv-bubble-actions button:focus-visible,
+.wv-note-bubble:focus-visible {
+  outline: 2px solid #3f6f57;
+  outline-offset: 2px;
+}
+@keyframes wv-bookmark-flash {
+  from { background-color: #ffd15a; }
+  to { background-color: #ffe08a; }
+}
 .reader-html :deep(.wv-pin),
 .wv-pin {
   display: inline-block;
@@ -952,5 +1297,21 @@ onBeforeUnmount(() => {
 .reader-column.is-marking,
 .reader-column.is-marking :deep(*) {
   cursor: crosshair;
+}
+@media (max-width: 768px) {
+  .reader-shell {
+    flex-direction: column;
+  }
+  .reader-shell > aside {
+    width: 100%;
+    max-height: 42vh;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wv-bubble,
+  .is-flash {
+    transition: none;
+    animation: none;
+  }
 }
 </style>

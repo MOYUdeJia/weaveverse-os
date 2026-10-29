@@ -10,7 +10,7 @@ from app import book_crud, book_notes
 from app.book_files import COVER_MEDIA_BY_EXT, MAX_UPLOAD_BYTES, cover_path
 from app.db import get_session
 from app.errors import raise_api_error
-from app.schemas import BookContent, BookDetail, BookNoteCreate, BookSummary, BookUpdate
+from app.schemas import BookContent, BookDetail, BookNoteCreate, BookNoteUpdate, BookSummary, BookUpdate
 
 
 router = APIRouter(prefix="/books", tags=["books"])
@@ -134,6 +134,15 @@ def post_note(book_id: int, data: BookNoteCreate, session: Session = Depends(get
     if data.type == "note" and not data.note_content:
         raise_api_error(400, "note_content", "请写笔记")
     note = book_notes.create_note(session, book_id, data.model_dump())
+    return book_notes.note_to_dict(note)
+
+
+@router.patch("/{book_id}/notes/{note_id}")
+def patch_note(book_id: int, note_id: int, data: BookNoteUpdate, session: Session = Depends(get_session)) -> dict:
+    _require_book(session, book_id)
+    note = book_notes.update_note_content(session, book_id, note_id, data.note_content)
+    if note is None:
+        raise_api_error(404, "id", "笔记不存在")
     return book_notes.note_to_dict(note)
 
 

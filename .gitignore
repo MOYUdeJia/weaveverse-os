@@ -10,6 +10,8 @@ __pycache__/
 .vite/
 .env
 backend/.weaveverse-port
+backend/.data-location
+backend/.pending-delete
 backend/data/album_secrets.json
 backend/data/ai_secrets.json
 backend/data/privacy.json

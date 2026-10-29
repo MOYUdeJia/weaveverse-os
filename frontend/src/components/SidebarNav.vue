@@ -35,9 +35,13 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  embedded: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['select', 'create', 'edit', 'delete', 'reorder', 'pin', 'lock', 'move', 'open-overview', 'search', 'note', 'appearance', 'ai'])
+const emit = defineEmits(['select', 'create', 'edit', 'delete', 'reorder', 'pin', 'lock', 'move', 'open-overview', 'search', 'note', 'appearance', 'ai', 'focus'])
 
 const localItems = ref([])
 
@@ -106,7 +110,7 @@ function onItemMenu(event, item) {
 </script>
 
 <template>
-  <aside class="wv-nav relative z-[1] flex h-screen w-[240px] shrink-0 flex-col border-r border-black/10 px-4 py-6">
+  <aside class="wv-nav relative z-[1] flex w-[240px] shrink-0 flex-col border-r border-black/10 px-4 py-6" :class="embedded ? 'h-full min-h-0' : 'h-screen'">
     <div class="mb-6">
       <p class="text-xs font-semibold uppercase tracking-[0.22em] text-moss">Weaveverse</p>
       <button type="button" class="mt-2 block w-full truncate text-left text-xl font-semibold text-ink" @click="emit('open-overview')">
@@ -171,7 +175,11 @@ function onItemMenu(event, item) {
           设置
         </button>
       </div>
-      <button type="button" class="mb-3 flex h-9 w-full items-center justify-center gap-2 rounded-md bg-white text-sm font-medium text-ink shadow-sm" title="AI Ctrl+J" @click="emit('ai')">
+      <button type="button" class="mb-3 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white text-sm font-medium text-ink shadow-sm" title="专注" @click="emit('focus')">
+        <span>⏱️</span>
+        <span>专注</span>
+      </button>
+      <button type="button" class="mb-3 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white text-sm font-medium text-ink shadow-sm" title="AI Ctrl+J" @click="emit('ai')">
         <span>🤖</span>
         <span>AI</span>
       </button>

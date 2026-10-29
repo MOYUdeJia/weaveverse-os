@@ -13,11 +13,15 @@ import {
   packFileUrl,
   splashUrl,
   getAutostart,
+  getDataDir,
+  getSystemStatus,
+  moveDataDir,
   setAutostart,
   updateAppearance,
   uploadBackground,
   uploadSplash,
 } from '../api/client'
+import { formatBuiltAt, frontendBuiltAt } from '../buildInfo'
 import AiSettings from './AiSettings.vue'
 import ThemePanel from './ThemePanel.vue'
 import BackupPanel from './BackupPanel.vue'
@@ -71,6 +75,12 @@ const opacityPercent = ref(85)
 const captionDraft = ref('正在编织你的宇宙')
 const autostart = ref(false)
 const autostartNote = ref('')
+const dataPath = ref('')
+const dataNote = ref('')
+const dataBusy = ref(false)
+const systemStatus = ref({ version: '', revision: '' })
+const systemNote = ref('')
+const builtLabel = formatBuiltAt(frontendBuiltAt)
 let opacityTimer
 
 const groupFile = computed(() => {
@@ -116,6 +126,10 @@ const splashPreview = computed(() => {
 watch(
   () => props.open,
   (open) => {
+    if (open) {
+      loadDataDir()
+      loadStatus()
+    }
     errorMessage.value = ''
     statusMessage.value = ''
     busyName.value = ''
@@ -349,6 +363,9 @@ function closeThemeMenu() {
 
 async function dropTheme(themeId) {
   closeThemeMenu()
+  if (!window.confirm('确定删除这个主题吗？')) {
+    return
+  }
   try {
     emit('change', await deleteCustomTheme(themeId))
   } catch (error) {
@@ -358,6 +375,9 @@ async function dropTheme(themeId) {
 
 async function dropPack(packId) {
   closeThemeMenu()
+  if (!window.confirm('确定删除这个主题包吗？')) {
+    return
+  }
   try {
     emit('change', await deletePack(packId))
     statusMessage.value = '已删除主题包'
@@ -381,6 +401,68 @@ async function loadAutostart() {
     autostartNote.value = ''
   } catch (error) {
     autostartNote.value = error.message || '读不到开机自启'
+  }
+}
+
+async function loadStatus() {
+  systemNote.value = ''
+  try {
+    systemStatus.value = await getSystemStatus()
+  } catch (error) {
+    systemNote.value = error.message || '读不到系统状态'
+  }
+}
+
+async function loadDataDir() {
+  dataNote.value = ''
+  try {
+    const data = await getDataDir()
+    dataPath.value = data.path || ''
+  } catch (error) {
+    dataNote.value = error.message || '读不到数据目录'
+  }
+}
+
+async function changeDataDir() {
+  if (dataBusy.value) {
+    return
+  }
+  let path = ''
+  const bridge = window.pywebview?.api
+  if (bridge && typeof bridge.pick_folder === 'function') {
+    const picked = await bridge.pick_folder()
+    if (!picked) {
+      return
+    }
+    if (picked.error) {
+      dataNote.value = picked.error
+      return
+    }
+    path = picked.path || ''
+  } else {
+    path = window.prompt('填写新的数据目录绝对路径', dataPath.value) || ''
+  }
+  path = path.trim()
+  if (!path) {
+    return
+  }
+  if (!window.confirm('应用将关闭，数据将迁移至新位置。核对成功之前，原来的数据不会删除。')) {
+    return
+  }
+  dataBusy.value = true
+  dataNote.value = ''
+  try {
+    await moveDataDir(path)
+    dataNote.value = '已复制并核对。正在重新打开。'
+    if (bridge && typeof bridge.relaunch === 'function') {
+      await bridge.relaunch()
+      return
+    }
+    dataNote.value = '目录已切换。请关闭并重新启动 Weaveverse。'
+  } catch (error) {
+    dataNote.value = error.message || '没有迁走，原来的数据还在'
+  } finally {
+    dataBusy.value = false
   }
 }
 
@@ -424,6 +506,16 @@ async function clear(kind, groupId) {
         <h2 class="wv-settings-title">设置</h2>
         <button type="button" class="wv-btn-ghost" @click="emit('close')">关闭</button>
       </div>
+      <section class="wv-card wv-status">
+        <h3>系统状态</h3>
+        <p class="wv-quiet">打开设置先看这三行。构建时间如果停在旧的时刻，窗口还在用旧的前端包。</p>
+        <dl>
+          <div><dt>前端构建时间</dt><dd>{{ builtLabel }}</dd></div>
+          <div><dt>后端版本</dt><dd>{{ systemStatus.version || '…' }}</dd></div>
+          <div><dt>数据库版本</dt><dd>{{ systemStatus.revision || '…' }}</dd></div>
+        </dl>
+        <p v-if="systemNote" class="mt-3 text-sm">{{ systemNote }}</p>
+      </section>
       <div v-if="page === 'general'" class="wv-card">
         <h3>开机自启</h3>
         <p class="wv-quiet">登录 Windows 时打开 Weaveverse。打包后的程序和这个开发目录会写成不同的启动命令。</p>
@@ -432,6 +524,15 @@ async function clear(kind, groupId) {
           登录后自动打开
         </label>
         <p v-if="autostartNote" class="mt-3 text-sm text-moss">{{ autostartNote }}</p>
+      </div>
+      <div v-if="page === 'general'" class="wv-card">
+        <h3>数据存储</h3>
+        <p class="wv-quiet">笔记、书籍和图片都在这个文件夹里。更改后会先完整复制并核对，成功才改配置。</p>
+        <p class="mt-3 break-all text-sm">{{ dataPath || '正在读取' }}</p>
+        <button type="button" class="wv-btn wv-btn-primary mt-4" :disabled="dataBusy" @click="changeDataDir">
+          {{ dataBusy ? '正在迁移' : '更改目录' }}
+        </button>
+        <p v-if="dataNote" class="mt-3 text-sm">{{ dataNote }}</p>
       </div>
       <div v-else-if="page === 'ai'" class="wv-card"><AiSettings /></div>
       <div v-else-if="page === 'remote'" class="wv-card"><RemotePanel /></div>

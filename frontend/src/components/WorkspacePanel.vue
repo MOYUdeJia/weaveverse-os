@@ -7,6 +7,7 @@ import BookmarksPage from '../focus/BookmarksPage.vue'
 import PlainPage from '../focus/PlainPage.vue'
 import { focusPageByType } from '../specialAdds/registry.js'
 import BookshelfPanel from './BookshelfPanel.vue'
+import TimelinePage from './TimelinePage.vue'
 import IdeaPanel from './IdeaPanel.vue'
 import PhotoLibraryPanel from './PhotoLibraryPanel.vue'
 import VaultPanel from './VaultPanel.vue'
@@ -58,9 +59,13 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  pendingBook: {
+    type: Object,
+    default: null,
+  },
 })
 
-const emit = defineEmits(['open-nav', 'rename-group', 'describe-group', 'search-tag'])
+const emit = defineEmits(['open-nav', 'rename-group', 'describe-group', 'search-tag', 'open-target', 'book-opened'])
 
 const page = ref(null)
 const pageLoading = ref(false)
@@ -208,6 +213,14 @@ async function addBlock(blockType) {
       :title="item.title"
       :icon="item.icon"
       :notice-message="noticeMessage"
+      :open-book-id="pendingBook?.id || null"
+      :open-position="pendingBook?.position || ''"
+      @opened="emit('book-opened')"
+    />
+
+    <TimelinePage
+      v-else-if="item && item.page_type === 'timeline' && !loading && !errorMessage && !empty"
+      @open="emit('open-target', $event)"
     />
 
     <PhotoLibraryPanel

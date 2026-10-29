@@ -95,6 +95,13 @@ PAGE_TYPES = {
             },
         ],
     },
+    "timeline": {
+        "layer": "core",
+        "label": "时间线",
+        "multi_instance": False,
+        "default_icon": "⏳",
+        "default_blocks": [],
+    },
     "bookshelf": {
         "layer": "core",
         "label": "书架",

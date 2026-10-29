@@ -1295,3 +1295,60 @@
   - 修改 `backend/app/library.py`
   - 修改 `docs/VERSIONS.md`
 
+## M14 · 2026-10-29
+- **任务**：补上书签整段和笔记气泡，做全局时间线、专注番茄钟、数据目录迁移，以及窄屏抽屉。
+- **实现**：
+  - 加书签时，选区向上收到包含它的 `<p>` 或 `<div>`；纯文本按换行收成整段。书签列表按时间倒序，顶部固定「📍 这里是最新的（最近阅读进度）」，每条有 `YYYY-MM-DD HH:mm`。点一条，整段暖黄闪一下。
+  - 笔记在正文里是浅蓝底加波浪下划线，末尾一个 💬。气泡用 `<Teleport>` 挂到 `body`，按锚点矩形摆放，能复制、改成输入框、再点或点外面关闭。
+  - 系统分组里有唯一的「时间线」页。它把收件箱速记、阅读笔记、新建的导航项、完成的番茄钟排成一条竖线，按今天、昨天、更早分组。点一条会打开对应页面；阅读笔记会打开书架里的那本书。
+  - 侧栏和悬浮球菜单都能打开 25 分钟专注。可以开始、暂停、放弃，并挂一段本地生成的白噪音。走完会响一声，写下「完成了一次 25 分钟专注」。
+  - 设置 → 通用 → 数据存储显示当前目录。更改时先复制、核对数据库，再把位置写到数据目录外面的指针文件。旧目录要等下次启动、新库校验通过才删除。
+  - 宽度不超过 768px 时，分组和导航收进左上角「菜单」滑出的抽屉，选中后关上。设置左侧改成顶部横滑。悬浮球吸到底部正中。删除导航、预设、素材、标注、备份、主题、速记和网址都会再问一次。
+- **技术架构**：
+  - 时间线的表数据是一条 `UNION`：`book_notes`（只要笔记）、`nav_items`（排除时间线自己和分组导览）、`focus_sessions`。速记存在收件箱区块的 JSON 里，不在表里，查出来再并上。
+  - 数据目录指针在开发时是 `backend/.data-location`，打包后是 `%LOCALAPPDATA%\WeaveverseOS\location.txt`，不跟数据一起搬走。环境变量 `WEAVEVERSE_DATA_DIR` 仍然优先。
+  - 气泡不用 GSAP。位移只有一次，CSS 就够。悬浮球原来的 GSAP 不动。白噪音用 Web Audio 生成，不另加音频库。
+- **与 M13.1 相比的变化**：
+  - 书签锁整段，并按时间而不是文中位置排列
+  - 笔记从侧栏文本变成正文波浪线和气泡
+  - 多了时间线、番茄钟和数据目录迁移
+  - 窄屏用抽屉，不再把两栏一直摊开
+- **已知问题**：
+  - 超过 4000 字的段落，书签只保住前 4000 字。EPUB 选区如果跨标签包不住，这一处波浪线或书签仍可能画不上。
+  - 已经加过的旧书签不会自动改成整段，需要重新标记。
+  - 浏览器里没有桌面桥时，更改目录改为手填绝对路径，并且要自己重启后端，指针才会生效。
+  - 番茄钟固定 25 分钟。放弃的一轮不进时间线。
+- **文件变更**：
+  - 新增 `backend/alembic/versions/20261029_0014_focus_sessions.py`
+  - 新增 `backend/app/timeline.py`、`backend/app/data_move.py`、`backend/app/routes/timeline.py`
+  - 新增 `frontend/src/focusClock.js`、`frontend/src/components/TimelinePage.vue`、`frontend/src/components/FocusTimer.vue`
+  - 修改 `backend/app/models.py`、`page_types.py`、`config.py`、`book_notes.py`、`schemas.py`、`api.py`、`main.py`
+  - 修改 `backend/app/routes/books.py`、`backend/app/routes/system.py`
+  - 修改 `frontend/src/App.vue`、`api/client.js`、`icons.js`、`style.css`
+  - 修改 `frontend/src/components/BookReader.vue`、`WorkspacePanel.vue`、`BookshelfPanel.vue`、`AppearanceDialog.vue`、`SidebarNav.vue`、`GroupBar.vue`、`MusicDock.vue`、`BackupPanel.vue`
+  - 修改 `frontend/src/focus/PlainPage.vue`、`frontend/src/focus/BookmarksPage.vue`
+  - 修改 `.gitignore`、`docs/VERSIONS.md`
+
+## M14.1 · 2026-10-29
+- **任务**：查出 M14 界面为什么打开后和旧版一样，修好书签时间、笔记气泡和时间线，并在设置里放上系统状态。
+- **实现**：
+  - 设置一打开就显示前端构建时间、后端版本 `M14.1`、数据库当前迁移号。构建时间由 Vite 在启动或打包时写进包里。
+  - 默认启动读的是 `frontend/dist`。那份包还是 M14 之前打的，所以时间线、气泡和书签时间都不会出现。`build.ps1` 现在会先删掉 `frontend/dist` 和 Vite 缓存再打包。页面入口不再允许被 WebView 缓存。
+  - EPUB 笔记和书签按文本节点分段包住。一段里夹了标签时，波浪线、浅蓝底和 💬 仍能画上。书签列表按创建时间倒序，每条都有 `YYYY-MM-DD HH:mm`。
+- **技术架构**：
+  - 事实：`python main.py` 在没有 `WEAVEVERSE_DEV=1` 时由 `backend/app/static.py` 托管 `frontend/dist`。当时的 `frontend/dist/assets/index-D-FyZAg-.js` 里没有「这些事发生过」「这里是最新」或 `wv-bubble`。源码里这些都在，所以不是组件没挂上，也不是 CSS 把整页盖住。
+  - 数据库版本用 Alembic 的 `MigrationContext.get_current_revision()`，和命令 `alembic current` 读的是同一条 `alembic_version`。
+- **与 M14 相比的变化**：
+  - 能从设置里看出当前窗口是不是新包
+  - 打包前清掉旧的 dist
+  - 跨标签的笔记和书签也能标上
+- **已知问题**：
+  - 磁盘上的 `frontend/dist` 在这次修改前仍是旧包。需要在 `frontend` 里执行一次 `npm run build`，关掉窗口再开。如果跑的是以前装好的 `WeaveverseOS.exe`，还要重新执行 `build.ps1`，安装包里的前端不会跟着源码变。
+  - 开发模式 `WEAVEVERSE_DEV=1` 的构建时间是 Vite 进程启动的时间，不是上次 `npm run build` 的时间。
+- **文件变更**：
+  - 新增 `backend/app/version.py`、`frontend/src/buildInfo.js`
+  - 修改 `backend/app/routes/system.py`、`backend/app/static.py`、`build.ps1`
+  - 修改 `frontend/vite.config.js`、`frontend/src/api/client.js`、`frontend/src/style.css`
+  - 修改 `frontend/src/components/AppearanceDialog.vue`、`frontend/src/components/BookReader.vue`
+  - 修改 `docs/VERSIONS.md`
+

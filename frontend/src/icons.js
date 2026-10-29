@@ -6,6 +6,7 @@ const DEFAULTS = {
   bookmarks: '🔖',
   canvas: '🎨',
   inbox: '📥',
+  timeline: '⏳',
   bookshelf: '📚',
   photo_library: '🖼',
   idea_box: '💡',

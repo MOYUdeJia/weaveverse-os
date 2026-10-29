@@ -8,6 +8,7 @@ import GroupBar from './components/GroupBar.vue'
 import GroupEditDialog from './components/GroupEditDialog.vue'
 import NavEditDialog from './components/NavEditDialog.vue'
 import AppearanceDialog from './components/AppearanceDialog.vue'
+import FocusTimer from './components/FocusTimer.vue'
 import GuideDialog from './components/GuideDialog.vue'
 import MusicDock from './components/MusicDock.vue'
 import SidebarNav from './components/SidebarNav.vue'
@@ -49,6 +50,12 @@ const appearanceOpen = ref(false)
 const orbMoving = ref(false)
 const chatOpen = ref(false)
 const guideOpen = ref(false)
+const narrow = ref(false)
+const drawerOpen = ref(false)
+const focusOpen = ref(false)
+const pendingBook = ref(null)
+let narrowMedia = null
+let syncNarrow = () => {}
 const appearance = ref({
   theme: 'warm',
   bar: 'push',
@@ -198,8 +205,34 @@ async function loadShellData() {
 }
 
 function openNav(id) {
+  drawerOpen.value = false
   showingOverview.value = false
   activeId.value = id
+}
+
+function pickGroup(id) {
+  drawerOpen.value = false
+  selectGroup(id, null, true)
+}
+
+async function openTimelineTarget(target) {
+  drawerOpen.value = false
+  if (!target?.nav_id) {
+    if (target?.kind === 'read') {
+      showToast('先添加一个书架，才能打开这本书')
+    } else if (target?.kind === 'focus') {
+      showToast('这一轮已经记在这条时间线上')
+    }
+    return
+  }
+  pendingBook.value = target.kind === 'read'
+    ? { id: target.book_id, position: target.position || '' }
+    : null
+  if (target.group_id && target.group_id !== activeGroupId.value) {
+    await selectGroup(target.group_id, target.nav_id)
+    return
+  }
+  openNav(target.nav_id)
 }
 
 function openCreateDialog() {
@@ -559,12 +592,22 @@ async function describeGroup(description, done) {
 }
 
 onMounted(() => {
+  narrowMedia = window.matchMedia('(max-width: 768px)')
+  syncNarrow = () => {
+    narrow.value = narrowMedia.matches
+    if (!narrow.value) {
+      drawerOpen.value = false
+    }
+  }
+  syncNarrow()
+  narrowMedia.addEventListener('change', syncNarrow)
   loadShellData()
   window.addEventListener('keydown', onGlobalKey)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKey)
+  narrowMedia?.removeEventListener('change', syncNarrow)
 })
 
 function onGlobalKey(event) {
@@ -790,7 +833,8 @@ async function onNoteSaved(saved) {
     <div v-if="splashVisible && !splashArmed" class="fixed inset-0 z-[100] bg-[#121816]" />
     <SplashScreen v-else-if="splashVisible" :appearance="appearance" @finished="splashVisible = false" />
 
-    <section class="relative z-10 isolate flex min-h-screen">
+    <section class="wv-shell relative z-10 isolate flex min-h-screen" :class="narrow ? 'is-narrow h-screen' : ''">
+      <button v-if="narrow" type="button" class="wv-burger" @click="drawerOpen = true">菜单</button>
       <div v-if="videoSrc || stillMedia" class="wv-media-layer pointer-events-none fixed inset-0 -z-10">
         <video
           v-if="videoSrc"
@@ -804,6 +848,7 @@ async function onNoteSaved(saved) {
         <img v-else-if="stillMedia" :src="stillMedia.startsWith('/api/') ? stillMedia : backgroundUrl(stillMedia)" alt="" class="h-full w-full object-cover" />
       </div>
       <GroupBar
+        v-if="!narrow"
         :groups="viewGroups"
         :active-id="activeGroupId"
         :bar="appearance.bar || 'push'"
@@ -816,6 +861,7 @@ async function onNoteSaved(saved) {
         @receive="receiveNav"
       />
       <SidebarNav
+        v-if="!narrow"
         :items="viewNav"
         :groups="groups"
         :group-id="activeGroupId"
@@ -836,6 +882,7 @@ async function onNoteSaved(saved) {
         @note="noteOpen = true"
         @appearance="appearanceOpen = true"
         @ai="chatOpen = !chatOpen"
+        @focus="focusOpen = true"
       />
       <WorkspacePanel
         :item="viewActive"
@@ -847,7 +894,10 @@ async function onNoteSaved(saved) {
         :overview-items="viewNav"
         :note-revision="noteRevision"
         :inbox-pause="noteOpen"
+        :pending-book="pendingBook"
         @open-nav="openNav"
+        @open-target="openTimelineTarget"
+        @book-opened="pendingBook = null"
         @rename-group="renameGroup"
         @describe-group="describeGroup"
         @search-tag="openSearch($event, 'focus')"
@@ -904,7 +954,50 @@ async function onNoteSaved(saved) {
       @move-done="finishOrbMove"
       @move-cancel="cancelOrbMove"
       @hide="hideOrb"
+      @focus="focusOpen = true"
     />
+    <FocusTimer :open="focusOpen" @close="focusOpen = false" @expand="focusOpen = true" />
+    <div v-if="narrow && drawerOpen" class="wv-drawer-mask" @click="drawerOpen = false">
+      <div class="wv-drawer" role="dialog" aria-label="导航" @click.stop>
+        <GroupBar
+          embedded
+          :groups="viewGroups"
+          :active-id="activeGroupId"
+          :bar="appearance.bar || 'push'"
+          @select="pickGroup"
+          @create="openCreateGroup"
+          @edit="openEditGroup"
+          @remove="removeGroup"
+          @lock="toggleGroupLock"
+          @reorder="persistGroupOrder"
+          @receive="receiveNav"
+        />
+        <SidebarNav
+          embedded
+          :items="viewNav"
+          :groups="groups"
+          :group-id="activeGroupId"
+          :group-name="activeGroup?.name || ''"
+          :active-id="showingOverview ? null : activeId"
+          :loading="isLoading || navLoading"
+          :error-message="errorMessage"
+          @select="openNav"
+          @create="openCreateDialog"
+          @edit="openEditDialog"
+          @delete="removeNavItem"
+          @reorder="persistNavOrder"
+          @pin="togglePin"
+          @lock="toggleLock"
+          @move="moveNavItem"
+          @open-overview="pickGroup(activeGroupId)"
+          @search="openSearch()"
+          @note="noteOpen = true; drawerOpen = false"
+          @appearance="appearanceOpen = true; drawerOpen = false"
+          @ai="chatOpen = !chatOpen; drawerOpen = false"
+          @focus="focusOpen = true; drawerOpen = false"
+        />
+      </div>
+    </div>
     <div v-if="appearance.active_pack && appearance.decorations?.length" class="pointer-events-none fixed inset-0 z-30">
       <img
         v-for="(item, index) in appearance.decorations"

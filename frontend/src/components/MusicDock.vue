@@ -34,7 +34,7 @@ const props = defineProps({
   moving: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['move-done', 'move-cancel', 'hide'])
+const emit = defineEmits(['move-done', 'move-cancel', 'hide', 'focus'])
 
 const tracks = ref([])
 const listId = ref('playlist')
@@ -796,6 +796,11 @@ function hideOrb() {
   emit('hide')
 }
 
+function openFocus() {
+  menu.value = null
+  emit('focus')
+}
+
 function setMode(id) {
   mode.value = id
   writeState()
@@ -886,6 +891,9 @@ async function onFile(event) {
 }
 
 async function removeAt(track) {
+  if (!window.confirm(`确定移除「${track.title || '这首'}」吗？`)) {
+    return
+  }
   await deleteTrack(track.filename)
   tracks.value = tracks.value.filter((item) => item.filename !== track.filename)
   if (!shown.value.length) {
@@ -1144,6 +1152,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <button type="button" class="wv-menu-main" @click="hideOrb">隐藏悬浮球</button>
+        <button type="button" class="wv-menu-main" @click="openFocus">专注</button>
       </div>
     </Teleport>
   </div>

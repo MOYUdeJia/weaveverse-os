@@ -238,3 +238,14 @@ class Idea(SQLModel, table=True):
     tags: str = Field(default="[]", sa_column=Column(Text, nullable=False, server_default="[]"))
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
     updated_at: datetime = Field(default_factory=utc_now, nullable=False)
+
+
+class FocusSession(SQLModel, table=True):
+    """One finished focus interval. Abandoned timers are not stored."""
+
+    __tablename__ = "focus_sessions"
+
+    id: int | None = Field(default=None, primary_key=True)
+    minutes: int = Field(default=25, nullable=False)
+    label: str = Field(default="", max_length=80, nullable=False)
+    completed_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)

@@ -58,4 +58,7 @@ def mount_frontend(app: FastAPI) -> None:
                 status_code=503,
                 detail={"field": "frontend", "message": "frontend/dist 不存在，请先在 frontend 执行 npm run build。"},
             )
-        return FileResponse(index_file)
+        return FileResponse(
+            index_file,
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )

@@ -359,6 +359,10 @@ onBeforeUnmount(() => {
 })
 
 function removeInboxLine(index) {
+  const line = lines.value[index]
+  if (String(line?.text || '').trim() && !window.confirm('确定删除这条速记吗？')) {
+    return
+  }
   if (lines.value.length <= 1) {
     lines.value = [{ uid: nextUid(), text: '', color: '', at: '', tags: [] }]
   } else {

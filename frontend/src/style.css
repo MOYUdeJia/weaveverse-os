@@ -1299,8 +1299,31 @@ textarea {
   padding: 18px 20px 20px;
 }
 
-.wv-card + .wv-card {
+.wv-card + .wv-card,
+.wv-status + .wv-card {
   margin-top: 16px;
+}
+
+.wv-status dl {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+}
+
+.wv-status div {
+  display: grid;
+  gap: 2px;
+}
+
+.wv-status dt {
+  font-size: 14px;
+}
+
+.wv-status dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 .wv-card h3 {
@@ -1388,7 +1411,63 @@ textarea {
   outline: none;
 }
 
-@media (max-width: 760px) {
+.wv-burger {
+  display: none;
+}
+
+.wv-shell.is-narrow {
+  flex-direction: column;
+}
+
+.wv-shell.is-narrow .wv-burger {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-height: 44px;
+  padding: 0 16px;
+  background: #efeae1;
+  color: #16201d;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.wv-shell.is-narrow .wv-work {
+  height: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+.wv-drawer-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(22, 32, 29, 0.4);
+}
+
+.wv-drawer {
+  display: flex;
+  width: min(360px, calc(100vw - 48px));
+  height: 100%;
+  background: #f7f3ea;
+  animation: wv-drawer-in 220ms ease;
+}
+
+@keyframes wv-drawer-in {
+  from {
+    transform: translateX(-24px);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wv-drawer {
+    animation: none;
+  }
+}
+
+@media (max-width: 768px) {
   .wv-settings {
     grid-template-columns: 1fr;
     height: min(760px, 92vh);
@@ -1402,6 +1481,23 @@ textarea {
 
   .wv-settings-nav button {
     flex: none;
+    min-height: 44px;
+    height: 44px;
+  }
+
+  .wv-orb-dock {
+    top: auto !important;
+    right: auto !important;
+    left: 50% !important;
+    bottom: 12px !important;
+    transform: translateX(-50%) !important;
+  }
+
+  .wv-btn,
+  .wv-choice,
+  .wv-nav button,
+  .wv-group button {
+    min-height: 44px;
   }
 
   .wv-settings-main {

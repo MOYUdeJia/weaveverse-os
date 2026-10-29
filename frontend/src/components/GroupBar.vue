@@ -19,6 +19,10 @@ const props = defineProps({
     type: String,
     default: 'push',
   },
+  embedded: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['select', 'create', 'edit', 'remove', 'reorder', 'lock', 'receive'])
@@ -170,8 +174,8 @@ onUnmounted(() => {
 <template>
   <!-- 默认 48px，悬停展开到 200px。窄于 900px 时不再展开。 -->
   <aside
-    class="wv-group group/folders relative z-[1] flex h-screen w-12 shrink-0 flex-col overflow-hidden border-r border-black/10 transition-[width] duration-300 ease-out"
-    :class="asideClass"
+    class="wv-group group/folders relative z-[1] flex w-12 shrink-0 flex-col overflow-hidden border-r border-black/10 transition-[width] duration-300 ease-out"
+    :class="[embedded ? 'h-full' : 'h-screen', asideClass]"
   >
     <button
       v-if="systemGroup"

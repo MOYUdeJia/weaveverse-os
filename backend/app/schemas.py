@@ -706,6 +706,15 @@ class QuickNoteCreate(BaseModel):
         return cleaned[:3]
 
 
+class BookNoteUpdate(BaseModel):
+    note_content: str = Field(default="", max_length=4000)
+
+    @field_validator("note_content")
+    @classmethod
+    def strip_note_body(cls, value: str) -> str:
+        return value.strip()
+
+
 class BookNoteCreate(BaseModel):
     position: str = Field(min_length=1, max_length=4000)
     type: str = Field(min_length=1, max_length=16)

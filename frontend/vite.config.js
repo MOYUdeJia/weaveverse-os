@@ -24,6 +24,12 @@ const backendPort = readBackendPort()
 
 export default defineConfig({
   plugins: [vue()],
+  define: {
+    __WV_BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
+  build: {
+    emptyOutDir: true,
+  },
   server: {
     host: '127.0.0.1',
     port: 5173,

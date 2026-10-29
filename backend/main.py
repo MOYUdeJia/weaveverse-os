@@ -15,6 +15,24 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import urlsplit
 
+
+def _use_project_python() -> None:
+    """Start with backend/.venv when the shell Python cannot see the project packages."""
+    if getattr(sys, "frozen", False):
+        return
+    venv_python = Path(__file__).resolve().parent / ".venv" / "Scripts" / "python.exe"
+    if not venv_python.is_file():
+        return
+    try:
+        if Path(sys.executable).resolve() == venv_python.resolve():
+            return
+    except OSError:
+        return
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+_use_project_python()
+
 from alembic import command
 from alembic.config import Config
 from sqlmodel import Session
@@ -24,8 +42,10 @@ import webview
 from app import book_crud
 from app.book_files import original_path
 from app.config import BACKEND_DIR, DATABASE_PATH, DATA_DIR, DEV_SERVER_URL, HOST, MIN_HEIGHT, MIN_WIDTH, PORT_FILE, WINDOW_HOST, is_dev_mode
+from app.data_move import consume_pending_delete
 from app.db import engine
 from app.seed import seed_initial_nav_items
+from app.timeline import ensure_timeline_page
 from app.static import create_app
 
 
@@ -244,6 +264,46 @@ class DesktopBridge:
             return {"error": "无法保存文件"}
         return {"path": str(target)}
 
+    # 选择新的数据目录。只返回路径，复制在 HTTP 接口里做。
+    # Return a folder path. Copying happens in the data-dir HTTP route.
+    def pick_folder(self) -> dict | None:
+        window = webview.windows[0] if webview.windows else None
+        if window is None:
+            return {"error": "窗口还没准备好"}
+        folder_mode = getattr(webview.FileDialog, "FOLDER", None)
+        if folder_mode is None:
+            return {"error": "当前窗口不能选择文件夹"}
+        try:
+            selected = window.create_file_dialog(folder_mode)
+        except Exception:
+            return {"error": "无法打开文件夹选择器"}
+        if not selected:
+            return None
+        path = Path(selected[0] if isinstance(selected, (list, tuple)) else selected)
+        if not path.is_dir():
+            return {"error": "没有选中文件夹"}
+        return {"path": str(path)}
+
+    # 用新进程重新打开，让数据目录指针生效。旧窗口随即关闭。
+    # Start a new process so the data-dir pointer is read, then close this window.
+    def relaunch(self) -> bool:
+        import subprocess
+
+        if getattr(sys, "frozen", False):
+            command = [sys.executable]
+            cwd = None
+        else:
+            command = [sys.executable, *sys.argv]
+            cwd = str(BACKEND_DIR)
+        flags = 0
+        if os.name == "nt":
+            flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        subprocess.Popen(command, cwd=cwd, creationflags=flags, close_fds=True)
+        window = webview.windows[0] if webview.windows else None
+        if window is not None:
+            window.destroy()
+        return True
+
 
 # 探测本机端口是否可绑定。
 # Probe whether a local port can be bound.
@@ -354,7 +414,10 @@ def main() -> None:
         os.chdir(Path(sys._MEIPASS))
 
     database_existed = run_migrations()
+    consume_pending_delete()
     seed_initial_nav_items(should_seed=not database_existed)
+    with Session(engine) as session:
+        ensure_timeline_page(session)
 
     server_port = choose_port()
     write_port_file(server_port)
