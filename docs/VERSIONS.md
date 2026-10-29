@@ -1352,3 +1352,30 @@
   - 修改 `frontend/src/components/AppearanceDialog.vue`、`frontend/src/components/BookReader.vue`
   - 修改 `docs/VERSIONS.md`
 
+## M14.2 · 2026-10-29
+- **任务**：修书签侧栏、笔记气泡高度、时间线滚动和返回位置、迁移时跳过语音模型和旧库，并加上验收脚本和窗口图标。
+- **实现**：
+  - 书签的正文最多两行，超出省略。备注按原样换行显示，字号更小、颜色更灰。
+  - 笔记气泡最高 300px，里面可以滚动。
+  - 时间线自己滚动。离开后再回来用 `KeepAlive` 留着原来的滚动位置。
+  - 换数据目录时不复制 `whisper_models/` 和 `*.pre-m5.db`。核对文件清单时同样排除它们。
+  - `scripts/verify.ps1` 写出 `docs/REPORT.md`：dist 在不在、是不是比源码旧、API 活不活、库里的迁移是不是代码里的最新一版。
+  - `frontend/public/icon.svg` 是一枚莫比乌斯环。Windows 窗口只接受 ico，所以同一图形另存为 `icon.ico`，`webview.start` 用它。
+- **技术架构**：
+  - 事实：pywebview 在 Windows 上用 `System.Drawing.Icon` 读图标，svg 不能直接当窗口图标。
+  - 时间线页面从 `v-else-if` 里拿出来，单独放进 `KeepAlive`。否则一点进别的页面，组件就被拆掉，滚动也没了。
+- **与 M14.1 相比的变化**：
+  - 书签标题和备注能分开看
+  - 长笔记不会把气泡撑出屏幕
+  - 时间线能滚动，返回后位置还在
+  - 迁移不再带走语音模型和 M5 之前的库文件
+- **已知问题**：
+  - 改完前端后要再执行一次 `npm run build`，窗口才会带上新界面和新图标。
+  - 验收脚本在后端没启动时会把 API 记为失败，这是当时的真实状态。
+- **文件变更**：
+  - 新增 `frontend/public/icon.svg`、`frontend/public/icon.ico`、`scripts/verify.ps1`
+  - 修改 `frontend/src/components/BookReader.vue`、`TimelinePage.vue`、`WorkspacePanel.vue`
+  - 修改 `backend/app/data_move.py`、`backend/app/version.py`、`backend/main.py`
+  - 修改 `docs/VERSIONS.md`
+  - 生成 `docs/REPORT.md`
+

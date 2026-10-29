@@ -75,6 +75,9 @@ const syncKey = ref(0)
 let saveGeneration = 0
 
 const blocks = computed(() => page.value?.blocks ?? [])
+const showTimeline = computed(() => Boolean(
+  props.item && props.item.page_type === 'timeline' && !props.loading && !props.errorMessage && !props.empty,
+))
 const focusSpec = computed(() => focusPageByType(page.value?.page_type || props.item?.page_type))
 const focusView = computed(() => focusViews[focusSpec.value?.pageType] || null)
 const focusBlock = computed(() => {
@@ -218,11 +221,6 @@ async function addBlock(blockType) {
       @opened="emit('book-opened')"
     />
 
-    <TimelinePage
-      v-else-if="item && item.page_type === 'timeline' && !loading && !errorMessage && !empty"
-      @open="emit('open-target', $event)"
-    />
-
     <PhotoLibraryPanel
       v-else-if="item && item.page_type === 'photo_library' && !loading && !errorMessage && !empty"
       :title="item.title"
@@ -280,7 +278,7 @@ async function addBlock(blockType) {
       </div>
     </div>
 
-    <div v-else class="min-h-0 flex-1 overflow-y-auto px-8 py-8">
+    <div v-else-if="item?.page_type !== 'timeline'" class="min-h-0 flex-1 overflow-y-auto px-8 py-8">
       <div class="mx-auto w-full max-w-3xl">
         <p class="text-sm font-semibold uppercase tracking-[0.28em] text-aurora">Workspace</p>
         <div v-if="noticeMessage" class="mt-4 rounded-md border border-moss/25 bg-moss/10 px-4 py-3 text-sm text-moss">
@@ -335,6 +333,10 @@ async function addBlock(blockType) {
         <h2 v-else class="mt-4 text-4xl font-semibold text-ink">请选择一个工作区</h2>
       </div>
     </div>
+
+    <KeepAlive>
+      <TimelinePage v-if="showTimeline" @open="emit('open-target', $event)" />
+    </KeepAlive>
 
     <div v-if="pickerOpen" class="fixed inset-0 z-30 grid place-items-center bg-black/40 px-4" @click.self="pickerOpen = false">
       <div class="w-full max-w-sm rounded-md bg-[#fcfaf5] p-5 shadow-2xl">

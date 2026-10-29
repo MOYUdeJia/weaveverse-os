@@ -41,7 +41,7 @@ import webview
 
 from app import book_crud
 from app.book_files import original_path
-from app.config import BACKEND_DIR, DATABASE_PATH, DATA_DIR, DEV_SERVER_URL, HOST, MIN_HEIGHT, MIN_WIDTH, PORT_FILE, WINDOW_HOST, is_dev_mode
+from app.config import BACKEND_DIR, DATABASE_PATH, DATA_DIR, DEV_SERVER_URL, FRONTEND_DIST, HOST, MIN_HEIGHT, MIN_WIDTH, PORT_FILE, PROJECT_ROOT, WINDOW_HOST, is_dev_mode
 from app.data_move import consume_pending_delete
 from app.db import engine
 from app.seed import seed_initial_nav_items
@@ -405,6 +405,18 @@ def shutdown_backend() -> None:
         server.should_exit = True
 
 
+def _window_icon() -> str | None:
+    """Windows window icons are .ico files. The svg is the same Möbius mark."""
+    candidates = (
+        FRONTEND_DIST / "icon.ico",
+        PROJECT_ROOT / "frontend" / "public" / "icon.ico",
+    )
+    for path in candidates:
+        if path.is_file():
+            return str(path)
+    return None
+
+
 # 迁移、种数据、起服务、打开桌面窗口。
 # Migrate, seed, start the server, and open the desktop window.
 def main() -> None:
@@ -433,6 +445,7 @@ def main() -> None:
     else:
         target_url = f"http://{WINDOW_HOST}:{server_port}"
 
+    icon = _window_icon()
     window = webview.create_window(
         "Weaveverse OS",
         target_url,
@@ -445,7 +458,7 @@ def main() -> None:
     window.events.closed += shutdown_backend
 
     try:
-        webview.start()
+        webview.start(icon=icon)
     finally:
         shutdown_backend()
         thread.join(timeout=5)

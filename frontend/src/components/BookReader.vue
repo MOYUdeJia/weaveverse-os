@@ -1080,9 +1080,11 @@ onBeforeUnmount(() => {
                     <span class="text-sm font-semibold">{{ typeLabel(item.type) }}</span>
                     <span v-if="item.color" class="inline-block h-3 w-3" :style="{ background: COLORS.find((color) => color.id === item.color)?.fill || '#f3d36b' }" />
                   </span>
-                  <span class="mt-1 block text-sm leading-5">{{ item.text || '这一处' }}</span>
+                  <span v-if="item.type === 'bookmark'" class="wv-mark-title">{{ item.text || '这一处' }}</span>
+                  <span v-else class="mt-1 block text-sm leading-5">{{ item.text || '这一处' }}</span>
                   <span v-if="item.type === 'bookmark' || item.created_at" class="wv-stamp">{{ item.created_at ? stamp(item.created_at) : '没有时间' }}</span>
-                  <span v-if="item.note_content" class="mt-1 block text-sm leading-5 text-ink/70">{{ item.note_content }}</span>
+                  <span v-if="item.type === 'bookmark' && item.note_content" class="wv-mark-note">{{ item.note_content }}</span>
+                  <span v-else-if="item.note_content" class="mt-1 block text-sm leading-5 text-ink/70">{{ item.note_content }}</span>
                 </button>
                 <button type="button" class="mt-2 text-sm text-[#9a4036]" @click="removeNote(item)">删除</button>
               </div>
@@ -1227,10 +1229,30 @@ onBeforeUnmount(() => {
   font-size: 16px;
   vertical-align: text-bottom;
 }
+.wv-mark-title {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  color: #16201d;
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.wv-mark-note {
+  display: block;
+  margin-top: 6px;
+  color: rgba(22, 32, 29, 0.45);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
 .wv-bubble {
   position: fixed;
   z-index: 90;
   width: min(280px, calc(100vw - 16px));
+  max-height: 300px;
+  overflow-y: auto;
   padding: 14px;
   background: #fffcf7;
   color: #16201d;

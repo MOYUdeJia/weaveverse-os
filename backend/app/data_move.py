@@ -16,6 +16,7 @@ from app.config import DATA_DIR, DATABASE_PATH, default_data_dir, location_file,
 
 SKIP_NAMES = {".weaveverse-port", "_backup_snapshot.db"}
 SKIP_SUFFIXES = {".db-wal", ".db-shm"}
+SKIP_DIRS = {"whisper_models"}
 
 
 def describe_data_dir() -> dict:
@@ -64,14 +65,31 @@ def _checkpoint() -> None:
         connection.exec_driver_sql("PRAGMA wal_checkpoint(FULL)")
 
 
+def _skipped(path: Path, root: Path) -> bool:
+    relative = path.relative_to(root)
+    if any(part in SKIP_DIRS for part in relative.parts):
+        return True
+    if path.name in SKIP_NAMES or path.name.endswith(".pre-m5.db"):
+        return True
+    return path.suffix.lower() in SKIP_SUFFIXES
+
+
+def _copy_ignore(_directory: str, names: list[str]) -> set[str]:
+    ignored: set[str] = set()
+    for name in names:
+        if name in SKIP_DIRS or name in SKIP_NAMES or name.endswith(".pre-m5.db"):
+            ignored.add(name)
+        elif Path(name).suffix.lower() in SKIP_SUFFIXES:
+            ignored.add(name)
+    return ignored
+
+
 def _manifest(root: Path) -> list[tuple[str, int]]:
     rows: list[tuple[str, int]] = []
     if not root.exists():
         return rows
     for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        if path.name in SKIP_NAMES or path.suffix.lower() in SKIP_SUFFIXES:
+        if not path.is_file() or _skipped(path, root):
             continue
         rows.append((path.relative_to(root).as_posix(), path.stat().st_size))
     return sorted(rows)
@@ -113,12 +131,12 @@ def move_data_dir(raw_path: str) -> dict:
     try:
         target.mkdir(parents=True, exist_ok=True)
         for child in source.iterdir():
-            if child.name in SKIP_NAMES:
+            if _skipped(child, source):
                 continue
             dest_child = target / child.name
             if child.is_dir():
-                shutil.copytree(child, dest_child, dirs_exist_ok=True)
-            elif child.is_file() and child.suffix.lower() not in SKIP_SUFFIXES:
+                shutil.copytree(child, dest_child, dirs_exist_ok=True, ignore=_copy_ignore)
+            elif child.is_file():
                 shutil.copy2(child, dest_child)
         problem = _verify_copy(source, target)
         if problem:

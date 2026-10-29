@@ -115,7 +115,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .wv-timeline {
-  min-height: 100%;
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
   padding: 28px 28px 80px;
   color: #16201d;
 }
