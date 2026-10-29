@@ -73,6 +73,7 @@ const openSlot = ref('')
 const picked = ref([])
 const selecting = ref(false)
 const deleteAsk = ref(0)
+const presetAsk = ref(null)
 const uploadTarget = ref(null)
 
 const orderedPresets = computed(() => {
@@ -324,6 +325,19 @@ async function makePreset() {
   }
 }
 
+function askRemovePreset(item) {
+  presetAsk.value = item
+}
+
+async function confirmRemovePreset() {
+  const item = presetAsk.value
+  presetAsk.value = null
+  if (!item) {
+    return
+  }
+  await removePreset(item.id)
+}
+
 async function removePreset(id) {
   try {
     await deletePreset(id)
@@ -535,7 +549,7 @@ async function removeAsset(type, id) {
         </button>
         <div class="flex justify-end">
           <button type="button" class="wv-btn-ghost" @click="startEdit(item)">编辑</button>
-          <button v-if="!item.system" type="button" class="wv-btn-ghost is-danger" @click="removePreset(item.id)">删除</button>
+          <button v-if="!item.system" type="button" class="wv-btn-ghost is-danger" @click="askRemovePreset(item)">删除</button>
           <span v-else class="inline-block w-[52px]" />
         </div>
       </div>
@@ -593,7 +607,11 @@ async function removeAsset(type, id) {
             preload="metadata"
             @loadedmetadata="(event) => { event.target.currentTime = 0.1 }"
           />
-          <span v-else-if="item.media === 'palette'" class="block h-24 w-full" :style="{ background: item.swatch || '#f4efe7' }" />
+          <span v-else-if="item.media === 'palette'" class="flex h-24 w-full flex-col">
+            <span class="min-h-0 flex-1" :style="{ background: item.palette?.dawn || '#f4efe7' }" />
+            <span class="mx-3 mb-3 h-8" :style="{ background: item.palette?.nav || item.swatch || '#f8f5ee' }" />
+            <span class="h-2.5" :style="{ background: item.palette?.progress || item.swatch || '#3f6f57' }" />
+          </span>
           <img v-else-if="item.preview" :src="iconEntryUrl(item.id, item.preview)" alt="" class="h-24 w-full object-cover" />
           <span v-else class="grid h-24 w-full place-items-center bg-[#e7e1d6] text-sm font-semibold">{{ item.media === 'lottie' ? '动画' : '图标包' }}</span>
           <span class="mt-2 block truncate text-sm font-semibold">{{ item.name }}</span>
@@ -614,7 +632,10 @@ async function removeAsset(type, id) {
         <div v-for="slot in SLOT_LABELS" :key="slot.id" class="mt-4">
           <button type="button" class="flex w-full items-center gap-3 rounded-lg bg-[#f3efe6] p-2 text-left" @click="toggleSlot(slot.id)">
             <img v-if="assetRecord(slot.type, draftSlots[slot.id])?.media === 'image'" :src="assetFileUrl(slot.type, draftSlots[slot.id])" alt="" class="h-14 w-14 object-cover" />
-            <span v-else-if="assetRecord(slot.type, draftSlots[slot.id])?.media === 'palette'" class="h-14 w-14" :style="{ background: assetRecord(slot.type, draftSlots[slot.id])?.swatch || '#f4efe7' }" />
+            <span v-else-if="assetRecord(slot.type, draftSlots[slot.id])?.media === 'palette'" class="flex h-14 w-14 flex-col">
+              <span class="min-h-0 flex-1" :style="{ background: assetRecord(slot.type, draftSlots[slot.id])?.palette?.dawn || '#f4efe7' }" />
+              <span class="h-1.5" :style="{ background: assetRecord(slot.type, draftSlots[slot.id])?.palette?.progress || '#3f6f57' }" />
+            </span>
             <img v-else-if="assetRecord(slot.type, draftSlots[slot.id])?.preview" :src="iconEntryUrl(draftSlots[slot.id], assetRecord(slot.type, draftSlots[slot.id]).preview)" alt="" class="h-14 w-14 object-cover" />
             <span v-else class="grid h-14 w-14 place-items-center bg-[#e7e1d6] text-xs font-semibold">{{ slot.empty }}</span>
             <span class="min-w-0 flex-1">
@@ -633,7 +654,10 @@ async function removeAsset(type, id) {
               @click="assignDraft(slot.id, item.id)"
             >
               <img v-if="item.media === 'image'" :src="assetFileUrl(slot.type, item.id)" alt="" class="h-12 w-full object-cover" />
-              <span v-else-if="item.media === 'palette'" class="block h-12 w-full" :style="{ background: item.swatch || '#f4efe7' }" />
+              <span v-else-if="item.media === 'palette'" class="flex h-12 w-full flex-col">
+                <span class="min-h-0 flex-1" :style="{ background: item.palette?.dawn || '#f4efe7' }" />
+                <span class="h-1.5" :style="{ background: item.palette?.progress || item.swatch || '#3f6f57' }" />
+              </span>
               <img v-else-if="item.preview" :src="iconEntryUrl(item.id, item.preview)" alt="" class="h-12 w-full object-cover" />
               <span v-else class="grid h-12 place-items-center text-xs">{{ item.media === 'video' ? '视频' : '素材' }}</span>
               <span class="mt-1 block truncate text-xs font-semibold">{{ item.name }}</span>
@@ -665,6 +689,17 @@ async function removeAsset(type, id) {
           <button type="button" class="wv-btn wv-btn-quiet" @click="closeEdit">取消</button>
           <button v-if="saveAs" type="button" class="wv-btn wv-btn-primary" :disabled="busy" @click="makePreset">另存为</button>
           <button v-else type="button" class="wv-btn wv-btn-primary" :disabled="busy" @click="saveEdited">{{ editing.system ? '另存为' : '保存' }}</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="presetAsk" class="fixed inset-0 z-[90] grid place-items-center bg-black/45 px-4">
+      <div class="w-full max-w-md bg-[#fffcf7] p-6">
+        <h3 class="text-xl font-semibold">删除预设</h3>
+        <p class="mt-3 text-base leading-7">确定要删除预设 {{ presetAsk.name }} 吗？</p>
+        <div class="mt-6 flex justify-end gap-2">
+          <button type="button" class="wv-btn wv-btn-quiet" @click="presetAsk = null">取消</button>
+          <button type="button" class="wv-btn wv-btn-danger" @click="confirmRemovePreset">删除</button>
         </div>
       </div>
     </div>

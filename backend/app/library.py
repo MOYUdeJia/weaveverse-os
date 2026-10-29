@@ -129,25 +129,42 @@ def _safe_asset_path(relative: str) -> Path:
     return path
 
 
-def _palette_swatch(item: dict) -> str:
+def _palette_vars(item: dict) -> dict:
     from app.themes import BUILTIN
 
     asset_id = str(item.get("id") or "")
-    vars_ = BUILTIN[asset_id]["vars"] if asset_id in BUILTIN else {}
-    if not vars_:
-        try:
-            payload = json.loads(_safe_asset_path(item["path"]).read_text(encoding="utf-8"))
-            vars_ = payload.get("vars") or {}
-        except (OSError, json.JSONDecodeError, ValueError, KeyError):
-            vars_ = {}
-    swatch = str(vars_.get("progress") or vars_.get("dawn") or "")
-    return swatch if swatch.startswith("#") else "#3f6f57"
+    if asset_id in BUILTIN:
+        return dict(BUILTIN[asset_id]["vars"])
+    try:
+        payload = json.loads(_safe_asset_path(item["path"]).read_text(encoding="utf-8"))
+        vars_ = payload.get("vars") or {}
+    except (OSError, json.JSONDecodeError, ValueError, KeyError):
+        vars_ = {}
+    return vars_ if isinstance(vars_, dict) else {}
+
+
+def _palette_preview(item: dict) -> dict:
+    vars_ = _palette_vars(item)
+
+    def pick(key: str, fallback: str) -> str:
+        value = str(vars_.get(key) or "").strip()
+        if value.startswith("#") or value.startswith("rgb"):
+            return value
+        return fallback
+
+    return {
+        "dawn": pick("dawn", "#f4efe7"),
+        "nav": pick("nav", "#f8f5ee"),
+        "progress": pick("progress", "#3f6f57"),
+    }
 
 
 def _present_asset(asset_type: str, item: dict) -> dict:
     shown = dict(item)
     if shown.get("media") == "palette":
-        shown["swatch"] = _palette_swatch(shown)
+        preview = _palette_preview(shown)
+        shown["palette"] = preview
+        shown["swatch"] = preview["progress"]
     if asset_type == "icons":
         try:
             names = list_icon_entries(shown["id"])

@@ -9,6 +9,7 @@ export function showMenu(event, items) {
     x: event.clientX,
     y: event.clientY,
     zIndex: 80,
+    adjustPosition: true,
     items,
   })
 }

@@ -1,6 +1,6 @@
 <script setup>
 import DOMPurify from 'dompurify'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, h, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import {
   createBookNote,
@@ -24,11 +24,24 @@ const props = defineProps({
 const emit = defineEmits(['close', 'progress'])
 
 const COLORS = [
-  { id: 'gold', label: '金' },
-  { id: 'moss', label: '绿' },
-  { id: 'sky', label: '蓝' },
-  { id: 'rose', label: '粉' },
+  { id: 'gold', label: '金', fill: '#f3d36b', line: '#c4922a' },
+  { id: 'moss', label: '绿', fill: '#9dceb0', line: '#2f6a48' },
+  { id: 'sky', label: '蓝', fill: '#9ec0ee', line: '#2d5eaa' },
+  { id: 'rose', label: '粉', fill: '#f3b4c8', line: '#b14b73' },
 ]
+const FILTERS = [
+  { id: 'all', label: '全部' },
+  { id: 'highlight', label: '高亮' },
+  { id: 'underline', label: '划线' },
+  { id: 'note', label: '笔记' },
+  { id: 'bookmark', label: '书签' },
+]
+const TYPE_BAR = {
+  highlight: '#e2b340',
+  underline: '#3f6f57',
+  note: '#3c6eae',
+  bookmark: '#9a4036',
+}
 
 const detail = ref(null)
 const content = ref(null)
@@ -41,12 +54,15 @@ const textRoot = ref(null)
 const htmlRoot = ref(null)
 const notes = ref([])
 const sideTab = ref('toc')
+const markFilter = ref('all')
+const marking = ref(false)
 const noteOpen = ref(false)
 const noteBody = ref('')
 const bookmarkOpen = ref(false)
 const bookmarkNote = ref('')
 const pendingSelection = ref(null)
-const activeBookmarkId = ref(null)
+const flashId = ref(null)
+let flashTimer = 0
 let suspendScroll = false
 let pending = null
 let timer = 0
@@ -55,14 +71,38 @@ let capturedSelection = null
 let capturedAt = 0
 
 const toc = computed(() => detail.value?.toc ?? [])
-const markNotes = computed(() => notes.value.filter((item) => item.type === 'highlight' || item.type === 'underline' || item.type === 'note'))
-const bookmarks = computed(() =>
-  notes.value
-    .filter((item) => item.type === 'bookmark')
-    .slice()
-    .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime()),
-)
-const textPieces = computed(() => pieces(content.value?.text || '', notes.value))
+const visibleNotes = computed(() => {
+  if (!bookmarkOpen.value || !pendingSelection.value?.text) {
+    return notes.value
+  }
+  return [...notes.value, {
+    id: 'pending',
+    type: 'bookmark',
+    position: pendingSelection.value.position,
+    text: pendingSelection.value.text,
+    color: '',
+    note_content: '',
+  }]
+})
+const listed = computed(() => notes.value
+  .filter((item) => markFilter.value === 'all' || item.type === markFilter.value)
+  .slice()
+  .sort((left, right) => {
+    const a = noteSpan(left)
+    const b = noteSpan(right)
+    const chapterA = Number.isFinite(a.chapter) ? a.chapter : 0
+    const chapterB = Number.isFinite(b.chapter) ? b.chapter : 0
+    if (chapterA !== chapterB) {
+      return chapterA - chapterB
+    }
+    const startA = Number.isFinite(a.start) ? a.start : 0
+    const startB = Number.isFinite(b.start) ? b.start : 0
+    if (startA !== startB) {
+      return startA - startB
+    }
+    return (left.id || 0) - (right.id || 0)
+  }))
+const textPieces = computed(() => pieces(content.value?.text || '', visibleNotes.value))
 
 function queueProgress(patch, immediate = false) {
   pending = { ...(pending || {}), ...patch }
@@ -173,7 +213,7 @@ function pieces(text, list) {
       if (item.type === 'highlight' || item.type === 'underline') {
         return true
       }
-      return item.type === 'bookmark' && item.id === activeBookmarkId.value
+      return item.type === 'bookmark' && item.id === flashId.value
     })
     .map((item) => ({
       start: Number(item.position),
@@ -181,10 +221,17 @@ function pieces(text, list) {
       note: item,
     }))
     .filter((item) => Number.isFinite(item.start) && item.end > item.start)
+  const pins = list
+    .filter((item) => item.type === 'bookmark' && item.text && !String(item.position).includes(':'))
+    .map((item) => Number(item.position))
+    .filter((start) => Number.isFinite(start))
   const points = new Set([0, text.length])
   for (const mark of marks) {
     points.add(Math.max(0, Math.min(text.length, mark.start)))
     points.add(Math.max(0, Math.min(text.length, mark.end)))
+  }
+  for (const start of pins) {
+    points.add(Math.max(0, Math.min(text.length, start)))
   }
   const sorted = [...points].sort((left, right) => left - right)
   const out = []
@@ -197,17 +244,22 @@ function pieces(text, list) {
     out.push({
       text: text.slice(start, end),
       start,
+      pin: pins.includes(start),
       marks: marks.filter((mark) => mark.start <= start && mark.end >= end).map((mark) => mark.note),
     })
   }
-  return out.length ? out : [{ text, start: 0, marks: [] }]
+  return out.length ? out : [{ text, start: 0, pin: false, marks: [] }]
 }
 
 function pieceClass(marks) {
   const highlight = marks.find((item) => item.type === 'highlight')
   const line = marks.find((item) => item.type === 'underline')
   const bookmark = marks.find((item) => item.type === 'bookmark')
-  return [highlight ? `is-${highlight.color}` : '', line ? `is-line is-line-${line.color}` : '', bookmark ? 'is-bookmark' : ''].filter(Boolean)
+  return [
+    highlight ? `wv-hl wv-hl-${highlight.color}` : '',
+    line ? `wv-ul wv-ul-${line.color}` : '',
+    bookmark ? 'is-flash' : '',
+  ].filter(Boolean)
 }
 
 function paintHtmlMarks() {
@@ -216,8 +268,8 @@ function paintHtmlMarks() {
     return
   }
   root.innerHTML = DOMPurify.sanitize(content.value?.html || '')
-  const ranges = notes.value
-    .filter((item) => item.text && (item.type === 'highlight' || item.type === 'underline' || (item.type === 'bookmark' && item.id === activeBookmarkId.value)))
+  const ranges = visibleNotes.value
+    .filter((item) => item.text && item.type !== 'note')
     .map((item) => {
       const [chapterPart, startPart] = String(item.position).split(':')
       return {
@@ -263,10 +315,22 @@ function wrapHtml(root, start, end, note) {
   try {
     range.setStart(startNode, startOffset)
     range.setEnd(endNode, endOffset)
-    const mark = document.createElement('mark')
+    const mark = document.createElement('span')
     mark.dataset.noteId = String(note.id)
-    mark.className = note.type === 'underline' ? `is-line is-line-${note.color}` : note.type === 'bookmark' ? 'is-bookmark' : `is-${note.color}`
+    if (note.type === 'underline') {
+      mark.className = `wv-ul wv-ul-${note.color}`
+    } else if (note.type === 'bookmark') {
+      mark.className = note.id === flashId.value ? 'wv-anchor is-flash' : 'wv-anchor'
+    } else {
+      mark.className = `wv-hl wv-hl-${note.color}`
+    }
     range.surroundContents(mark)
+    if (note.type === 'bookmark') {
+      const pin = document.createElement('span')
+      pin.className = 'wv-pin'
+      pin.setAttribute('aria-hidden', 'true')
+      mark.before(pin)
+    }
   } catch (error) {
     console.error('Failed to wrap highlight:', error)
   }
@@ -338,6 +402,10 @@ function marksCovering(selection) {
   return activeNoteId ? marks.filter((item) => item.id === activeNoteId) : []
 }
 
+function colorSwatch(hex) {
+  return h('span', { class: 'wv-menu-swatch', style: { background: hex } })
+}
+
 function openMarkMenu(selection) {
   pendingSelection.value = selection
   const canText = Boolean(selection?.text)
@@ -346,12 +414,21 @@ function openMarkMenu(selection) {
     {
       label: '高亮',
       disabled: !canText,
-      children: COLORS.map((color) => ({ label: color.label, onClick: () => addMark('highlight', color.id) })),
+      children: COLORS.map((color) => ({
+        label: color.label,
+        icon: colorSwatch(color.fill),
+        onClick: () => addMark('highlight', color.id),
+      })),
     },
     {
       label: '划线',
+      divided: 'up',
       disabled: !canText,
-      children: COLORS.map((color) => ({ label: color.label, onClick: () => addMark('underline', color.id) })),
+      children: COLORS.map((color) => ({
+        label: color.label,
+        icon: colorSwatch(color.line),
+        onClick: () => addMark('underline', color.id),
+      })),
     },
     { label: '取消高亮', disabled: !marksCovering(selection).length, onClick: clearMarks },
     {
@@ -371,8 +448,24 @@ function readingRoot() {
 }
 
 function onMouseUp() {
-  capturedSelection = readSelection(readingRoot())
+  const selection = readSelection(readingRoot())
+  capturedSelection = selection
   capturedAt = Date.now()
+  if (!marking.value || !selection?.text) {
+    return
+  }
+  pendingSelection.value = {
+    text: selection.text,
+    position: props.book.format === 'epub' ? `${chapter.value}:${selection.position}` : selection.position,
+    end: selection.end,
+    rawStart: selection.position,
+  }
+  bookmarkNote.value = ''
+  bookmarkOpen.value = true
+  marking.value = false
+  if (props.book.format === 'epub') {
+    nextTick(() => paintHtmlMarks())
+  }
 }
 
 function onTextMenu(event) {
@@ -492,45 +585,40 @@ async function excerpt() {
   }
 }
 
-function visibleIndex() {
-  const el = scroller.value
-  const root = props.book.format === 'epub' ? htmlRoot.value : textRoot.value
-  const length = root?.textContent?.length || content.value?.text?.length || 1
-  const max = el ? el.scrollHeight - el.clientHeight : 0
-  const ratio = !el || max <= 0 ? 0 : el.scrollTop / max
-  return Math.min(length - 1, Math.max(0, Math.round(ratio * length)))
-}
-
-function stamp(value) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return ''
+function toggleMark() {
+  marking.value = !marking.value
+  if (marking.value) {
+    showToast('选中一段文字，松开后填写备注')
   }
-  const pad = (number) => String(number).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-function askBookmark() {
-  bookmarkNote.value = ''
-  bookmarkOpen.value = true
+function cancelBookmark() {
+  bookmarkOpen.value = false
+  pendingSelection.value = null
+  if (props.book.format === 'epub') {
+    nextTick(() => paintHtmlMarks())
+  }
 }
 
 async function addBookmark() {
+  const selection = pendingSelection.value
+  if (!selection?.text) {
+    showToast('先在正文里选一段')
+    return
+  }
   try {
-    const index = visibleIndex()
-    const position = props.book.format === 'epub' ? `${chapter.value}:${index}` : String(index)
-    const source = props.book.format === 'epub' ? htmlRoot.value?.textContent || '' : content.value?.text || ''
-    const created = await createBookNote(props.book.id, {
+    await createBookNote(props.book.id, {
       type: 'bookmark',
-      position,
-      text: source.slice(index, index + 48),
+      position: selection.position,
+      text: selection.text.slice(0, 4000),
       color: '',
       note_content: bookmarkNote.value.trim(),
     })
     bookmarkOpen.value = false
+    pendingSelection.value = null
     await loadNotes()
-    sideTab.value = 'bookmarks'
-    activeBookmarkId.value = created.id
+    sideTab.value = 'marks'
+    markFilter.value = 'bookmark'
     showToast('已加书签')
   } catch (error) {
     showToast(error.message || '没有加书签')
@@ -576,15 +664,28 @@ const rendition = {
   },
 }
 
+function typeLabel(type) {
+  return FILTERS.find((item) => item.id === type)?.label || '标注'
+}
+
 async function focusNote(note) {
-  activeBookmarkId.value = note.type === 'bookmark' ? note.id : activeBookmarkId.value
+  window.clearTimeout(flashTimer)
+  flashId.value = note.type === 'bookmark' ? note.id : null
   await rendition.display(note.position)
   if (props.book.format === 'epub') {
     await nextTick()
     paintHtmlMarks()
-    const span = noteSpan(note)
-    scrollToIndex(span.start, htmlRoot.value)
+    scrollToIndex(noteSpan(note).start, htmlRoot.value)
   }
+  if (note.type !== 'bookmark') {
+    return
+  }
+  flashTimer = window.setTimeout(() => {
+    flashId.value = null
+    if (props.book.format === 'epub') {
+      paintHtmlMarks()
+    }
+  }, 1000)
 }
 
 async function removeNote(note) {
@@ -622,7 +723,11 @@ function onKey(event) {
       return
     }
     if (bookmarkOpen.value) {
-      bookmarkOpen.value = false
+      cancelBookmark()
+      return
+    }
+    if (marking.value) {
+      marking.value = false
       return
     }
     close()
@@ -653,6 +758,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
+  window.clearTimeout(flashTimer)
   window.clearTimeout(timer)
   if (pending) {
     const body = pending
@@ -677,10 +783,11 @@ onBeforeUnmount(() => {
       <button
         v-if="book.format !== 'pdf'"
         type="button"
-        class="h-10 rounded-md px-3 text-sm font-medium text-moss hover:bg-black/5"
-        @click="askBookmark"
+        class="h-10 rounded-md px-3 text-sm font-semibold"
+        :class="marking ? 'bg-ink text-white' : 'text-moss hover:bg-black/5'"
+        @click="toggleMark"
       >
-        书签
+        {{ marking ? '取消标记' : '加书签' }}
       </button>
       <template v-if="book.format === 'epub' && toc.length">
         <button type="button" class="h-10 rounded-md px-3 text-sm font-medium text-moss disabled:text-ink/30" :disabled="chapter <= 0" @click="stepChapter(-1)">上一章</button>
@@ -701,63 +808,69 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else class="flex min-h-0 flex-1">
-      <aside class="flex w-72 shrink-0 flex-col bg-[#efeae1]">
-        <div class="flex border-b border-black/10 text-xs">
-          <button type="button" class="h-9 flex-1" :class="sideTab === 'toc' ? 'text-ink' : 'text-ink/40'" @click="sideTab = 'toc'">目录</button>
-          <button type="button" class="h-9 flex-1" :class="sideTab === 'notes' ? 'text-ink' : 'text-ink/40'" @click="sideTab = 'notes'">笔记</button>
-          <button type="button" class="h-9 flex-1" :class="sideTab === 'bookmarks' ? 'text-ink' : 'text-ink/40'" @click="sideTab = 'bookmarks'">书签</button>
+      <aside class="flex w-72 shrink-0 flex-col bg-[#efeae1] text-ink">
+        <div class="flex gap-1 p-2">
+          <button type="button" class="h-9 flex-1 rounded-md text-sm font-semibold" :class="sideTab === 'toc' ? 'bg-ink text-white' : 'bg-[#fffcf7]'" @click="sideTab = 'toc'">目录</button>
+          <button type="button" class="h-9 flex-1 rounded-md text-sm font-semibold" :class="sideTab === 'marks' ? 'bg-ink text-white' : 'bg-[#fffcf7]'" @click="sideTab = 'marks'">标注</button>
         </div>
-        <div class="min-h-0 flex-1 overflow-y-auto p-2">
+        <div v-if="sideTab === 'marks'" class="flex flex-wrap gap-1 px-2 pb-2">
+          <button
+            v-for="item in FILTERS"
+            :key="item.id"
+            type="button"
+            class="h-8 rounded-md px-2 text-sm"
+            :class="markFilter === item.id ? 'bg-ink font-semibold text-white' : 'bg-[#e7e1d6]'"
+            @click="markFilter = item.id"
+          >
+            {{ item.label }}
+          </button>
+        </div>
+        <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
           <template v-if="sideTab === 'toc'">
             <button
               v-for="item in toc"
               :key="item.index"
               type="button"
-              class="block w-full truncate px-2 py-1.5 text-left text-sm text-ink/80 hover:bg-black/5"
+              class="block w-full truncate px-2 py-2 text-left text-sm text-ink hover:bg-[#fffcf7]"
               @click="goTo(item.index)"
             >
               {{ item.title }}
             </button>
-            <p v-if="!toc.length" class="px-2 py-3 text-xs text-ink/40">这本书没有目录</p>
-          </template>
-          <template v-else-if="sideTab === 'notes'">
-            <div v-for="item in markNotes" :key="item.id" class="mb-2 bg-white/70 p-2">
-              <button type="button" class="block w-full text-left" @click="focusNote(item)">
-                <span class="block text-xs text-ink/40">{{ item.type === 'underline' ? '划线' : item.type === 'note' ? '笔记' : '高亮' }}</span>
-                <span class="mt-1 block text-sm leading-5">{{ item.text }}</span>
-                <span v-if="item.note_content" class="mt-1 block text-xs text-ink/60">{{ item.note_content }}</span>
-              </button>
-              <button type="button" class="mt-1 text-xs text-ink/35" @click="removeNote(item)">删除</button>
-            </div>
-            <p v-if="!markNotes.length" class="px-2 py-3 text-xs text-ink/40">选中文字后可以高亮或写笔记</p>
+            <p v-if="!toc.length" class="px-2 py-3 text-sm text-ink/60">这本书没有目录</p>
           </template>
           <template v-else>
-            <div v-for="item in bookmarks" :key="item.id" class="mb-2 bg-[#fffcf7] p-3" :class="activeBookmarkId === item.id ? 'bg-[#fff1c9]' : ''">
-              <button type="button" class="block w-full text-left" @click="focusNote(item)">
-                <span class="block text-xs text-ink/50">{{ stamp(item.created_at) }}</span>
-                <span class="mt-1 block text-sm font-semibold leading-5">{{ item.text || '这一处' }}</span>
-                <span v-if="item.note_content" class="mt-1 block text-sm leading-5 text-ink/70">{{ item.note_content }}</span>
-              </button>
-              <button type="button" class="mt-2 text-sm text-[#9a4036]" @click="removeNote(item)">删除</button>
+            <div v-for="item in listed" :key="item.id" class="mb-2 flex bg-[#fffcf7]">
+              <span class="w-1.5 shrink-0" :style="{ background: TYPE_BAR[item.type] || '#16201d' }" />
+              <div class="min-w-0 flex-1 px-3 py-2">
+                <button type="button" class="block w-full text-left" @click="focusNote(item)">
+                  <span class="flex items-center gap-2">
+                    <span class="text-sm font-semibold">{{ typeLabel(item.type) }}</span>
+                    <span v-if="item.color" class="inline-block h-3 w-3" :style="{ background: COLORS.find((color) => color.id === item.color)?.fill || '#f3d36b' }" />
+                  </span>
+                  <span class="mt-1 block text-sm leading-5">{{ item.text || '这一处' }}</span>
+                  <span v-if="item.note_content" class="mt-1 block text-sm leading-5 text-ink/70">{{ item.note_content }}</span>
+                </button>
+                <button type="button" class="mt-2 text-sm text-[#9a4036]" @click="removeNote(item)">删除</button>
+              </div>
             </div>
-            <p v-if="!bookmarks.length" class="px-2 py-3 text-sm text-ink/50">还没有书签。点右上角「书签」可以记下当前位置。</p>
+            <p v-if="!listed.length" class="px-2 py-3 text-sm text-ink/60">这里还没有{{ markFilter === 'all' ? '标注' : typeLabel(markFilter) }}。选中正文可以高亮、划线，或点「加书签」选一段。</p>
           </template>
         </div>
       </aside>
 
-      <div ref="scroller" class="reader-column min-h-0 flex-1 overflow-y-auto px-8 py-8" @scroll="onScroll" @mouseup="onMouseUp" @contextmenu="onTextMenu">
-        <article v-if="book.format === 'epub'" ref="htmlRoot" class="reader-html mx-auto max-w-3xl text-base leading-8" />
-        <div v-else ref="textRoot" class="mx-auto max-w-3xl whitespace-pre-wrap font-sans text-base leading-8"><span v-for="(piece, index) in textPieces" :key="`${index}-${piece.start}`" :class="pieceClass(piece.marks)">{{ piece.text }}</span></div>
+      <div ref="scroller" class="reader-column min-h-0 flex-1 overflow-y-auto px-8 py-8" :class="marking ? 'is-marking' : ''" @scroll="onScroll" @mouseup="onMouseUp" @contextmenu="onTextMenu">
+        <article v-if="book.format === 'epub'" ref="htmlRoot" class="reader-html mx-auto max-w-3xl text-base leading-8 text-[#16201d]" />
+        <div v-else ref="textRoot" class="mx-auto max-w-3xl whitespace-pre-wrap font-sans text-base leading-8 text-[#16201d]"><template v-for="(piece, index) in textPieces" :key="`${index}-${piece.start}`"><span v-if="piece.pin" class="wv-pin" aria-hidden="true" /><span :class="pieceClass(piece.marks)">{{ piece.text }}</span></template></div>
       </div>
     </div>
 
     <div v-if="bookmarkOpen" class="fixed inset-0 z-[80] grid place-items-center bg-black/45 px-4">
       <div class="w-full max-w-md bg-[#fffcf7] p-6">
-        <h3 class="text-xl font-semibold text-ink">给这个位置写一句备注</h3>
-        <p class="mt-2 text-sm leading-6 text-ink/60">可以留空。书签会记下当前这一行，并按时间排在最上面。</p>
+        <h3 class="text-xl font-semibold text-ink">给这段写一句备注</h3>
+        <p class="mt-2 text-sm leading-6 text-ink/60">可以留空。这段旁边会留下书签，点侧栏时整段会亮一下。</p>
         <textarea v-model="bookmarkNote" class="mt-4 h-24 w-full bg-[#f3efe6] p-3 text-sm outline-none" maxlength="4000" placeholder="备注，可选" />
         <div class="mt-4 flex justify-end gap-2">
-          <button type="button" class="h-9 rounded-md px-3 text-sm text-ink/70" @click="bookmarkOpen = false">取消</button>
+          <button type="button" class="h-9 rounded-md px-3 text-sm text-ink/70" @click="cancelBookmark">取消</button>
           <button type="button" class="h-9 rounded-md bg-ink px-4 text-sm font-semibold text-white" @click="addBookmark">记下书签</button>
         </div>
       </div>
@@ -794,21 +907,50 @@ onBeforeUnmount(() => {
   font-weight: 650;
 }
 
-.reader-html :deep(mark),
-.is-gold { background: #f3d36b; }
-.is-moss { background: #9dceb0; }
-.is-sky { background: #9ec0ee; }
-.is-rose { background: #f3b4c8; }
-.is-line { text-decoration: underline; text-underline-offset: 3px; background: transparent; }
-.is-line-gold { text-decoration-color: #c4922a; }
-.is-line-moss { text-decoration-color: #2f6a48; }
-.is-line-sky { text-decoration-color: #2d5eaa; }
-.is-line-rose { text-decoration-color: #b14b73; }
-.is-bookmark { background: #ffe08a; }
+.reader-html :deep(.wv-hl-gold),
+.wv-hl-gold { background-color: #f3d36b !important; }
+.reader-html :deep(.wv-hl-moss),
+.wv-hl-moss { background-color: #9dceb0 !important; }
+.reader-html :deep(.wv-hl-sky),
+.wv-hl-sky { background-color: #9ec0ee !important; }
+.reader-html :deep(.wv-hl-rose),
+.wv-hl-rose { background-color: #f3b4c8 !important; }
+.reader-html :deep(.wv-ul),
+.wv-ul {
+  text-decoration-line: underline !important;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+.reader-html :deep(.wv-ul-gold),
+.wv-ul-gold { text-decoration-color: #c4922a !important; }
+.reader-html :deep(.wv-ul-moss),
+.wv-ul-moss { text-decoration-color: #2f6a48 !important; }
+.reader-html :deep(.wv-ul-sky),
+.wv-ul-sky { text-decoration-color: #2d5eaa !important; }
+.reader-html :deep(.wv-ul-rose),
+.wv-ul-rose { text-decoration-color: #b14b73 !important; }
+.reader-html :deep(.wv-anchor),
+.wv-anchor { background-color: transparent; }
+.reader-html :deep(.is-flash),
+.is-flash { background-color: #ffe08a !important; }
+.reader-html :deep(.wv-pin),
+.wv-pin {
+  display: inline-block;
+  width: 10px;
+  height: 14px;
+  margin-right: 3px;
+  vertical-align: text-top;
+  background: #9a4036;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%);
+}
 .reader-column,
 .reader-column :deep(*) {
   cursor: auto;
   -webkit-user-select: text;
   user-select: text;
+}
+.reader-column.is-marking,
+.reader-column.is-marking :deep(*) {
+  cursor: crosshair;
 }
 </style>

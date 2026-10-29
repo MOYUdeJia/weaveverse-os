@@ -1371,6 +1371,13 @@ textarea {
   color: #fffcf7;
 }
 
+.wv-menu-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  background: #f3d36b;
+}
+
 .wv-field {
   height: 40px;
   width: 100%;
