@@ -1,9 +1,8 @@
 <script setup>
 // Floating 25-minute focus timer. Finished rounds are written to the timeline.
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
-import { saveFocusSession } from '../api/client'
-import { FOCUS_SECONDS, focusClock, formatClock } from '../focusClock'
+import { focusClock, focusCommand, formatClock } from '../focusClock'
 import { showToast } from '../toast'
 
 const props = defineProps({
@@ -17,8 +16,7 @@ const emit = defineEmits(['close', 'expand'])
 
 const noiseOn = ref(false)
 const doneOpen = ref(false)
-const saving = ref(false)
-let timer = 0
+const desktop = ref(false)
 let audioCtx = null
 let noiseSource = null
 let noiseGain = null
@@ -28,77 +26,48 @@ const dash = computed(() => `${Math.max(0, Math.min(1, ratio.value)) * 100} 100`
 const label = computed(() => formatClock(focusClock.left))
 const running = computed(() => focusClock.status === 'running' || focusClock.status === 'paused')
 
-function tick() {
-  if (focusClock.status !== 'running') {
+async function start() {
+  try {
+    await focusCommand(focusClock.status === 'paused' ? 'resume' : 'start')
+  } catch (error) {
+    showToast(error.message || '这一轮没有开始')
     return
   }
-  focusClock.left = Math.max(0, Math.round((focusClock.endsAt - Date.now()) / 1000))
-  if (focusClock.left <= 0) {
-    finish()
-  }
-}
-
-function start() {
-  if (focusClock.status === 'idle' || focusClock.status === 'done') {
-    focusClock.total = FOCUS_SECONDS
-    focusClock.left = FOCUS_SECONDS
-  }
-  focusClock.endsAt = Date.now() + focusClock.left * 1000
-  focusClock.status = 'running'
-  window.clearInterval(timer)
-  timer = window.setInterval(tick, 250)
   if (noiseOn.value) {
     startNoise()
   }
 }
 
-function pause() {
+async function pause() {
   if (focusClock.status !== 'running') {
     return
   }
-  tick()
-  focusClock.status = 'paused'
-  window.clearInterval(timer)
+  try {
+    await focusCommand('pause')
+  } catch (error) {
+    showToast(error.message || '没有暂停')
+  }
   stopNoise()
 }
 
-function abandon() {
-  window.clearInterval(timer)
+async function abandon() {
   stopNoise()
-  focusClock.status = 'idle'
-  focusClock.left = FOCUS_SECONDS
-  focusClock.total = FOCUS_SECONDS
-  focusClock.endsAt = 0
   noiseOn.value = false
+  try {
+    await focusCommand('abandon')
+  } catch (error) {
+    showToast(error.message || '没有放弃这一轮')
+  }
   emit('close')
 }
 
-async function finish() {
-  if (saving.value || focusClock.status === 'done') {
-    return
-  }
-  window.clearInterval(timer)
-  stopNoise()
-  focusClock.left = 0
-  focusClock.status = 'done'
-  chime()
-  saving.value = true
-  try {
-    await saveFocusSession(25)
-    window.dispatchEvent(new CustomEvent('wv-timeline-refresh'))
-  } catch (error) {
-    showToast(error.message || '这一轮没有记到时间线')
-  } finally {
-    saving.value = false
-    doneOpen.value = true
-  }
-}
-
-function acknowledge() {
+async function acknowledge() {
   doneOpen.value = false
-  focusClock.status = 'idle'
-  focusClock.left = FOCUS_SECONDS
-  focusClock.total = FOCUS_SECONDS
+  try {
+    await focusCommand('acknowledge')
+  } catch (error) {
+    showToast(error.message || '没有记下这一轮')
+  }
 }
 
 function startNoise() {
@@ -164,25 +133,28 @@ function chime() {
 }
 
 watch(
-  () => props.open,
-  (open) => {
-    if (open && focusClock.status === 'running' && !timer) {
-      timer = window.setInterval(tick, 250)
+  () => focusClock.status,
+  (status, previous) => {
+    if (status === 'done' && previous === 'running') {
+      stopNoise()
+      chime()
+      doneOpen.value = true
+    }
+    if (status === 'idle') {
+      doneOpen.value = false
     }
   },
 )
 
-onBeforeUnmount(() => {
-  window.clearInterval(timer)
-  stopNoise()
-  audioCtx?.close()
+onMounted(() => {
+  desktop.value = Boolean(window.pywebview?.api?.open_focus_pet)
 })
 </script>
 
 <template>
   <div class="wv-focus-root">
     <button
-      v-if="!open && running"
+      v-if="!open && running && !desktop"
       type="button"
       class="wv-focus-chip"
       @click="emit('expand')"

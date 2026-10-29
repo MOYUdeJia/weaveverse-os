@@ -39,6 +39,7 @@ DEFAULT = {
     "progress_style": "solid",
     "progress_color": "#3f6f57",
     "low_power": False,
+    "glass": False,
     "bg_opacity": 0.85,
     "hide_guide": False,
     "splash_mode": "default",
@@ -157,6 +158,7 @@ def load_settings() -> dict:
     color = str(merged.get("progress_color") or "")
     merged["progress_color"] = color.lower() if COLOR_PATTERN.fullmatch(color) else "#3f6f57"
     merged["low_power"] = bool(merged.get("low_power"))
+    merged["glass"] = bool(merged.get("glass"))
     opacity = _ratio(merged.get("bg_opacity"))
     merged["bg_opacity"] = 0.85 if opacity is None else opacity
     merged["hide_guide"] = bool(merged.get("hide_guide"))
@@ -248,6 +250,8 @@ def save_settings(data: dict) -> dict:
             current["progress_color"] = color.lower()
     if "low_power" in data:
         current["low_power"] = bool(data["low_power"])
+    if "glass" in data:
+        current["glass"] = bool(data["glass"])
     if "bg_opacity" in data:
         opacity = _ratio(data.get("bg_opacity"))
         if opacity is not None:

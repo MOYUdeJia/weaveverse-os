@@ -1,5 +1,5 @@
 {
-  "theme": "seer-colors",
+  "theme": "dragon-girl",
   "bar": "overlay",
   "player": "free",
   "player_hidden": false,
@@ -9,7 +9,8 @@
   "progress_style": "gradient",
   "progress_color": "#b5175c",
   "low_power": false,
-  "bg_opacity": 0.75,
+  "glass": false,
+  "bg_opacity": 0.81,
   "hide_guide": true,
   "splash_mode": "default",
   "splash_file": "",
@@ -92,12 +93,12 @@
   "group_names": {
     "1": "26_04_27_19_37_29.png"
   },
-  "current_preset": "seer-peak-personal",
+  "current_preset": "dragon-girl",
   "slots": {
-    "colors": "seer-colors",
-    "background": null,
+    "colors": "dragon-girl",
+    "background": "u-c90f95e189",
     "splash": null,
-    "icons": null
+    "icons": "u-619abdc88c"
   },
   "slot_config": {
     "splash": {
@@ -106,11 +107,13 @@
     },
     "icon_bindings": {
       "nav": {},
-      "group": {}
+      "group": {
+        "4": "@file:600069da29c6"
+      }
     }
   },
   "dirty": false,
   "library_ready": true,
-  "slot_background": "",
-  "slot_background_media": ""
+  "slot_background": "u-c90f95e189",
+  "slot_background_media": "video"
 }

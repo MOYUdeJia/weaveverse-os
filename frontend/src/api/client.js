@@ -597,6 +597,17 @@ export function saveFocusSession(minutes = 25) {
   })
 }
 
+export function getFocusLive() {
+  return request('/focus/live')
+}
+
+export function postFocusLive(action) {
+  return request('/focus/live', {
+    method: 'POST',
+    body: JSON.stringify({ action }),
+  })
+}
+
 export function getDataDir() {
   return request('/system/data-dir')
 }

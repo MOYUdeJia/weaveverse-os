@@ -17,6 +17,7 @@ import QuickNoteDialog from './components/QuickNoteDialog.vue'
 import SplashScreen from './components/SplashScreen.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import WorkspacePanel from './components/WorkspacePanel.vue'
+import { bindFocusClock, focusClock, focusCommand } from './focusClock'
 import { showToast, toastText } from './toast'
 
 const splashVisible = ref(true)
@@ -60,6 +61,7 @@ const appearance = ref({
   theme: 'warm',
   bar: 'push',
   low_power: false,
+  glass: false,
   bg_opacity: 0.85,
   hide_guide: false,
   splash_mode: 'default',
@@ -602,8 +604,39 @@ onMounted(() => {
   syncNarrow()
   narrowMedia.addEventListener('change', syncNarrow)
   loadShellData()
+  bindFocusClock()
   window.addEventListener('keydown', onGlobalKey)
 })
+
+async function beginFocus() {
+  try {
+    if (focusClock.status === 'idle' || focusClock.status === 'done') {
+      await focusCommand('start')
+    }
+  } catch (error) {
+    showToast(error.message || '这一轮没有开始')
+    return
+  }
+  const api = window.pywebview?.api
+  if (api && typeof api.open_focus_pet === 'function') {
+    try {
+      await api.open_focus_pet()
+      focusOpen.value = false
+      return
+    } catch (error) {
+      showToast(error.message || '悬浮窗没有打开')
+    }
+  }
+  focusOpen.value = true
+}
+
+async function windowAction(name) {
+  const api = window.pywebview?.api
+  const fn = api?.[name]
+  if (typeof fn === 'function') {
+    await fn()
+  }
+}
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKey)
@@ -682,6 +715,20 @@ function applyThemeVars(settings) {
     keys.forEach((key) => root.style.removeProperty(`--wv-${key}`))
   }
   paintOpacity(settings.bg_opacity)
+  root.dataset.glass = settings.glass ? 'on' : 'off'
+  root.dataset.glassInk = glassInk(settings)
+}
+
+function glassInk(settings) {
+  const themeId = settings.theme || 'warm'
+  const custom = (settings.custom_themes || []).find((item) => item.id === themeId)
+  const hex = solidColor(custom?.vars?.work, '#fcfaf5')
+  const value = Number.parseInt(hex.slice(1), 16)
+  const red = (value >> 16) & 255
+  const green = (value >> 8) & 255
+  const blue = value & 255
+  const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255
+  return luminance < 0.42 ? 'light' : 'dark'
 }
 
 function applyAppearance(next) {
@@ -828,14 +875,19 @@ async function onNoteSaved(saved) {
 <template>
   <main
     class="relative min-h-screen overflow-hidden text-ink"
-    :class="videoSrc || stillMedia ? 'wv-has-media' : 'bg-dawn'"
+    :class="appearance.glass ? 'is-glass' : (videoSrc || stillMedia ? 'wv-has-media' : 'bg-dawn')"
   >
+    <div v-if="appearance.glass" class="wv-drag-strip">
+      <button type="button" @click="windowAction('window_minimize')">最小化</button>
+      <button type="button" @click="windowAction('window_maximize')">最大化</button>
+      <button type="button" @click="windowAction('window_close')">关闭</button>
+    </div>
     <div v-if="splashVisible && !splashArmed" class="fixed inset-0 z-[100] bg-[#121816]" />
     <SplashScreen v-else-if="splashVisible" :appearance="appearance" @finished="splashVisible = false" />
 
     <section class="wv-shell relative z-10 isolate flex min-h-screen" :class="narrow ? 'is-narrow h-screen' : ''">
       <button v-if="narrow" type="button" class="wv-burger" @click="drawerOpen = true">菜单</button>
-      <div v-if="videoSrc || stillMedia" class="wv-media-layer pointer-events-none fixed inset-0 -z-10">
+      <div v-if="!appearance.glass && (videoSrc || stillMedia)" class="wv-media-layer pointer-events-none fixed inset-0 -z-10">
         <video
           v-if="videoSrc"
           :src="videoSrc"
@@ -882,7 +934,7 @@ async function onNoteSaved(saved) {
         @note="noteOpen = true"
         @appearance="appearanceOpen = true"
         @ai="chatOpen = !chatOpen"
-        @focus="focusOpen = true"
+        @focus="beginFocus"
       />
       <WorkspacePanel
         :item="viewActive"
@@ -954,7 +1006,7 @@ async function onNoteSaved(saved) {
       @move-done="finishOrbMove"
       @move-cancel="cancelOrbMove"
       @hide="hideOrb"
-      @focus="focusOpen = true"
+      @focus="beginFocus"
     />
     <FocusTimer :open="focusOpen" @close="focusOpen = false" @expand="focusOpen = true" />
     <div v-if="narrow && drawerOpen" class="wv-drawer-mask" @click="drawerOpen = false">
@@ -994,7 +1046,7 @@ async function onNoteSaved(saved) {
           @note="noteOpen = true; drawerOpen = false"
           @appearance="appearanceOpen = true; drawerOpen = false"
           @ai="chatOpen = !chatOpen; drawerOpen = false"
-          @focus="focusOpen = true; drawerOpen = false"
+          @focus="beginFocus(); drawerOpen = false"
         />
       </div>
     </div>

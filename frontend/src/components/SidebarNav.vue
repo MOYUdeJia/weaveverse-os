@@ -175,9 +175,8 @@ function onItemMenu(event, item) {
           设置
         </button>
       </div>
-      <button type="button" class="mb-3 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white text-sm font-medium text-ink shadow-sm" title="专注" @click="emit('focus')">
-        <span>⏱️</span>
-        <span>专注</span>
+      <button type="button" class="mb-3 flex h-11 w-full items-center justify-center rounded-md bg-white text-sm font-medium text-ink shadow-sm" title="开始专注" @click="emit('focus')">
+        开始专注
       </button>
       <button type="button" class="mb-3 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white text-sm font-medium text-ink shadow-sm" title="AI Ctrl+J" @click="emit('ai')">
         <span>🤖</span>

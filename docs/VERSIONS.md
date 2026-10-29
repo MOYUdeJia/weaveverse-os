@@ -1379,3 +1379,29 @@
   - 修改 `docs/VERSIONS.md`
   - 生成 `docs/REPORT.md`
 
+## M15 · 2026-10-29
+- **任务**：修设置页系统状态重复和迁移误删，加上透明玻璃窗口，以及系统级番茄钟悬浮窗。
+- **实现**：
+  - 系统状态只留在设置 → 通用的最下方。外观里增加「透明玻璃模式」，默认关闭。打开后重新启动窗口，`transparent=True` 且 `frameless=True`。顶部 30px 是拖拽条，右侧可以最小化、最大化、关闭。
+  - 面板在亮色下是 `rgba(255,255,255,0.6)`，工作区很暗时是 `rgba(0,0,0,0.6)`，都加 `backdrop-filter: blur(20px)`。工作区里的卡片不再叠第二层模糊。
+  - 迁移成功后只删已经复制过去的文件。`whisper_models` 留在旧目录。旧库先改名为 `weaveverse.old.db`，下次启动再删。删不掉就留下指针，再试一次。
+  - 侧栏「开始专注」在桌面窗口里弹出 160×160 的无边框置顶小窗。拖到左、右、上边缘会半隐，只留 5px，鼠标移上去再滑出。右键可以暂停、放弃、进入全屏专注、隐藏。全屏变暗，中间是倒计时和一句短句，并播放白噪音。Esc 回到小窗。
+- **技术架构**：
+  - 事实：两个 pywebview 窗口不共享页面里的 JavaScript 内存。倒计时放在后端进程的一份内存里，两端都请求 `GET/POST /api/focus/live`，用同一个 `ends_at` 算剩余秒数。到点由这一份状态写入 `focus_sessions`，只记一次。
+  - 悬浮窗必须在 `webview.start` 之后、从非主线程创建。设置里的桥接调用正好在那条线程上。
+  - 透明和毛玻璃只在窗口创建时生效，所以开关会重新打开程序。浏览器里打开开发页看不到桌面。
+- **与 M14.2 相比的变化**：
+  - 系统状态不再出现在每一个设置栏目
+  - 迁移不再整棵删掉旧目录
+  - 可以开透明玻璃
+  - 专注计时变成桌面上的独立小窗
+- **已知问题**：
+  - 改完前端后要再执行一次 `npm run build`，普通启动才会带上新界面。开发模式用 `WEAVEVERSE_DEV=1` 可以直接看。
+  - 没有在这台机器上测量毛玻璃帧率。WebView2 上三块全高面板的 `backdrop-filter` 会多一次合成，低配核显滚动时可能发闷。卡片没有再加第二层模糊。
+  - 无边框之后，系统标题栏没有了。关闭靠拖拽条右侧的「关闭」，或悬浮窗菜单里的「隐藏」。
+- **文件变更**：
+  - 新增 `backend/app/focus_live.py`、`backend/app/routes/focus.py`、`frontend/src/components/FocusPet.vue`
+  - 修改 `backend/app/data_move.py`、`backend/app/appearance.py`、`backend/app/api.py`、`backend/app/version.py`、`backend/main.py`
+  - 修改 `frontend/src/App.vue`、`AppearanceDialog.vue`、`FocusTimer.vue`、`SidebarNav.vue`、`focusClock.js`、`api/client.js`、`main.js`、`style.css`
+  - 修改 `docs/VERSIONS.md`
+

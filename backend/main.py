@@ -51,6 +51,9 @@ from app.static import create_app
 
 server_port: int | None = None
 server: uvicorn.Server | None = None
+_target_url = ""
+_PET_SIZE = 160
+_PEEK = 5
 
 
 class DesktopBridge:
@@ -58,6 +61,11 @@ class DesktopBridge:
 
     def __init__(self) -> None:
         self._picked_book: Path | None = None
+        self._pet = None
+        self._dock: dict | None = None
+        self._full = False
+        self._before_full: tuple | None = None
+        self._zoomed = False
 
     # 用系统浏览器打开 http(s) 外链。
     # Open an http(s) URL in the system browser.
@@ -299,9 +307,216 @@ class DesktopBridge:
         if os.name == "nt":
             flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
         subprocess.Popen(command, cwd=cwd, creationflags=flags, close_fds=True)
-        window = webview.windows[0] if webview.windows else None
+        window = self._main_window()
         if window is not None:
             window.destroy()
+        return True
+
+    def _main_window(self):
+        for window in webview.windows:
+            if getattr(window, "uid", "") == "master":
+                return window
+        return webview.windows[0] if webview.windows else None
+
+    # 无边框主窗口的最小化、最大化、关闭。
+    def window_minimize(self) -> bool:
+        window = self._main_window()
+        if window is None:
+            return False
+        window.minimize()
+        return True
+
+    def window_maximize(self) -> bool:
+        window = self._main_window()
+        if window is None:
+            return False
+        if self._zoomed:
+            window.restore()
+            self._zoomed = False
+        else:
+            window.maximize()
+            self._zoomed = True
+        return True
+
+    def window_close(self) -> bool:
+        window = self._main_window()
+        if window is None:
+            return False
+        window.destroy()
+        return True
+
+    def _living_pet(self):
+        pet = self._pet
+        if pet is None:
+            return None
+        if pet not in webview.windows:
+            self._pet = None
+            self._dock = None
+            self._full = False
+            return None
+        return pet
+
+    def _forget_pet(self, *_args) -> None:
+        self._pet = None
+        self._dock = None
+        self._full = False
+        self._before_full = None
+
+    def _screen_for(self, x: int, y: int):
+        try:
+            screens = list(webview.screens or [])
+        except Exception:
+            return None
+        if not screens:
+            return None
+        for screen in screens:
+            if screen.x <= x < screen.x + screen.width and screen.y <= y < screen.y + screen.height:
+                return screen
+        return screens[0]
+
+    def _glide(self, pet, x: int, y: int) -> None:
+        x0, y0 = pet.x, pet.y
+        steps = 8
+        for step in range(1, steps + 1):
+            t = step / steps
+            ease = t * t * (3 - 2 * t)
+            pet.move(round(x0 + (x - x0) * ease), round(y0 + (y - y0) * ease))
+            time.sleep(0.016)
+
+    # 打开置顶的专注小窗。已打开时只把它显示出来。
+    def open_focus_pet(self) -> dict:
+        pet = self._living_pet()
+        if pet is not None:
+            pet.show()
+            return {"opened": True, "existing": True}
+        base = _target_url or f"http://{WINDOW_HOST}:{server_port or 8765}"
+        join = "&" if "?" in base else "?"
+        url = f"{base}{join}surface=pet"
+        self._pet = webview.create_window(
+            "专注",
+            url,
+            width=_PET_SIZE,
+            height=_PET_SIZE,
+            frameless=True,
+            transparent=True,
+            on_top=True,
+            easy_drag=False,
+            shadow=False,
+            resizable=False,
+            focus=True,
+            text_select=False,
+            background_color="#000000",
+            min_size=(_PET_SIZE, _PET_SIZE),
+            js_api=self,
+        )
+        if self._pet is not None:
+            self._pet.events.closed += self._forget_pet
+        return {"opened": self._pet is not None, "existing": False}
+
+    def focus_geometry(self) -> dict:
+        pet = self._living_pet()
+        if pet is None:
+            return {"ok": False}
+        return {"ok": True, "x": pet.x, "y": pet.y, "width": pet.width, "height": pet.height, "full": self._full}
+
+    def focus_move(self, x: int, y: int) -> dict:
+        pet = self._living_pet()
+        if pet is None or self._full:
+            return {"ok": False}
+        self._dock = None
+        pet.move(int(x), int(y))
+        return {"ok": True, "x": pet.x, "y": pet.y}
+
+    def focus_resize(self, width: int, height: int) -> dict:
+        pet = self._living_pet()
+        if pet is None or self._full:
+            return {"ok": False}
+        pet.resize(max(_PET_SIZE, int(width)), max(_PET_SIZE, int(height)))
+        return {"ok": True, "width": pet.width, "height": pet.height}
+
+    def _dock_points(self, pet, screen, side: str) -> dict:
+        width = pet.width or _PET_SIZE
+        height = pet.height or _PET_SIZE
+        y = min(max(pet.y, screen.y), screen.y + screen.height - _PEEK)
+        x = min(max(pet.x, screen.x), screen.x + screen.width - _PEEK)
+        if side == "left":
+            home = (screen.x - width + _PEEK, y)
+            shown = (screen.x, y)
+        elif side == "right":
+            home = (screen.x + screen.width - _PEEK, y)
+            shown = (screen.x + screen.width - width, y)
+        else:
+            home = (x, screen.y - height + _PEEK)
+            shown = (x, screen.y)
+        return {"side": side, "home": home, "shown": shown}
+
+    def focus_settle(self) -> dict:
+        """Park the pet halfway off the nearest left, right, or top edge."""
+        pet = self._living_pet()
+        if pet is None or self._full:
+            return {"dock": None}
+        width = pet.width or _PET_SIZE
+        height = pet.height or _PET_SIZE
+        screen = self._screen_for(pet.x + width // 2, pet.y + height // 2)
+        if screen is None:
+            return {"dock": None}
+        margin = 28
+        if pet.x <= screen.x + margin:
+            side = "left"
+        elif pet.x + width >= screen.x + screen.width - margin:
+            side = "right"
+        elif pet.y <= screen.y + margin:
+            side = "top"
+        else:
+            self._dock = None
+            return {"dock": None}
+        self._dock = self._dock_points(pet, screen, side)
+        home = self._dock["home"]
+        self._glide(pet, home[0], home[1])
+        return {"dock": side}
+
+    def focus_peek(self, show: bool) -> dict:
+        pet = self._living_pet()
+        dock = self._dock
+        if pet is None or dock is None or self._full:
+            return {"ok": False}
+        point = dock["shown"] if show else dock["home"]
+        self._glide(pet, point[0], point[1])
+        return {"ok": True, "show": bool(show)}
+
+    def focus_fullscreen(self, enabled: bool) -> dict:
+        pet = self._living_pet()
+        if pet is None:
+            return {"ok": False}
+        if enabled:
+            if self._full:
+                return {"ok": True, "full": True}
+            self._before_full = (pet.x, pet.y, pet.width, pet.height, self._dock)
+            screen = self._screen_for(pet.x, pet.y)
+            self._full = True
+            self._dock = None
+            if screen is not None:
+                pet.move(screen.x, screen.y)
+                pet.resize(screen.width, screen.height)
+            return {"ok": True, "full": True}
+        if not self._full:
+            return {"ok": True, "full": False}
+        self._full = False
+        saved = self._before_full or (80, 80, _PET_SIZE, _PET_SIZE, None)
+        x, y, width, height, dock = saved
+        pet.resize(width, height)
+        pet.move(x, y)
+        self._dock = dock
+        if dock:
+            home = dock["home"]
+            self._glide(pet, home[0], home[1])
+        return {"ok": True, "full": False}
+
+    def focus_hide(self) -> bool:
+        pet = self._living_pet()
+        if pet is None:
+            return False
+        pet.hide()
         return True
 
 
@@ -419,8 +634,17 @@ def _window_icon() -> str | None:
 
 # 迁移、种数据、起服务、打开桌面窗口。
 # Migrate, seed, start the server, and open the desktop window.
+def _glass_enabled() -> bool:
+    try:
+        from app.appearance import load_settings
+
+        return bool(load_settings().get("glass"))
+    except Exception:
+        return False
+
+
 def main() -> None:
-    global server_port
+    global server_port, _target_url
 
     if getattr(sys, "frozen", False):
         os.chdir(Path(sys._MEIPASS))
@@ -446,15 +670,20 @@ def main() -> None:
         target_url = f"http://{WINDOW_HOST}:{server_port}"
 
     icon = _window_icon()
-    window = webview.create_window(
-        "Weaveverse OS",
-        target_url,
-        min_size=(MIN_WIDTH, MIN_HEIGHT),
-        width=1180,
-        height=760,
-        text_select=True,
-        js_api=DesktopBridge(),
-    )
+    _target_url = target_url
+    glass = _glass_enabled()
+    window_args = {
+        "min_size": (MIN_WIDTH, MIN_HEIGHT),
+        "width": 1180,
+        "height": 760,
+        "text_select": True,
+        "js_api": DesktopBridge(),
+    }
+    if glass:
+        window_args["transparent"] = True
+        window_args["frameless"] = True
+        window_args["easy_drag"] = False
+    window = webview.create_window("Weaveverse OS", target_url, **window_args)
     window.events.closed += shutdown_backend
 
     try:
