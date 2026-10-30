@@ -52,8 +52,8 @@ from app.static import create_app
 server_port: int | None = None
 server: uvicorn.Server | None = None
 _target_url = ""
-_PET_SIZE = 160
-_PEEK = 5
+_PET_SIZE = 132
+_PEEK = 18
 
 
 class DesktopBridge:
@@ -411,6 +411,7 @@ class DesktopBridge:
         )
         if self._pet is not None:
             self._pet.events.closed += self._forget_pet
+            _open_desktop(self._pet, holes=True)
         return {"opened": self._pet is not None, "existing": False}
 
     def focus_geometry(self) -> dict:
@@ -634,13 +635,39 @@ def _window_icon() -> str | None:
 
 # 迁移、种数据、起服务、打开桌面窗口。
 # Migrate, seed, start the server, and open the desktop window.
-def _glass_enabled() -> bool:
-    try:
-        from app.appearance import load_settings
+def _open_desktop(window, *, holes: bool = False) -> None:
+    """Show the desktop through pixels the page leaves unpainted.
 
-        return bool(load_settings().get("glass"))
+    The form is black, and WinForms treats that black as the color key.
+    Do this only after the page has loaded, and do not call SetWindowLong
+    from the show path. That call runs inside the window procedure, leaves
+    the transparent window hidden, and the process sits on the server log
+    with no window. ``holes`` keeps the tomato and the main window on one path.
+    background_color stays a 6-digit hex.
+    """
+
+    del holes
+
+    def apply(*_args) -> None:
+        native = getattr(window, "native", None)
+        if native is None:
+            return
+        try:
+            from System.Drawing import Color
+
+            browser = getattr(native, "browser", None)
+            web = getattr(browser, "webview", None) if browser is not None else None
+            if web is not None:
+                web.DefaultBackgroundColor = Color.Transparent
+            native.BackColor = Color.Black
+            native.TransparencyKey = Color.Black
+        except Exception:
+            return
+
+    try:
+        window.events.loaded += apply
     except Exception:
-        return False
+        return
 
 
 def main() -> None:
@@ -671,19 +698,15 @@ def main() -> None:
 
     icon = _window_icon()
     _target_url = target_url
-    glass = _glass_enabled()
-    window_args = {
-        "min_size": (MIN_WIDTH, MIN_HEIGHT),
-        "width": 1180,
-        "height": 760,
-        "text_select": True,
-        "js_api": DesktopBridge(),
-    }
-    if glass:
-        window_args["transparent"] = True
-        window_args["frameless"] = True
-        window_args["easy_drag"] = False
-    window = webview.create_window("Weaveverse OS", target_url, **window_args)
+    window = webview.create_window(
+        "Weaveverse OS",
+        target_url,
+        min_size=(MIN_WIDTH, MIN_HEIGHT),
+        width=1180,
+        height=760,
+        text_select=True,
+        js_api=DesktopBridge(),
+    )
     window.events.closed += shutdown_backend
 
     try:

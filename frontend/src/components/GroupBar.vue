@@ -25,7 +25,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select', 'create', 'edit', 'remove', 'reorder', 'lock', 'receive'])
+const emit = defineEmits(['select', 'create', 'edit', 'remove', 'reorder', 'lock', 'receive', 'stats'])
 
 const narrow = ref(false)
 const holding = ref(false)
@@ -258,6 +258,17 @@ onUnmounted(() => {
           :class="bar === 'overlay' || bar === 'stack' ? 'hidden' : narrow ? 'opacity-0' : menuOpen ? 'opacity-100' : 'opacity-0 group-hover/folders:opacity-100'"
         >
           新建分组
+        </span>
+      </button>
+      <button type="button" class="flex h-12 w-full items-center text-left text-ink/80 hover:bg-black/5" title="专注统计" @click="emit('stats')">
+        <span class="grid h-12 w-12 shrink-0 place-items-center">
+          <span class="block h-3 w-3 rounded-full bg-[#d4251c]"></span>
+        </span>
+        <span
+          class="truncate whitespace-nowrap text-sm font-medium transition-opacity duration-300"
+          :class="bar === 'overlay' || bar === 'stack' ? 'hidden' : narrow ? 'opacity-0' : menuOpen ? 'opacity-100' : 'opacity-0 group-hover/folders:opacity-100'"
+        >
+          专注统计
         </span>
       </button>
     </div>

@@ -1405,3 +1405,31 @@
   - 修改 `frontend/src/App.vue`、`AppearanceDialog.vue`、`FocusTimer.vue`、`SidebarNav.vue`、`focusClock.js`、`api/client.js`、`main.js`、`style.css`
   - 修改 `docs/VERSIONS.md`
 
+## M15.1 · 2026-10-30
+- **任务**：迁走数据后把旧目录清到只剩指针文件，让透明玻璃真正透出桌面，并把番茄钟改成 100×100 的红色番茄小窗。
+- **实现**：
+  - 复制成功并释放数据库句柄后，旧目录里除了根上的指针文件（`location.txt`、`.data-location`、`.pending-delete`）全部删除。`whisper_models`、`safety`、`*.pre-m5.db` 不复制，也不再留在旧目录。删不掉的锁定文件仍留给下次启动。
+  - `html`、`body`、`#app` 在透明模式下强制 `background: transparent !important`。左右工作区是 `rgba(255,255,255,0.5)` 加 `backdrop-filter: blur(20px)`。顶上 30px 是一条 `z-index: 99999` 的拖拽带，窗口按钮在它上面且为 `no-drag`。`background_color` 只能是 6 位十六进制。
+  - 浅灰底是 WinForms 默认的控件灰。颜色键改在页面加载完成后再设，并且不再从显示过程里调用 `SetWindowLong`。那次调用会把透明窗口留在隐藏状态，进程停在服务日志上，窗口出不来。
+  - 专注小窗改为 100×100、无边框、透明、置顶。画面是一颗红色番茄，中间是分:秒。按住番茄拖动，贴边后半隐，移上去再滑出。右键可以暂停、放弃、全屏、隐藏、改 5–180 分钟，并选择雨声、咖啡厅或纯音作为默认白噪音。
+  - 主界面左侧栏底部增加「专注统计」：今天的累计分钟，和最近十六周的热力格。
+- **技术架构**：
+  - 事实：M15 的清理只删「已经复制成功」的文件，所以被跳过的 `whisper_models` 和 `*.pre-m5.db` 会留下；指针若在旧目录里又会被当成普通文件复制后删掉。
+  - 事实：pywebview 在 `transparent=True` 时会把 WebView2 的默认背景设成透明，但页面自己如果给最外层铺了纯色，桌面仍然出不来。小窗之前还写了 `background_color="#000000"`，尺寸是 160。
+  - 两个窗口仍不共享页面内存。倒计时和所选时长放在后端的一份状态里，完成时按这一轮的分钟数写入 `focus_sessions`。
+- **与 M15 相比的变化**：
+  - 旧目录不再保留语音模型和安全备份
+  - 最外层背景改成透明，面板才是毛玻璃
+  - 悬浮窗从白底圆角块变成 100×100 的番茄
+  - 时长可以改，左下角能看统计
+- **已知问题**：
+  - 改完前端后要再执行一次 `npm run build`，普通启动才会带上新界面。开发模式用 `WEAVEVERSE_DEV=1` 可以直接看。
+  - 浏览器里检查得到的是元素背景为透明。普通浏览器标签的画布仍是白的，桌面透出要在打开了透明模式的桌面窗口里看。
+  - 白噪音在点击「开始专注」的同一刻创建并 `resume()` AudioContext，不放在 `mounted`。主窗口和小窗各有一份，后开始的那份会停掉另一份。全屏底是实色 `#101418`，避免颜色键把半透明深色染成品红。
+  - 桌面是否真的透出，要重新启动 `python main.py` 后看。这次用探针量到窗口 `BackColor` 是 `(240,240,240)`。探针里的透明窗一直停在隐藏状态，没能拍到壁纸从孔里透出来。
+- **文件变更**：
+  - 新增 `backend/tests/test_data_move_clears_old_dir.py`、`backend/app/focus_stats.py`、`frontend/src/components/FocusStats.vue`
+  - 修改 `backend/app/data_move.py`、`focus_live.py`、`timeline.py`、`routes/focus.py`、`routes/timeline.py`、`version.py`、`main.py`
+  - 修改 `frontend/index.html`、`frontend/src/style.css`、`FocusPet.vue`、`FocusStats.vue`、`GroupBar.vue`、`App.vue`、`focusClock.js`、`focusNoise.js`、`api/client.js`
+  - 修改 `docs/VERSIONS.md`
+

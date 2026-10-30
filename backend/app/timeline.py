@@ -97,11 +97,26 @@ def ensure_timeline_page(session: Session) -> NavItem:
         raise_api_error(409, "title", "系统分组里已有同名页面，时间线建不出来")
 
 
-def record_focus(session: Session, minutes: int) -> FocusSession:
-    minutes = 25 if minutes != 25 else minutes
+def record_focus(
+    session: Session,
+    minutes: int,
+    *,
+    label: str | None = None,
+    category: str = "",
+    outcome: str = "done",
+    interrupt: str = "",
+) -> FocusSession:
+    amount = int(minutes)
+    if amount < 1 or amount > 180:
+        raise ValueError("时长要在 1 到 180 分钟之间")
+    kept = outcome if outcome in {"done", "abandoned"} else "done"
+    name = (label or "").strip() or f"完成了一次 {amount} 分钟专注"
     row = FocusSession(
-        minutes=minutes,
-        label=f"完成了一次 {minutes} 分钟专注",
+        minutes=amount,
+        label=name[:80],
+        category=(category or "")[:20],
+        outcome=kept,
+        interrupt=(interrupt or "")[:40],
         completed_at=utc_now(),
     )
     session.add(row)

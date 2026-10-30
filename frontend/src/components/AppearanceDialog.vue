@@ -80,7 +80,6 @@ const dataNote = ref('')
 const dataBusy = ref(false)
 const systemStatus = ref({ version: '', revision: '' })
 const systemNote = ref('')
-const glassNote = ref('')
 const builtLabel = formatBuiltAt(frontendBuiltAt)
 let opacityTimer
 
@@ -185,24 +184,6 @@ async function setProgressColor(event) {
 
 async function setLowPower(event) {
   emit('change', await updateAppearance({ low_power: event.target.checked }))
-}
-
-async function setGlass(event) {
-  const next = event.target.checked
-  glassNote.value = ''
-  try {
-    emit('change', await updateAppearance({ glass: next }))
-    glassNote.value = '正在重新打开窗口。'
-    const bridge = window.pywebview?.api
-    if (bridge && typeof bridge.relaunch === 'function') {
-      await bridge.relaunch()
-      return
-    }
-    glassNote.value = '已保存。用桌面窗口重新打开后才会生效。'
-  } catch (error) {
-    event.target.checked = !next
-    glassNote.value = error.message || '没有保存'
-  }
 }
 
 async function setSplashDuration(seconds) {
@@ -549,15 +530,6 @@ async function clear(kind, groupId) {
       <div v-else-if="page === 'privacy'" class="wv-card"><PrivacyPanel /></div>
       <ThemePanel v-else-if="page === 'theme'" :appearance="appearance" @change="emit('change', $event)" />
       <template v-else>
-      <section class="wv-card">
-      <h3>透明玻璃模式</h3>
-      <p class="wv-quiet">窗口变成无边框。面板是磨砂玻璃，能看见桌面。打开或关掉都会重新打开窗口。</p>
-      <label class="mt-4 flex items-center gap-3 text-base font-semibold">
-        <input type="checkbox" :checked="appearance.glass" @change="setGlass" />
-        使用透明玻璃
-      </label>
-      <p v-if="glassNote" class="mt-3 text-sm">{{ glassNote }}</p>
-      </section>
       <section class="wv-card">
       <h3>背景不透明度</h3>
       <p class="wv-quiet">100% 时界面盖住背景，0% 只留界面底色。</p>

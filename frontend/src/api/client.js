@@ -601,11 +601,53 @@ export function getFocusLive() {
   return request('/focus/live')
 }
 
-export function postFocusLive(action) {
+export function postFocusLive(action, extra = {}) {
   return request('/focus/live', {
     method: 'POST',
-    body: JSON.stringify({ action }),
+    body: JSON.stringify({ action, ...extra }),
   })
+}
+
+export function getFocusStats(start, end) {
+  const query = new URLSearchParams()
+  if (start) query.set('start', start)
+  if (end) query.set('end', end)
+  const suffix = query.toString() ? `?${query}` : ''
+  return request(`/focus/stats${suffix}`)
+}
+
+export function getFocusPresets() {
+  return request('/focus/presets')
+}
+
+export function createFocusPreset(body) {
+  return request('/focus/presets', { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function updateFocusPreset(id, body) {
+  return request(`/focus/presets/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
+}
+
+export function deleteFocusPresets(ids) {
+  return request('/focus/presets/delete', { method: 'POST', body: JSON.stringify({ ids }) })
+}
+
+export function reorderFocusPresets(ids) {
+  return request('/focus/presets/reorder', { method: 'POST', body: JSON.stringify({ ids }) })
+}
+
+export function addFocusSession(body) {
+  return request('/focus/sessions', { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function getFocusBackgrounds() {
+  return request('/focus/backgrounds')
+}
+
+export async function uploadFocusBackground(file) {
+  const body = new FormData()
+  body.append('file', file)
+  return request('/focus/backgrounds', { method: 'POST', body })
 }
 
 export function getDataDir() {

@@ -9,6 +9,7 @@ import GroupEditDialog from './components/GroupEditDialog.vue'
 import NavEditDialog from './components/NavEditDialog.vue'
 import AppearanceDialog from './components/AppearanceDialog.vue'
 import FocusTimer from './components/FocusTimer.vue'
+import FocusStats from './components/FocusStats.vue'
 import GuideDialog from './components/GuideDialog.vue'
 import MusicDock from './components/MusicDock.vue'
 import SidebarNav from './components/SidebarNav.vue'
@@ -18,6 +19,7 @@ import SplashScreen from './components/SplashScreen.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import WorkspacePanel from './components/WorkspacePanel.vue'
 import { bindFocusClock, focusClock, focusCommand } from './focusClock'
+import { claimNoise } from './focusNoise'
 import { showToast, toastText } from './toast'
 
 const splashVisible = ref(true)
@@ -54,6 +56,7 @@ const guideOpen = ref(false)
 const narrow = ref(false)
 const drawerOpen = ref(false)
 const focusOpen = ref(false)
+const focusStatsOpen = ref(false)
 const pendingBook = ref(null)
 let narrowMedia = null
 let syncNarrow = () => {}
@@ -608,9 +611,20 @@ onMounted(() => {
   window.addEventListener('keydown', onGlobalKey)
 })
 
-async function beginFocus() {
+async function beginFocus(preset) {
+  claimNoise()
   try {
-    if (focusClock.status === 'idle' || focusClock.status === 'done') {
+    if (preset?.id) {
+      await focusCommand('preset', {
+        preset_id: preset.id,
+        name: preset.name,
+        category: preset.category,
+        focus_minutes: preset.focus_minutes,
+        rest_minutes: preset.rest_minutes,
+        cycles: preset.cycles,
+      })
+    }
+    if (focusClock.status !== 'running') {
       await focusCommand('start')
     }
   } catch (error) {
@@ -715,7 +729,7 @@ function applyThemeVars(settings) {
     keys.forEach((key) => root.style.removeProperty(`--wv-${key}`))
   }
   paintOpacity(settings.bg_opacity)
-  root.dataset.glass = settings.glass ? 'on' : 'off'
+  root.dataset.glass = 'off'
   root.dataset.glassInk = glassInk(settings)
 }
 
@@ -875,19 +889,14 @@ async function onNoteSaved(saved) {
 <template>
   <main
     class="relative min-h-screen overflow-hidden text-ink"
-    :class="appearance.glass ? 'is-glass' : (videoSrc || stillMedia ? 'wv-has-media' : 'bg-dawn')"
+    :class="videoSrc || stillMedia ? 'wv-has-media' : 'bg-dawn'"
   >
-    <div v-if="appearance.glass" class="wv-drag-strip">
-      <button type="button" @click="windowAction('window_minimize')">最小化</button>
-      <button type="button" @click="windowAction('window_maximize')">最大化</button>
-      <button type="button" @click="windowAction('window_close')">关闭</button>
-    </div>
     <div v-if="splashVisible && !splashArmed" class="fixed inset-0 z-[100] bg-[#121816]" />
     <SplashScreen v-else-if="splashVisible" :appearance="appearance" @finished="splashVisible = false" />
 
     <section class="wv-shell relative z-10 isolate flex min-h-screen" :class="narrow ? 'is-narrow h-screen' : ''">
       <button v-if="narrow" type="button" class="wv-burger" @click="drawerOpen = true">菜单</button>
-      <div v-if="!appearance.glass && (videoSrc || stillMedia)" class="wv-media-layer pointer-events-none fixed inset-0 -z-10">
+      <div v-if="videoSrc || stillMedia" class="wv-media-layer pointer-events-none fixed inset-0 -z-10">
         <video
           v-if="videoSrc"
           :src="videoSrc"
@@ -911,6 +920,7 @@ async function onNoteSaved(saved) {
         @lock="toggleGroupLock"
         @reorder="persistGroupOrder"
         @receive="receiveNav"
+        @stats="focusStatsOpen = true"
       />
       <SidebarNav
         v-if="!narrow"
@@ -1009,6 +1019,7 @@ async function onNoteSaved(saved) {
       @focus="beginFocus"
     />
     <FocusTimer :open="focusOpen" @close="focusOpen = false" @expand="focusOpen = true" />
+    <FocusStats :open="focusStatsOpen" @close="focusStatsOpen = false" />
     <div v-if="narrow && drawerOpen" class="wv-drawer-mask" @click="drawerOpen = false">
       <div class="wv-drawer" role="dialog" aria-label="导航" @click.stop>
         <GroupBar
@@ -1023,6 +1034,7 @@ async function onNoteSaved(saved) {
           @lock="toggleGroupLock"
           @reorder="persistGroupOrder"
           @receive="receiveNav"
+          @stats="focusStatsOpen = true; drawerOpen = false"
         />
         <SidebarNav
           embedded

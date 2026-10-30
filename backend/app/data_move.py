@@ -1,10 +1,12 @@
-"""Move the data folder without discarding anything that was not copied.
+"""Move the data folder, then empty the old one.
 
 The location pointer lives outside the data folder. A failed copy never writes
-the pointer. After a good copy, only files that exist in the new folder are
-removed from the old one. Skipped folders such as whisper_models stay put.
-The old database is renamed to weaveverse.old.db immediately, and deleted on
-a later startup once this process is no longer holding it.
+that pointer. Whisper models and old pre-m5 backups are not copied; they can
+be downloaded again. After a good copy, the old folder keeps only pointer
+files (location.txt, .data-location, .pending-delete). Everything else,
+including whisper_models and safety, is removed once database handles are
+released. If a file is still locked, the pending marker stays for the next
+startup.
 """
 
 from __future__ import annotations
@@ -19,11 +21,8 @@ from app.config import DATA_DIR, DATABASE_PATH, default_data_dir, location_file,
 SKIP_NAMES = {".weaveverse-port", "_backup_snapshot.db"}
 SKIP_SUFFIXES = {".db-wal", ".db-shm"}
 SKIP_DIRS = {"whisper_models"}
-LIVE_DB = "weaveverse.db"
-RETIRED_DB = "weaveverse.old.db"
-# Never delete these by the "already copied" pass. The live file is renamed;
-# the retired file is removed only on a later startup.
-KEPT_DB_NAMES = {LIVE_DB, RETIRED_DB}
+# Files that point at a data folder. They are not copied and not deleted.
+POINTER_NAMES = {".data-location", "location.txt", ".pending-delete"}
 
 
 def describe_data_dir() -> dict:
@@ -72,8 +71,15 @@ def _checkpoint() -> None:
         connection.exec_driver_sql("PRAGMA wal_checkpoint(FULL)")
 
 
+def _pointer(path: Path, root: Path) -> bool:
+    return path.is_file() and path.parent == root and path.name in POINTER_NAMES
+
+
 def _skipped(path: Path, root: Path) -> bool:
+    """True when a path is not part of the copy. It is still removed afterwards."""
     relative = path.relative_to(root)
+    if _pointer(path, root):
+        return True
     if any(part in SKIP_DIRS for part in relative.parts):
         return True
     if path.name in SKIP_NAMES or path.name.endswith(".pre-m5.db"):
@@ -84,7 +90,7 @@ def _skipped(path: Path, root: Path) -> bool:
 def _copy_ignore(_directory: str, names: list[str]) -> set[str]:
     ignored: set[str] = set()
     for name in names:
-        if name in SKIP_DIRS or name in SKIP_NAMES or name.endswith(".pre-m5.db"):
+        if name in SKIP_DIRS or name in SKIP_NAMES or name in POINTER_NAMES or name.endswith(".pre-m5.db"):
             ignored.add(name)
         elif Path(name).suffix.lower() in SKIP_SUFFIXES:
             ignored.add(name)
@@ -156,12 +162,13 @@ def move_data_dir(raw_path: str) -> dict:
     pointer = location_file()
     pointer.parent.mkdir(parents=True, exist_ok=True)
     pointer.write_text(str(target.resolve()), encoding="utf-8")
-    pending_delete_file().write_text(str(source), encoding="utf-8")
+    pending = pending_delete_file()
+    pending.write_text(str(source), encoding="utf-8")
     # The running process still has the old file open until dispose.
     _release_handles()
-    _retire_database(source)
-    _delete_copied(source, target.resolve())
-    _prune_empty_dirs(source)
+    _empty_except_pointers(source)
+    if _old_settled(source):
+        pending.unlink(missing_ok=True)
     return {"path": str(target.resolve()), "moved": True}
 
 
@@ -172,100 +179,33 @@ def _release_handles() -> None:
     engine.dispose()
 
 
-def _retire_database(folder: Path) -> bool:
-    """Rename weaveverse.db so the old folder no longer shows the live database name."""
-    live = folder / LIVE_DB
-    retired = folder / RETIRED_DB
-    if not live.exists():
-        return True
-    if retired.exists():
-        try:
-            retired.unlink()
-        except OSError:
-            return False
-    try:
-        live.replace(retired)
-    except OSError:
-        return False
-    for name in ("weaveverse.db-wal", "weaveverse.db-shm"):
-        side = folder / name
-        try:
-            if side.is_file():
-                side.unlink()
-        except OSError:
-            pass
-    return True
-
-
-def _delete_retired_database(folder: Path) -> bool:
-    """Remove the renamed database. False means a later startup should try again."""
-    ok = True
-    for name in (
-        RETIRED_DB,
-        "weaveverse.old.db-wal",
-        "weaveverse.old.db-shm",
-        "weaveverse.db-wal",
-        "weaveverse.db-shm",
-    ):
-        path = folder / name
-        if not path.exists():
-            continue
-        try:
-            path.unlink()
-        except OSError:
-            ok = False
-    if (folder / LIVE_DB).exists():
-        return False
-    return ok
-
-
-def _delete_copied(old: Path, new: Path) -> None:
-    """Delete only files that were copied. Skipped paths and the database stay."""
-    if not old.is_dir() or not new.is_dir():
-        return
-    files = [path for path in old.rglob("*") if path.is_file()]
-    for path in sorted(files, key=lambda item: len(item.parts), reverse=True):
-        if _skipped(path, old) or path.name in KEPT_DB_NAMES:
-            continue
-        dest = new / path.relative_to(old)
-        try:
-            same_size = dest.is_file() and dest.stat().st_size == path.stat().st_size
-        except OSError:
-            continue
-        if not same_size:
-            continue
-        try:
-            path.unlink()
-        except OSError:
-            pass
-
-
-def _prune_empty_dirs(root: Path) -> None:
+def _empty_except_pointers(root: Path) -> None:
+    """Delete every file in the old folder except root-level pointer files."""
     if not root.is_dir():
         return
-    dirs = [path for path in root.rglob("*") if path.is_dir()]
-    for path in sorted(dirs, key=lambda item: len(item.parts), reverse=True):
-        if _skipped(path, root):
+    entries = list(root.rglob("*"))
+    files = [path for path in entries if path.is_file()]
+    folders = [path for path in entries if path.is_dir()]
+    for path in sorted(files, key=lambda item: len(item.parts), reverse=True):
+        if _pointer(path, root):
             continue
+        try:
+            path.unlink()
+        except OSError:
+            pass
+    for path in sorted(folders, key=lambda item: len(item.parts), reverse=True):
         try:
             path.rmdir()
         except OSError:
             pass
-    try:
-        if root.is_dir() and not any(root.iterdir()):
-            root.rmdir()
-    except OSError:
-        pass
 
 
 def _old_settled(folder: Path) -> bool:
-    """True when the old folder is gone, or only skipped files remain."""
+    """True when the old folder is gone, or only pointer files remain."""
     if not folder.exists():
         return True
-    if (folder / LIVE_DB).exists() or (folder / RETIRED_DB).exists():
-        return False
     for path in folder.rglob("*"):
-        if path.is_file() and not _skipped(path, folder):
+        if path.is_file() and not _pointer(path, folder):
             return False
     return True
 
@@ -284,10 +224,9 @@ def _new_db_ok() -> bool:
 
 
 def consume_pending_delete() -> None:
-    """Finish the previous move: rename any leftover database, then delete it.
+    """Finish a previous move by emptying the old folder down to pointer files.
 
-    Copied files go away. whisper_models and other skipped paths stay.
-    If the renamed database is still locked, the pending file remains.
+    If a database file is still locked, the pending file remains.
     """
     pending = pending_delete_file()
     try:
@@ -307,9 +246,6 @@ def consume_pending_delete() -> None:
     if not old.exists():
         pending.unlink(missing_ok=True)
         return
-    _retire_database(old)
-    _delete_retired_database(old)
-    _delete_copied(old, DATA_DIR)
-    _prune_empty_dirs(old)
+    _empty_except_pointers(old)
     if _old_settled(old):
         pending.unlink(missing_ok=True)

@@ -25,10 +25,17 @@ def get_timeline(session: Session = Depends(get_session)) -> dict:
 
 @router.post("/focus", status_code=201)
 def post_focus(data: dict, session: Session = Depends(get_session)) -> dict:
-    minutes = data.get("minutes") if isinstance(data, dict) else None
-    if minutes != 25:
-        raise_api_error(400, "minutes", "目前只记录 25 分钟的一轮专注")
-    row = record_focus(session, 25)
+    raw = data.get("minutes") if isinstance(data, dict) else None
+    try:
+        minutes = int(raw)
+    except (TypeError, ValueError):
+        minutes = 0
+    if minutes < 5 or minutes > 180:
+        raise_api_error(400, "minutes", "时长要在 5 到 180 分钟之间")
+    try:
+        row = record_focus(session, minutes)
+    except ValueError as exc:
+        raise_api_error(400, "minutes", str(exc))
     return {
         "id": row.id,
         "minutes": row.minutes,

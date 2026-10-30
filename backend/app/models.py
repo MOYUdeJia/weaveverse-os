@@ -241,11 +241,28 @@ class Idea(SQLModel, table=True):
 
 
 class FocusSession(SQLModel, table=True):
-    """One finished focus interval. Abandoned timers are not stored."""
+    """One finished or abandoned focus interval."""
 
     __tablename__ = "focus_sessions"
 
     id: int | None = Field(default=None, primary_key=True)
     minutes: int = Field(default=25, nullable=False)
     label: str = Field(default="", max_length=80, nullable=False)
+    category: str = Field(default="", max_length=20, nullable=False)
+    outcome: str = Field(default="done", max_length=20, nullable=False)
+    interrupt: str = Field(default="", max_length=40, nullable=False)
     completed_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)
+
+
+class FocusPreset(SQLModel, table=True):
+    """A saved tomato: focus length, rest length, and how many rounds."""
+
+    __tablename__ = "focus_presets"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(default="番茄", max_length=40, nullable=False)
+    focus_minutes: int = Field(default=25, nullable=False)
+    rest_minutes: int = Field(default=5, nullable=False)
+    cycles: int = Field(default=1, nullable=False)
+    category: str = Field(default="学习", max_length=20, nullable=False)
+    sort_order: int = Field(default=0, nullable=False, index=True)
