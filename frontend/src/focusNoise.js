@@ -59,9 +59,8 @@ function stopNodes() {
 
 export function stopNoise() {
   stopNodes()
-  if (window.localStorage.getItem(OWNER_KEY) === ownerId()) {
-    window.localStorage.setItem(OWNER_KEY, '')
-  }
+  window.localStorage.setItem(OWNER_KEY, '')
+  window.localStorage.setItem('wv-focus-noise-stop', String(Date.now()))
 }
 
 export function startNoise(kind = noiseKind()) {
@@ -111,7 +110,11 @@ export function claimNoise(kind = noiseKind()) {
 }
 
 window.addEventListener('storage', (event) => {
-  if (event.key === OWNER_KEY && event.newValue !== ownerId()) {
+  if (event.key === 'wv-focus-noise-stop') {
+    stopNodes()
+    return
+  }
+  if (event.key === OWNER_KEY && event.newValue && event.newValue !== ownerId()) {
     stopNodes()
   }
 })

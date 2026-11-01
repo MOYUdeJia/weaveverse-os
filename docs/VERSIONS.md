@@ -1433,3 +1433,67 @@
   - 修改 `frontend/index.html`、`frontend/src/style.css`、`FocusPet.vue`、`FocusStats.vue`、`GroupBar.vue`、`App.vue`、`focusClock.js`、`focusNoise.js`、`api/client.js`
   - 修改 `docs/VERSIONS.md`
 
+## M16 · 2026-10-30
+- **任务**：收官。修番茄小窗一点就卡死，重画 132px 番茄，侧栏列表改成专注控制台，并加上 iframe 插件 MVP。
+- **实现**：
+  - 打开、拖动、缩放、全屏、隐藏都改成桥返回之后再动窗口。拖动只保留最后一格坐标。单击不再挪窗，贴边滑入滑出在窗口自己移动的这几百毫秒里不再响应鼠标进出。
+  - 小窗番茄改成带高光和暗面的果实，进度圈裁在果肉内侧。
+  - 侧栏番茄列表换成「专注控制台」。弹窗里每一项右侧是「▶ 启动」，点下去开始这一轮并弹出桌宠。
+  - `data/plugins/` 扫描 `manifest.json`。右侧工作区用沙箱 iframe 打开插件。右下角插头图标和 AI 并排，面板可导入 zip、导出、删除，市场页写着敬请期待。附带 Hello World 和 `docs/PLUGIN-GUIDE.md`。
+- **技术架构**：
+  - 事实：pywebview 的 js_api 要等 Python 返回，而 `create_window` / `move` / `resize` 又要占用同一条界面线程。点「启动」或点一下小窗时，这两边互相等，窗口就停住。贴边逻辑还会在窗口一动就再发一次 `focus_move`，把等待排成一串。
+  - 预测：把窗口操作推迟到桥返回之后，单击不再调用 `focus_move`，这条卡死会消失。这次没有在桌面窗口里点过，要你自己打包后看一眼。
+  - 插件 iframe 使用 `sandbox="allow-scripts"`，不给同源。HTML 响应带 CSP：脚本和样式只能内联，`connect-src 'none'`。宿主只接受来自该 iframe、`source === "wv-plugin"` 的 `ready` 和 `toast`。加载后宿主回一条 `wv-host` / `hello`，里面只有 id 和名字。
+- **与 M15.1 相比的变化**：
+  - 番茄小窗不再在点击时同步挪窗口
+  - 侧栏不再铺番茄列表
+  - 可以安装并用 iframe 跑一个 HTML 插件
+- **已知问题**：
+  - 改完前端后要再执行一次 `npm run build`，普通启动才会带上新界面。这次任务只跑了前端编译，没有跑 `build.ps1` 或安装包脚本。
+  - 插件页面不能外链脚本、样式和图片，也不能请求接口。这是隔离，不是遗漏。市场页没有接口。
+  - 番茄果实用了 SVG 渐变来做高光和暗面。页面其他地方仍然是平涂。
+- **文件变更**：
+  - 新增 `backend/app/plugins.py`、`backend/app/routes/plugins.py`、`backend/app/bundled_plugins/hello-world/`
+  - 新增 `frontend/src/components/PluginFrame.vue`、`frontend/src/components/PluginPanel.vue`
+  - 新增 `docs/PLUGIN-GUIDE.md`
+  - 修改 `backend/main.py`、`backend/app/api.py`、`backend/app/version.py`
+  - 修改 `frontend/src/App.vue`、`FocusPet.vue`、`FocusBoard.vue`、`focusClock.js`、`api/client.js`、`style.css`
+  - 修改 `docs/VERSIONS.md`
+
+## M16.1 · 2026-10-30
+- **任务**：桌宠不进任务栏，去掉首次召唤的方块阴影和全屏样式错乱，并把插件、AI、专注控制台的入口按新布局收好。
+- **实现**：
+  - 小窗先隐藏。页面挂上之后才显示，再用 `GetWindowLong` / `SetWindowLong` 加上 `WS_EX_TOOLWINDOW`、去掉 `WS_EX_APPWINDOW`。桌面合成的非客户区阴影关掉。拖动按帧合并。
+  - 小窗没画到的地方用纯黑，交给颜色键抠掉，右键菜单撑大窗口后会再抠一次。
+  - 全屏的时钟和翻页数字限制在一列里，声音下拉用实色并压在时钟上面。全黑模式只藏说明和工具，不藏时间。
+  - 隐藏桌宠时主窗口提示：桌宠已隐藏，可在设置→外观中重新召唤。召唤开关在外观页。
+  - 主界面倒计时面板去掉。音乐球右键里的专注去掉。右下角的插件和 AI 挪到最左分组栏底部，从下到上是设置、插件、AI。侧栏设置下面的 AI 按钮换成专注控制台。
+  - 插件面板可打开开发者文档，内容来自 `docs/PLUGIN-GUIDE.md`。
+- **技术架构**：
+  - 事实：上次把 `SetWindowLong` 放在主窗口显示过程里，会把透明窗口留在隐藏状态。这次只对已经显示的桌宠调用，并且不在 `loaded` 回调里调用。
+  - 预测：任务栏不再出现桌宠图标，第一次拖动不再拖着一块灰底。要在桌面窗口里确认，这次没有点过真窗口。
+- **已知问题**：
+  - 改完前端后要再执行一次 `npm run build`。没有跑打包脚本。
+- **文件变更**：
+  - 修改 `backend/main.py`、`backend/app/routes/plugins.py`
+  - 修改 `frontend/src/App.vue`、`FocusPet.vue`、`FocusBoard.vue`、`PluginPanel.vue`、`GroupBar.vue`、`SidebarNav.vue`、`MusicDock.vue`、`AppearanceDialog.vue`、`api/client.js`、`style.css`
+  - 修改 `docs/VERSIONS.md`
+
+## M16.2 · 2026-11-01
+- **任务**：修复透明桌宠无法点击、拖动，以及主窗口关闭后桌宠残留，并统一收圆核心面板、补齐状态动效。
+- **实现**：
+  - 桌宠从透明 WebView 改为不透明画布，用 Win32 `SetWindowRgn` 裁出番茄和圆角菜单轮廓；不再使用会让 WebView2 画面可见但鼠标穿透的 `TransparencyKey`。
+  - 拖动改为原生物理鼠标跟踪，不依赖 WebView 边界内的 `mousemove`；菜单展开时会自动移回屏幕工作区。
+  - 进入全屏前清除番茄形状的 Win32 裁剪区，退出时再恢复，避免全屏内容仍被裁成小圆形。
+  - 主窗口关闭时先隐藏、再销毁桌宠窗口。
+  - 设置、专注控制台、插件管理、开发者文档和专注统计统一为 16–20px 圆角；列表项、按钮、编辑区和桌宠菜单同步收圆。
+  - 面板使用 280–320ms 减速进入，按钮有 130–180ms 按压反馈；所有动效支持 `prefers-reduced-motion`。
+- **验证**：
+  - `npm run build` 通过。
+  - Windows 真机验证：番茄无黑色方底、可右键、可跨窗口拖动；全屏和 Esc 返回正常，翻页数字会在秒数变化时执行 3D 翻转；关闭主窗口后桌宠立即消失。
+  - `python -m py_compile main.py` 通过。
+- **文件变更**：
+  - 修改 `backend/main.py`
+  - 修改 `frontend/src/style.css`、`FocusPet.vue`、`FocusBoard.vue`、`PluginPanel.vue`、`FocusStats.vue`
+  - 修改 `docs/VERSIONS.md`
+

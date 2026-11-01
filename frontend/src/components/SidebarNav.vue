@@ -164,7 +164,6 @@ function onItemMenu(event, item) {
       </template>
     </draggable>
 
-    <FocusBoard @start="emit('focus', $event)" />
     <div class="mt-auto border-t border-black/10 pt-5">
       <div class="mb-3 grid grid-cols-3 gap-2">
         <button type="button" class="h-9 rounded-md bg-white text-xs font-medium text-ink shadow-sm" title="搜索 Ctrl+K" @click="emit('search')">
@@ -177,10 +176,7 @@ function onItemMenu(event, item) {
           设置
         </button>
       </div>
-      <button type="button" class="mb-3 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-white text-sm font-medium text-ink shadow-sm" title="AI Ctrl+J" @click="emit('ai')">
-        <span>🤖</span>
-        <span>AI</span>
-      </button>
+      <FocusBoard @start="emit('focus', $event)" />
       <button
         type="button"
         class="mb-5 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-ink text-sm font-semibold text-white transition hover:bg-moss"

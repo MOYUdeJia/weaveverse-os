@@ -650,6 +650,33 @@ export async function uploadFocusBackground(file) {
   return request('/focus/backgrounds', { method: 'POST', body })
 }
 
+export function getPlugins() {
+  return request('/plugins')
+}
+
+export function getPluginGuide() {
+  return request('/plugins/guide')
+}
+
+export function importPlugin(file) {
+  const body = new FormData()
+  body.append('file', file)
+  return request('/plugins/import', { method: 'POST', body })
+}
+
+export function deletePlugin(id) {
+  return request(`/plugins/${id}`, { method: 'DELETE' })
+}
+
+export function pluginExportUrl(id) {
+  return `/api/plugins/${id}/export`
+}
+
+export function pluginEntryUrl(plugin) {
+  const entry = String(plugin.entry || 'index.html').replace(/^\/+/, '')
+  return `/api/plugins/${encodeURIComponent(plugin.id)}/files/${entry}`
+}
+
 export function getDataDir() {
   return request('/system/data-dir')
 }

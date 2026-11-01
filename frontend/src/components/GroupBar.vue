@@ -25,7 +25,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select', 'create', 'edit', 'remove', 'reorder', 'lock', 'receive', 'stats'])
+const emit = defineEmits(['select', 'create', 'edit', 'remove', 'reorder', 'lock', 'receive', 'stats', 'settings', 'plugins', 'ai'])
 
 const narrow = ref(false)
 const holding = ref(false)
@@ -269,6 +269,37 @@ onUnmounted(() => {
           :class="bar === 'overlay' || bar === 'stack' ? 'hidden' : narrow ? 'opacity-0' : menuOpen ? 'opacity-100' : 'opacity-0 group-hover/folders:opacity-100'"
         >
           专注统计
+        </span>
+      </button>
+      <button type="button" class="flex h-12 w-full items-center text-left text-ink/80 hover:bg-black/5" title="AI" @click="emit('ai')">
+        <span class="grid h-12 w-12 shrink-0 place-items-center text-xs font-semibold">AI</span>
+        <span
+          class="truncate whitespace-nowrap text-sm font-medium transition-opacity duration-300"
+          :class="bar === 'overlay' || bar === 'stack' ? 'hidden' : narrow ? 'opacity-0' : menuOpen ? 'opacity-100' : 'opacity-0 group-hover/folders:opacity-100'"
+        >
+          AI
+        </span>
+      </button>
+      <button type="button" class="flex h-12 w-full items-center text-left text-ink/80 hover:bg-black/5" title="插件" @click="emit('plugins')">
+        <span class="grid h-12 w-12 shrink-0 place-items-center">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 2h2v4h2V2h2v4h2v7a5 5 0 0 1-4 4.9V22h-2v-4.1A5 5 0 0 1 7 13V6h2V2z" /></svg>
+        </span>
+        <span
+          class="truncate whitespace-nowrap text-sm font-medium transition-opacity duration-300"
+          :class="bar === 'overlay' || bar === 'stack' ? 'hidden' : narrow ? 'opacity-0' : menuOpen ? 'opacity-100' : 'opacity-0 group-hover/folders:opacity-100'"
+        >
+          插件
+        </span>
+      </button>
+      <button type="button" class="flex h-12 w-full items-center text-left text-ink/80 hover:bg-black/5" title="设置" @click="emit('settings')">
+        <span class="grid h-12 w-12 shrink-0 place-items-center">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" /></svg>
+        </span>
+        <span
+          class="truncate whitespace-nowrap text-sm font-medium transition-opacity duration-300"
+          :class="bar === 'overlay' || bar === 'stack' ? 'hidden' : narrow ? 'opacity-0' : menuOpen ? 'opacity-100' : 'opacity-0 group-hover/folders:opacity-100'"
+        >
+          设置
         </span>
       </button>
     </div>

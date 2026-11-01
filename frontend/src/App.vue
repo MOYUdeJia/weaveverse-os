@@ -8,7 +8,6 @@ import GroupBar from './components/GroupBar.vue'
 import GroupEditDialog from './components/GroupEditDialog.vue'
 import NavEditDialog from './components/NavEditDialog.vue'
 import AppearanceDialog from './components/AppearanceDialog.vue'
-import FocusTimer from './components/FocusTimer.vue'
 import FocusStats from './components/FocusStats.vue'
 import GuideDialog from './components/GuideDialog.vue'
 import MusicDock from './components/MusicDock.vue'
@@ -17,6 +16,8 @@ import SearchDialog from './components/SearchDialog.vue'
 import QuickNoteDialog from './components/QuickNoteDialog.vue'
 import SplashScreen from './components/SplashScreen.vue'
 import ChatPanel from './components/ChatPanel.vue'
+import PluginFrame from './components/PluginFrame.vue'
+import PluginPanel from './components/PluginPanel.vue'
 import WorkspacePanel from './components/WorkspacePanel.vue'
 import { bindFocusClock, focusClock, focusCommand } from './focusClock'
 import { claimNoise } from './focusNoise'
@@ -52,10 +53,11 @@ const noteRevision = ref(0)
 const appearanceOpen = ref(false)
 const orbMoving = ref(false)
 const chatOpen = ref(false)
+const pluginsOpen = ref(false)
+const activePlugin = ref(null)
 const guideOpen = ref(false)
 const narrow = ref(false)
 const drawerOpen = ref(false)
-const focusOpen = ref(false)
 const focusStatsOpen = ref(false)
 const pendingBook = ref(null)
 let narrowMedia = null
@@ -134,6 +136,7 @@ function applyNavItems(items, preferredId = null) {
 }
 
 async function selectGroup(groupId, preferredId = null, overview = false) {
+  activePlugin.value = null
   const requestId = ++navRequest
   activeGroupId.value = groupId
   navLoading.value = true
@@ -210,9 +213,16 @@ async function loadShellData() {
 }
 
 function openNav(id) {
+  activePlugin.value = null
   drawerOpen.value = false
   showingOverview.value = false
   activeId.value = id
+}
+
+function openPlugin(plugin) {
+  activePlugin.value = plugin
+  pluginsOpen.value = false
+  drawerOpen.value = false
 }
 
 function pickGroup(id) {
@@ -609,7 +619,12 @@ onMounted(() => {
   loadShellData()
   bindFocusClock()
   window.addEventListener('keydown', onGlobalKey)
+  window.addEventListener('wv-pet-hidden', onPetHidden)
 })
+
+function onPetHidden() {
+  showToast('桌宠已隐藏，可在设置→外观中重新召唤')
+}
 
 async function beginFocus(preset) {
   claimNoise()
@@ -635,13 +650,25 @@ async function beginFocus(preset) {
   if (api && typeof api.open_focus_pet === 'function') {
     try {
       await api.open_focus_pet()
-      focusOpen.value = false
-      return
     } catch (error) {
       showToast(error.message || '悬浮窗没有打开')
     }
+    return
   }
-  focusOpen.value = true
+  showToast('桌宠要在桌面窗口里召唤')
+}
+
+async function summonPet() {
+  const api = window.pywebview?.api
+  if (!api || typeof api.open_focus_pet !== 'function') {
+    showToast('桌宠要在桌面窗口里召唤')
+    return
+  }
+  try {
+    await api.open_focus_pet()
+  } catch (error) {
+    showToast(error.message || '悬浮窗没有打开')
+  }
 }
 
 async function windowAction(name) {
@@ -654,6 +681,7 @@ async function windowAction(name) {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKey)
+  window.removeEventListener('wv-pet-hidden', onPetHidden)
   narrowMedia?.removeEventListener('change', syncNarrow)
 })
 
@@ -677,6 +705,9 @@ function onGlobalKey(event) {
   }
   if (event.key === 'Escape' && chatOpen.value) {
     chatOpen.value = false
+  }
+  if (event.key === 'Escape' && pluginsOpen.value) {
+    pluginsOpen.value = false
   }
 }
 
@@ -921,6 +952,9 @@ async function onNoteSaved(saved) {
         @reorder="persistGroupOrder"
         @receive="receiveNav"
         @stats="focusStatsOpen = true"
+        @settings="appearanceOpen = true"
+        @plugins="pluginsOpen = true"
+        @ai="chatOpen = !chatOpen"
       />
       <SidebarNav
         v-if="!narrow"
@@ -943,10 +977,11 @@ async function onNoteSaved(saved) {
         @search="openSearch()"
         @note="noteOpen = true"
         @appearance="appearanceOpen = true"
-        @ai="chatOpen = !chatOpen"
         @focus="beginFocus"
       />
+      <PluginFrame v-if="activePlugin" :plugin="activePlugin" @close="activePlugin = null" />
       <WorkspacePanel
+        v-else
         :item="viewActive"
         :loading="isLoading"
         :error-message="errorMessage"
@@ -1002,8 +1037,10 @@ async function onNoteSaved(saved) {
       @opacity="previewOpacity"
       @open-guide="guideOpen = true"
       @move-orb="startOrbMove"
+      @summon-pet="summonPet"
     />
     <ChatPanel :open="chatOpen" @close="chatOpen = false" @open-nav="openSearchNav" />
+    <PluginPanel :open="pluginsOpen" @close="pluginsOpen = false" @open="openPlugin" />
     <MusicDock
       v-if="!appearance.player_hidden"
       :place="appearance.player || 'corner'"
@@ -1016,9 +1053,7 @@ async function onNoteSaved(saved) {
       @move-done="finishOrbMove"
       @move-cancel="cancelOrbMove"
       @hide="hideOrb"
-      @focus="beginFocus"
     />
-    <FocusTimer :open="focusOpen" @close="focusOpen = false" @expand="focusOpen = true" />
     <FocusStats :open="focusStatsOpen" @close="focusStatsOpen = false" />
     <div v-if="narrow && drawerOpen" class="wv-drawer-mask" @click="drawerOpen = false">
       <div class="wv-drawer" role="dialog" aria-label="导航" @click.stop>
@@ -1035,6 +1070,9 @@ async function onNoteSaved(saved) {
           @reorder="persistGroupOrder"
           @receive="receiveNav"
           @stats="focusStatsOpen = true; drawerOpen = false"
+          @settings="appearanceOpen = true; drawerOpen = false"
+          @plugins="pluginsOpen = true; drawerOpen = false"
+          @ai="chatOpen = !chatOpen; drawerOpen = false"
         />
         <SidebarNav
           embedded
@@ -1057,7 +1095,6 @@ async function onNoteSaved(saved) {
           @search="openSearch()"
           @note="noteOpen = true; drawerOpen = false"
           @appearance="appearanceOpen = true; drawerOpen = false"
-          @ai="chatOpen = !chatOpen; drawerOpen = false"
           @focus="beginFocus(); drawerOpen = false"
         />
       </div>

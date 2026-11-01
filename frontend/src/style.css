@@ -1256,8 +1256,10 @@ textarea {
   width: min(920px, 100%);
   height: min(760px, 88vh);
   overflow: hidden;
+  border-radius: 20px;
   background: #f3efe6;
   color: #16201d;
+  animation: wv-panel-in 320ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .wv-settings-nav {
@@ -1297,8 +1299,35 @@ textarea {
 
 .wv-card {
   background: #fffcf7;
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 18px 20px 20px;
+}
+
+.wv-card,
+.wv-btn,
+.wv-choice,
+.wv-settings-nav button {
+  transition:
+    transform 140ms cubic-bezier(0.2, 0, 0, 1),
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.wv-btn:active,
+.wv-choice:active,
+.wv-settings-nav button:active {
+  transform: scale(0.97);
+}
+
+@keyframes wv-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .wv-card + .wv-card,
@@ -1631,8 +1660,21 @@ html[data-surface='pet'] #app {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: transparent !important;
-  background-color: transparent !important;
+  background: #010001 !important;
+  background-color: #010001 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wv-settings {
+    animation: none;
+  }
+
+  .wv-card,
+  .wv-btn,
+  .wv-choice,
+  .wv-settings-nav button {
+    transition: none;
+  }
 }
 
 html.is-pet-full,

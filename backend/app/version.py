@@ -1,6 +1,6 @@
 """Identity shown in settings, so a stale window is obvious."""
 
-APP_VERSION = "M15.1"
+APP_VERSION = "M16"
 
 
 def database_revision() -> str:

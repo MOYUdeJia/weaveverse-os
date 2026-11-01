@@ -6,6 +6,7 @@ the main thread so GUI frameworks keep their expected threading model.
 
 from __future__ import annotations
 
+import ctypes
 import os
 import socket
 import sys
@@ -44,6 +45,7 @@ from app.book_files import original_path
 from app.config import BACKEND_DIR, DATABASE_PATH, DATA_DIR, DEV_SERVER_URL, FRONTEND_DIST, HOST, MIN_HEIGHT, MIN_WIDTH, PORT_FILE, PROJECT_ROOT, WINDOW_HOST, is_dev_mode
 from app.data_move import consume_pending_delete
 from app.db import engine
+from app.plugins import ensure_seed
 from app.seed import seed_initial_nav_items
 from app.timeline import ensure_timeline_page
 from app.static import create_app
@@ -66,6 +68,13 @@ class DesktopBridge:
         self._full = False
         self._before_full: tuple | None = None
         self._zoomed = False
+        self._opening = False
+        self._pet_shown = False
+        self._pet_home = (80, 80)
+        self._pet_dragging = False
+        self._move_lock = threading.Lock()
+        self._move_target: tuple[int, int] | None = None
+        self._move_busy = False
 
     # 用系统浏览器打开 http(s) 外链。
     # Open an http(s) URL in the system browser.
@@ -316,7 +325,10 @@ class DesktopBridge:
         for window in webview.windows:
             if getattr(window, "uid", "") == "master":
                 return window
-        return webview.windows[0] if webview.windows else None
+        for window in webview.windows:
+            if window is not self._pet:
+                return window
+        return None
 
     # 无边框主窗口的最小化、最大化、关闭。
     def window_minimize(self) -> bool:
@@ -361,6 +373,7 @@ class DesktopBridge:
         self._dock = None
         self._full = False
         self._before_full = None
+        self._pet_shown = False
 
     def _screen_for(self, x: int, y: int):
         try:
@@ -374,45 +387,81 @@ class DesktopBridge:
                 return screen
         return screens[0]
 
+    def _defer(self, fn, delay: float = 0.04) -> None:
+        """Run a window call after the JS bridge has returned.
+
+        pywebview delivers js_api on the GUI thread and waits for the return
+        value. move, resize, show and create_window also need that thread.
+        Doing them inline deadlocks the pet the moment it is clicked.
+        """
+
+        def _run() -> None:
+            time.sleep(delay)
+            try:
+                fn()
+            except Exception:
+                return
+
+        threading.Thread(target=_run, daemon=True).start()
+
     def _glide(self, pet, x: int, y: int) -> None:
         x0, y0 = pet.x, pet.y
         steps = 8
         for step in range(1, steps + 1):
             t = step / steps
             ease = t * t * (3 - 2 * t)
-            pet.move(round(x0 + (x - x0) * ease), round(y0 + (y - y0) * ease))
+            try:
+                pet.move(round(x0 + (x - x0) * ease), round(y0 + (y - y0) * ease))
+            except Exception:
+                return
             time.sleep(0.016)
 
-    # 打开置顶的专注小窗。已打开时只把它显示出来。
-    def open_focus_pet(self) -> dict:
-        pet = self._living_pet()
-        if pet is not None:
-            pet.show()
-            return {"opened": True, "existing": True}
+    def _spawn_pet(self) -> None:
+        if self._living_pet() is not None:
+            return
         base = _target_url or f"http://{WINDOW_HOST}:{server_port or 8765}"
         join = "&" if "?" in base else "?"
         url = f"{base}{join}surface=pet"
+        self._pet_shown = False
         self._pet = webview.create_window(
             "专注",
             url,
             width=_PET_SIZE,
             height=_PET_SIZE,
             frameless=True,
-            transparent=True,
+            transparent=False,
             on_top=True,
             easy_drag=False,
             shadow=False,
+            hidden=True,
             resizable=False,
-            focus=True,
             text_select=False,
-            background_color="#000000",
+            background_color="#010001",
             min_size=(_PET_SIZE, _PET_SIZE),
             js_api=self,
         )
         if self._pet is not None:
             self._pet.events.closed += self._forget_pet
-            _open_desktop(self._pet, holes=True)
-        return {"opened": self._pet is not None, "existing": False}
+            threading.Timer(0.6, self._arm_pet_chrome).start()
+
+    # 打开置顶的专注小窗。已打开时只把它显示出来。
+    def open_focus_pet(self) -> dict:
+        pet = self._living_pet()
+        if pet is not None:
+            _begin_gui(pet, lambda: pet.show())
+            return {"opened": True, "existing": True}
+        if self._opening:
+            return {"opened": True, "existing": True}
+        self._opening = True
+
+        def _open() -> None:
+            try:
+                self._spawn_pet()
+            finally:
+                self._opening = False
+
+        self._defer(_open)
+        return {"opened": True, "existing": False}
 
     def focus_geometry(self) -> dict:
         pet = self._living_pet()
@@ -420,20 +469,153 @@ class DesktopBridge:
             return {"ok": False}
         return {"ok": True, "x": pet.x, "y": pet.y, "width": pet.width, "height": pet.height, "full": self._full}
 
-    def focus_move(self, x: int, y: int) -> dict:
+    def focus_nudge(self, dx: int, dy: int) -> dict:
+        """Move by a mouse delta. pywebview's own move() truncates the window handle."""
+        try:
+            step = (int(dx), int(dy))
+        except (TypeError, ValueError):
+            return {"ok": False}
+        if step == (0, 0):
+            return {"ok": True}
         pet = self._living_pet()
         if pet is None or self._full:
             return {"ok": False}
-        self._dock = None
-        pet.move(int(x), int(y))
-        return {"ok": True, "x": pet.x, "y": pet.y}
+
+        def _go() -> None:
+            current = self._living_pet()
+            native = getattr(current, "native", None) if current else None
+            if native is None:
+                return
+            scale = float(getattr(native, "_scale", 1) or 1)
+            hwnd = _hwnd_of(current)
+            if not hwnd:
+                return
+            _set_window_pos(
+                hwnd,
+                int(native.Left + step[0] * scale),
+                int(native.Top + step[1] * scale),
+                0,
+                0,
+                0x0001 | 0x0004 | 0x0010,
+            )
+
+        _begin_gui(pet, _go)
+        return {"ok": True}
+
+    def focus_begin_drag(self) -> dict:
+        """Track the physical mouse outside WebView2 until the button is released."""
+        pet = self._living_pet()
+        if pet is None or self._full or self._pet_dragging:
+            return {"ok": False}
+        hwnd = _hwnd_of(pet)
+        if not hwnd:
+            return {"ok": False}
+        self._pet_dragging = True
+
+        def _drag() -> None:
+            class Point(ctypes.Structure):
+                _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+            class Rect(ctypes.Structure):
+                _fields_ = [
+                    ("left", ctypes.c_long),
+                    ("top", ctypes.c_long),
+                    ("right", ctypes.c_long),
+                    ("bottom", ctypes.c_long),
+                ]
+
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+            cursor = Point()
+            rect = Rect()
+            try:
+                if not user32.GetCursorPos(ctypes.byref(cursor)):
+                    return
+                if not user32.GetWindowRect(ctypes.c_void_p(hwnd), ctypes.byref(rect)):
+                    return
+                start_mouse = (int(cursor.x), int(cursor.y))
+                start_window = (int(rect.left), int(rect.top))
+                while user32.GetAsyncKeyState(0x01) & 0x8000:
+                    if user32.GetCursorPos(ctypes.byref(cursor)):
+                        _set_window_pos(
+                            hwnd,
+                            start_window[0] + int(cursor.x) - start_mouse[0],
+                            start_window[1] + int(cursor.y) - start_mouse[1],
+                            0,
+                            0,
+                            0x0001 | 0x0004 | 0x0010,
+                        )
+                    time.sleep(0.008)
+            finally:
+                self._pet_dragging = False
+
+        threading.Thread(target=_drag, daemon=True).start()
+        return {"ok": True}
+
+    def focus_move(self, x: int, y: int) -> dict:
+        try:
+            point = (int(x), int(y))
+        except (TypeError, ValueError):
+            return {"ok": False}
+        pet = self._living_pet()
+        if pet is None or self._full:
+            return {"ok": False}
+
+        def _go() -> None:
+            current = self._living_pet()
+            native = getattr(current, "native", None) if current else None
+            if native is None:
+                return
+            scale = float(getattr(native, "_scale", 1) or 1)
+            hwnd = _hwnd_of(current)
+            if not hwnd:
+                return
+            _set_window_pos(hwnd, int(point[0] * scale), int(point[1] * scale), 0, 0, 0x0001 | 0x0004 | 0x0010)
+
+        _begin_gui(pet, _go)
+        return {"ok": True, "x": point[0], "y": point[1]}
 
     def focus_resize(self, width: int, height: int) -> dict:
+        try:
+            size = (max(_PET_SIZE, int(width)), max(_PET_SIZE, int(height)))
+        except (TypeError, ValueError):
+            return {"ok": False}
         pet = self._living_pet()
         if pet is None or self._full:
             return {"ok": False}
-        pet.resize(max(_PET_SIZE, int(width)), max(_PET_SIZE, int(height)))
-        return {"ok": True, "width": pet.width, "height": pet.height}
+
+        def _go() -> None:
+            current = self._living_pet()
+            native = getattr(current, "native", None) if current else None
+            if native is None:
+                return
+            scale = float(getattr(native, "_scale", 1) or 1)
+            hwnd = _hwnd_of(current)
+            if not hwnd:
+                return
+            target_width = int(size[0] * scale)
+            target_height = int(size[1] * scale)
+            x = int(native.Left)
+            y = int(native.Top)
+            try:
+                from System.Windows.Forms import Screen
+
+                area = Screen.FromPoint(native.Location).WorkingArea
+                x = min(max(x, int(area.Left)), int(area.Right) - target_width)
+                y = min(max(y, int(area.Top)), int(area.Bottom) - target_height)
+            except Exception:
+                pass
+            _set_window_pos(
+                hwnd,
+                x,
+                y,
+                target_width,
+                target_height,
+                0x0004 | 0x0010,
+            )
+            _finish_pet_chrome(current)
+
+        _begin_gui(pet, _go)
+        return {"ok": True, "width": size[0], "height": size[1]}
 
     def _dock_points(self, pet, screen, side: str) -> dict:
         width = pet.width or _PET_SIZE
@@ -473,7 +655,7 @@ class DesktopBridge:
             return {"dock": None}
         self._dock = self._dock_points(pet, screen, side)
         home = self._dock["home"]
-        self._glide(pet, home[0], home[1])
+        self._defer(lambda: self._glide(pet, home[0], home[1]))
         return {"dock": side}
 
     def focus_peek(self, show: bool) -> dict:
@@ -482,7 +664,7 @@ class DesktopBridge:
         if pet is None or dock is None or self._full:
             return {"ok": False}
         point = dock["shown"] if show else dock["home"]
-        self._glide(pet, point[0], point[1])
+        self._defer(lambda: self._glide(pet, point[0], point[1]))
         return {"ok": True, "show": bool(show)}
 
     def focus_fullscreen(self, enabled: bool) -> dict:
@@ -496,29 +678,91 @@ class DesktopBridge:
             screen = self._screen_for(pet.x, pet.y)
             self._full = True
             self._dock = None
-            if screen is not None:
-                pet.move(screen.x, screen.y)
-                pet.resize(screen.width, screen.height)
+
+            def _enter() -> None:
+                current = self._living_pet()
+                if current is None or screen is None:
+                    return
+                _clear_pet_region(current)
+                current.move(screen.x, screen.y)
+                current.resize(screen.width, screen.height)
+
+            self._defer(_enter)
             return {"ok": True, "full": True}
         if not self._full:
             return {"ok": True, "full": False}
         self._full = False
         saved = self._before_full or (80, 80, _PET_SIZE, _PET_SIZE, None)
         x, y, width, height, dock = saved
-        pet.resize(width, height)
-        pet.move(x, y)
         self._dock = dock
-        if dock:
-            home = dock["home"]
-            self._glide(pet, home[0], home[1])
+
+        def _leave() -> None:
+            current = self._living_pet()
+            if current is None:
+                return
+            current.resize(width, height)
+            current.move(x, y)
+            _shape_pet(current)
+            if dock:
+                home = dock["home"]
+                self._glide(current, home[0], home[1])
+
+        self._defer(_leave)
         return {"ok": True, "full": False}
+
+    def focus_ready(self) -> dict:
+        """Style the pet after it is on screen. Never show or Invoke from this call."""
+        self._arm_pet_chrome()
+        return {"ok": True}
+
+    def _arm_pet_chrome(self) -> None:
+        pet = self._living_pet()
+        if pet is None or self._pet_shown:
+            return
+        self._pet_shown = True
+
+        def _present() -> None:
+            _finish_pet_chrome(pet, True)
+            try:
+                pet.native.Show()
+                pet.native.Activate()
+            except Exception:
+                return
+
+        _begin_gui(pet, _present)
 
     def focus_hide(self) -> bool:
         pet = self._living_pet()
         if pet is None:
             return False
-        pet.hide()
+
+        def _go() -> None:
+            current = self._living_pet()
+            if current is not None:
+                current.hide()
+            main = self._main_window()
+            if main is None:
+                return
+            try:
+                main.evaluate_js("window.dispatchEvent(new CustomEvent('wv-pet-hidden'))")
+            except Exception:
+                return
+
+        self._defer(_go)
         return True
+
+    def close_focus_pet(self, *_args) -> None:
+        """Destroy the accessory window when the main window is closing."""
+        pet = self._living_pet()
+        if pet is None:
+            return
+        native = getattr(pet, "native", None)
+        if native is not None:
+            try:
+                native.Hide()
+            except Exception:
+                pass
+        self._defer(pet.destroy, 0)
 
 
 # 探测本机端口是否可绑定。
@@ -633,6 +877,214 @@ def _window_icon() -> str | None:
     return None
 
 
+def _paint_pet_hole(window) -> None:
+    """Keep the WebView background stable; the Win32 region supplies the shape."""
+    native = getattr(window, "native", None)
+    if native is None:
+        return
+    try:
+        from System.Drawing import Color
+
+        browser = getattr(native, "browser", None)
+        web = getattr(browser, "webview", None) if browser is not None else None
+        key = Color.FromArgb(255, 1, 0, 1)
+        if web is not None:
+            web.DefaultBackgroundColor = key
+        native.BackColor = key
+    except Exception:
+        return
+
+
+def _hwnd_of(window) -> int | None:
+    native = getattr(window, "native", None)
+    if native is None:
+        return None
+    handle = getattr(native, "Handle", None)
+    if handle is None:
+        return None
+    try:
+        return int(handle.ToInt64())
+    except Exception:
+        try:
+            return int(handle)
+        except Exception:
+            return None
+
+
+def _park_pet(window) -> None:
+    """Working-area pixels are already physical. Do not scale them again."""
+    native = getattr(window, "native", None)
+    hwnd = _hwnd_of(window)
+    if native is None or not hwnd:
+        return
+    try:
+        from System.Windows.Forms import Screen
+
+        area = Screen.FromPoint(native.Location).WorkingArea
+    except Exception:
+        return
+    width = int(native.Width or _PET_SIZE)
+    height = int(native.Height or _PET_SIZE)
+    x = int(area.Right - width - 36)
+    y = int(area.Bottom - height - 48)
+    if x < area.Left:
+        x = int(area.Left + 24)
+    if y < area.Top:
+        y = int(area.Top + 24)
+    _set_window_pos(hwnd, x, y, 0, 0, 0x0001 | 0x0004 | 0x0010)
+
+
+def _clear_pet_region(window) -> None:
+    hwnd = _hwnd_of(window)
+    if not hwnd:
+        return
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.SetWindowRgn.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int]
+    user32.SetWindowRgn.restype = ctypes.c_int
+    user32.SetWindowRgn(ctypes.c_void_p(hwnd), None, 1)
+
+
+def _shape_pet(window) -> None:
+    """Give WebView2 an explicit hit-tested silhouette instead of transparency."""
+    native = getattr(window, "native", None)
+    hwnd = _hwnd_of(window)
+    if native is None or not hwnd:
+        return
+    width = int(native.ClientSize.Width or native.Width or _PET_SIZE)
+    height = int(native.ClientSize.Height or native.Height or _PET_SIZE)
+    scale = float(getattr(native, "_scale", 1) or 1)
+    css_width = round(width / scale)
+    css_height = round(height / scale)
+    if css_width > 340 or css_height > 260:
+        _clear_pet_region(window)
+        return
+
+    def px(value: float) -> int:
+        return round(value * scale)
+
+    gdi = ctypes.WinDLL("gdi32", use_last_error=True)
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    gdi.CreateEllipticRgn.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+    gdi.CreateEllipticRgn.restype = ctypes.c_void_p
+    gdi.CreateRoundRectRgn.argtypes = [
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
+    gdi.CreateRoundRectRgn.restype = ctypes.c_void_p
+    gdi.CombineRgn.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int]
+    gdi.CombineRgn.restype = ctypes.c_int
+    gdi.DeleteObject.argtypes = [ctypes.c_void_p]
+    gdi.DeleteObject.restype = ctypes.c_int
+    user32.SetWindowRgn.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int]
+    user32.SetWindowRgn.restype = ctypes.c_int
+    fruit = gdi.CreateEllipticRgn(px(17), px(33), px(116), px(122))
+    crown = gdi.CreateEllipticRgn(px(34), px(31), px(102), px(58))
+    if not fruit or not crown:
+        return
+    gdi.CombineRgn(fruit, fruit, crown, 2)  # RGN_OR
+    gdi.DeleteObject(crown)
+    if css_width > _PET_SIZE + 40:
+        menu = gdi.CreateRoundRectRgn(px(140), px(28), px(288), px(193), px(28), px(28))
+        if menu:
+            gdi.CombineRgn(fruit, fruit, menu, 2)
+            gdi.DeleteObject(menu)
+    if not user32.SetWindowRgn(ctypes.c_void_p(hwnd), fruit, 1):
+        gdi.DeleteObject(fruit)
+
+
+def _set_window_pos(hwnd: int, x: int, y: int, width: int, height: int, flags: int) -> None:
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.SetWindowPos.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_uint,
+    ]
+    user32.SetWindowPos.restype = ctypes.c_int
+    user32.SetWindowPos(ctypes.c_void_p(hwnd), None, int(x), int(y), int(width), int(height), int(flags))
+
+
+def _begin_gui(window, fn) -> None:
+    """Queue work on the window thread without waiting. Invoke here deadlocks create_window."""
+    native = getattr(window, "native", None)
+    if native is None or not hasattr(native, "BeginInvoke"):
+        return
+    try:
+        from System import Action
+
+        native.BeginInvoke(Action(fn))
+    except Exception:
+        return
+
+
+def _finish_pet_chrome(window, park: bool = False) -> None:
+    """Apply the pet's native silhouette and accessory-window behavior."""
+    native = getattr(window, "native", None)
+    if native is None:
+        return
+    _paint_pet_hole(window)
+    _shape_pet(window)
+    _style_pet(window)
+    if park:
+        _park_pet(window)
+
+
+def _style_pet(window) -> None:
+    """Drop the taskbar button and the native square shadow. Not on the show path."""
+    if sys.platform != "win32":
+        return
+    hwnd = _hwnd_of(window)
+    if not hwnd:
+        return
+    try:
+        _force_toolwindow(hwnd)
+        _disable_dwm_shadow(hwnd)
+    except Exception:
+        return
+
+
+def _force_toolwindow(hwnd: int) -> None:
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    gwl_exstyle = -20
+    toolwindow = 0x00000080
+    appwindow = 0x00040000
+    pointer = ctypes.c_void_p(hwnd)
+    if ctypes.sizeof(ctypes.c_void_p) == 8:
+        get_long = user32.GetWindowLongPtrW
+        set_long = user32.SetWindowLongPtrW
+        get_long.restype = ctypes.c_ssize_t
+        set_long.restype = ctypes.c_ssize_t
+        get_long.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        set_long.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_ssize_t]
+    else:
+        get_long = user32.GetWindowLongW
+        set_long = user32.SetWindowLongW
+        get_long.restype = ctypes.c_long
+        set_long.restype = ctypes.c_long
+        get_long.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        set_long.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_long]
+    style = get_long(pointer, gwl_exstyle)
+    if not style:
+        return
+    updated = (style | toolwindow) & ~appwindow
+    if updated != style:
+        set_long(pointer, gwl_exstyle, updated)
+    _set_window_pos(hwnd, 0, 0, 0, 0, 0x0002 | 0x0001 | 0x0004 | 0x0010 | 0x0020)
+
+
+def _disable_dwm_shadow(hwnd: int) -> None:
+    dwmapi = ctypes.WinDLL("dwmapi", use_last_error=True)
+    policy = ctypes.c_int(1)
+    dwmapi.DwmSetWindowAttribute(ctypes.c_void_p(hwnd), 2, ctypes.byref(policy), ctypes.sizeof(policy))
+
+
 # 迁移、种数据、起服务、打开桌面窗口。
 # Migrate, seed, start the server, and open the desktop window.
 def _open_desktop(window, *, holes: bool = False) -> None:
@@ -679,6 +1131,7 @@ def main() -> None:
     database_existed = run_migrations()
     consume_pending_delete()
     seed_initial_nav_items(should_seed=not database_existed)
+    ensure_seed()
     with Session(engine) as session:
         ensure_timeline_page(session)
 
@@ -698,6 +1151,7 @@ def main() -> None:
 
     icon = _window_icon()
     _target_url = target_url
+    bridge = DesktopBridge()
     window = webview.create_window(
         "Weaveverse OS",
         target_url,
@@ -705,8 +1159,9 @@ def main() -> None:
         width=1180,
         height=760,
         text_select=True,
-        js_api=DesktopBridge(),
+        js_api=bridge,
     )
+    window.events.closing += bridge.close_focus_pet
     window.events.closed += shutdown_backend
 
     try:

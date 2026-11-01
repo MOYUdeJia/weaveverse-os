@@ -57,7 +57,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['close', 'change', 'open-guide', 'move-orb', 'opacity'])
+const emit = defineEmits(['close', 'change', 'open-guide', 'move-orb', 'opacity', 'summon-pet'])
 
 const page = ref('look')
 const maskArmed = ref(false)
@@ -545,6 +545,11 @@ async function clear(kind, groupId) {
         <button type="button" class="wv-choice" :class="appearance.bar === 'overlay' ? 'is-on' : ''" @click="setBar('overlay')">名字浮出</button>
         <button type="button" class="wv-choice" :class="appearance.bar === 'stack' ? 'is-on' : ''" @click="setBar('stack')">图标在上</button>
       </div>
+      </section>
+      <section class="wv-card">
+      <h3>番茄桌宠</h3>
+      <p class="wv-quiet">藏起来之后，从这里再打开。它不进任务栏。</p>
+      <button type="button" class="wv-btn wv-btn-primary mt-4" @click="emit('summon-pet')">召唤桌宠</button>
       </section>
       <section class="wv-card">
       <h3>悬浮球</h3>

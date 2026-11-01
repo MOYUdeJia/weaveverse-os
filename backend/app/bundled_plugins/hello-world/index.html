@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <title>Hello World</title>
+    <style>
+      html, body { margin: 0; min-height: 100%; background: #f4efe6; color: #1c1915; }
+      body { font: 18px/1.5 "Segoe UI", sans-serif; }
+      main { width: min(440px, calc(100% - 48px)); margin: 12vh auto 0; }
+      h1 { margin: 0; font-size: 48px; line-height: 0.95; letter-spacing: -0.04em; }
+      p { margin: 16px 0 0; }
+      button { margin-top: 24px; border: 0; background: #1c1915; color: #f4efe6; font: inherit; font-weight: 700; padding: 12px 18px; }
+      button:focus-visible { outline: 2px solid #c43228; outline-offset: 3px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Hello World</h1>
+      <p>这是一块隔离的页面。它跑在 iframe 里，碰不到外面的界面。</p>
+      <button type="button" id="ping">跟宿主打个招呼</button>
+    </main>
+    <script>
+      parent.postMessage({ source: "wv-plugin", type: "ready" }, "*")
+      document.getElementById("ping").addEventListener("click", function () {
+        parent.postMessage({ source: "wv-plugin", type: "toast", text: "Hello World 在插件里说了一句。" }, "*")
+      })
+    </script>
+  </body>
+</html>

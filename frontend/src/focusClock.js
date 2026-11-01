@@ -24,6 +24,7 @@ export const focusClock = reactive({
 
 let started = false
 let completing = false
+let pulling = false
 
 export function formatClock(seconds) {
   const value = Math.max(0, Math.floor(Number(seconds) || 0))
@@ -58,10 +59,16 @@ export async function focusCommand(action, extra = {}) {
 }
 
 async function pull() {
+  if (pulling) {
+    return
+  }
+  pulling = true
   try {
     applyLive(await getFocusLive())
   } catch {
     // The next poll retries. A missed tick should not blank the clock.
+  } finally {
+    pulling = false
   }
 }
 

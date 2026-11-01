@@ -196,8 +196,10 @@ watch(
   max-height: calc(100vh - 32px);
   overflow: auto;
   padding: 20px;
+  border-radius: 18px;
   background: rgba(244, 239, 231, 0.96);
   color: #16201d;
+  animation: stats-in 280ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 header,
@@ -224,6 +226,7 @@ button,
 input,
 select {
   border: 0;
+  border-radius: 8px;
   background: #fff;
   color: inherit;
   font: inherit;
@@ -232,6 +235,24 @@ select {
 
 button {
   padding: 6px 8px;
+  transition:
+    transform 130ms cubic-bezier(0.2, 0, 0, 1),
+    background-color 160ms ease;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+@keyframes stats-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 button.is-on {
@@ -348,5 +369,15 @@ input:focus-visible,
 select:focus-visible {
   outline: 2px solid #3f6f57;
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    animation: none;
+  }
+
+  button {
+    transition: none;
+  }
 }
 </style>

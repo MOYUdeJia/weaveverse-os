@@ -28,6 +28,7 @@ from app.routes.speech import router as speech_router
 from app.routes.system import router as system_router
 from app.routes.timeline import router as timeline_router
 from app.routes.focus import router as focus_router
+from app.routes.plugins import router as plugins_router
 from app.routes.templates import router as templates_router
 
 
@@ -65,6 +66,7 @@ router.include_router(cleanup_router)
 router.include_router(system_router)
 router.include_router(timeline_router)
 router.include_router(focus_router)
+router.include_router(plugins_router)
 
 
 @router.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
